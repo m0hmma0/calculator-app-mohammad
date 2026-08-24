@@ -3,7 +3,10 @@
  *   :root                              → light (the default, always complete)
  *   prefers-color-scheme: dark         → dark, unless the app is pinned to light
  *   :root[data-theme="dark"]           → dark, whatever the OS says
- * Never declare a colour only inside a media block; components read tokens only.
+ *
+ * The two dark blocks must define exactly the same tokens as each other and as
+ * :root. A token missing from one of them renders one theme's colours on the
+ * other theme's ground, which is why tests/unit/tokens.test.ts checks it.
  */
 :root {
   --canvas-bg: #fafbfd;
@@ -83,16 +86,6 @@
     --guide: #ff5c93;
     --marquee: #8a94ff;
 
-    --guide: #ff5c93;
-    --marquee: #8a94ff;
-
-    --shape-1: #7f8bf5;
-    --shape-2: #45bf94;
-    --shape-3: #d9a04e;
-    --shape-4: #e0698d;
-    --shape-5: #9c81ea;
-    --shape-6: #4fa2d8;
-
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
     --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);
   }
@@ -118,6 +111,16 @@
 
   --danger: #ff7093;
   --ok: #4ed2a0;
+
+  --shape-1: #7f8bf5;
+  --shape-2: #45bf94;
+  --shape-3: #d9a04e;
+  --shape-4: #e0698d;
+  --shape-5: #9c81ea;
+  --shape-6: #4fa2d8;
+
+  --guide: #ff5c93;
+  --marquee: #8a94ff;
 
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
   --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);
