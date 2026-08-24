@@ -1,0 +1,19 @@
+.editor {
+  position: absolute;
+  z-index: 5;
+  margin: 0;
+  border: 0;
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--text);
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  caret-color: var(--accent);
+}
+
+.editor::selection {
+  background: var(--accent-soft);
+}

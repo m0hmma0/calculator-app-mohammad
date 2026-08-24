@@ -61,7 +61,10 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 src/
   canvas/     renderer, viewport maths, grid, theme colour cache
   geometry/   pure maths — rects, points, intersection, union
+  ink/        freehand sampling, straightening, simplifying, erasing
   input/      pointer state machine and keyboard shortcuts
+  laser/      the ephemeral pointer trail — never saved
+  media/      image import, downsampling and the decode cache
   model/      elements, bounds, transforms, hit-testing, z-order
   snapping/   alignment guides and equal-spacing detection
   scene/      demo content for the renderer panel

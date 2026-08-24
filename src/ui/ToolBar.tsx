@@ -40,6 +40,37 @@ const TOOLS: ToolSpec[] = [
   { id: 'polygon', label: 'Polygon', path: 'M8 2.5l5.2 3.8-2 6.2H4.8l-2-6.2Z' },
   { id: 'line', label: 'Line', shortcut: 'L', path: 'M3 13 13 3' },
   { id: 'arrow', label: 'Arrow', shortcut: 'A', path: 'M3 13 13 3M8.4 3h4.6v4.6' },
+  {
+    id: 'pen',
+    label: 'Pen',
+    shortcut: 'P',
+    path: 'M3 13.2l.7-2.8L11.1 3a1.7 1.7 0 0 1 2.4 2.4l-7.4 7.4-3.1.8Z',
+  },
+  {
+    id: 'eraser',
+    label: 'Eraser',
+    shortcut: 'E',
+    path: 'M6.3 13.5h6.9M2.7 10.6l4.6 4.6 6-6-4.6-4.6Z',
+  },
+  { id: 'text', label: 'Text', shortcut: 'T', path: 'M3.5 3.6h9M8 3.6v9M6 12.6h4' },
+  {
+    id: 'sticky',
+    label: 'Sticky note',
+    shortcut: 'N',
+    path: 'M3 3.5h10v6.2l-3.3 3.3H3Zm10 6.2H9.7v3.3',
+  },
+  {
+    id: 'frame',
+    label: 'Frame',
+    shortcut: 'F',
+    path: 'M5.2 2.5v11M10.8 2.5v11M2.5 5.2h11M2.5 10.8h11',
+  },
+  {
+    id: 'laser',
+    label: 'Laser pointer',
+    shortcut: 'K',
+    path: 'M8 2.4v2.4M8 11.2v2.4M2.4 8h2.4M11.2 8h2.4M8 6.2A1.8 1.8 0 1 1 8 9.8a1.8 1.8 0 0 1 0-3.6Z',
+  },
 ];
 
 export function ToolBar() {

@@ -2,6 +2,7 @@ import { rectsIntersect } from '@/geometry';
 import { elementAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
 import { lineEnds, polygonPoints, POLYGONAL } from '@/model/shapePath';
+import { drawFrameLabel, drawImage, drawInk, drawText } from './renderContent';
 import { resolveColor, type CanvasColors } from './theme';
 import { visibleBounds, type Size, type Viewport } from './viewport';
 
@@ -84,6 +85,87 @@ const MAX_RUN = 48;
 /** Reused across frames so a pan does not hand the garbage collector 5,000 objects. */
 const onScreen: BoardElement[] = [];
 
+/**
+ * Ink, text, images and frames each need their own drawing pass, so they cannot join
+ * a shared path. They interrupt a run rather than being reordered out of it, which is
+ * what keeps a sticky note on top of the rectangle it was dropped onto.
+ */
+const CONTENT: ReadonlySet<string> = new Set(['path', 'text', 'sticky', 'image', 'frame']);
+
+function drawContent(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+  zoom: number,
+  onImageReady: () => void,
+): void {
+  const rotated = element.rotation !== 0;
+  if (rotated) {
+    ctx.save();
+    const cx = element.x + element.w / 2;
+    const cy = element.y + element.h / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate(element.rotation);
+    ctx.translate(-cx, -cy);
+  }
+
+  ctx.globalAlpha = element.opacity;
+
+  switch (element.type) {
+    case 'path':
+      drawInk(ctx, element, colors);
+      break;
+
+    case 'image':
+      drawImage(ctx, element, onImageReady, colors);
+      break;
+
+    case 'sticky':
+    case 'frame': {
+      const fill = resolveColor(element.style.fill, colors);
+      const stroke = resolveColor(element.style.stroke, colors);
+      const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+
+      ctx.beginPath();
+      if (radius > 0.5) ctx.roundRect(element.x, element.y, element.w, element.h, radius);
+      else ctx.rect(element.x, element.y, element.w, element.h);
+
+      if (element.style.shadow) {
+        ctx.shadowColor = 'rgba(0,0,0,0.22)';
+        ctx.shadowBlur = 10 / zoom;
+        ctx.shadowOffsetY = 3 / zoom;
+      }
+      if (fill) {
+        ctx.fillStyle = fill;
+        ctx.fill();
+      }
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      if (stroke && element.style.strokeWidth > 0) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = element.style.strokeWidth / zoom;
+        ctx.stroke();
+      }
+
+      if (element.type === 'frame') drawFrameLabel(ctx, element, colors, zoom);
+      else drawText(ctx, element, colors);
+      break;
+    }
+
+    case 'text':
+      drawText(ctx, element, colors);
+      break;
+
+    default:
+      break;
+  }
+
+  ctx.globalAlpha = 1;
+  if (rotated) ctx.restore();
+}
+
 function paintRun(
   ctx: CanvasRenderingContext2D,
   run: readonly BoardElement[],
@@ -153,6 +235,7 @@ export function renderElements(
   size: Size,
   elements: readonly BoardElement[],
   colors: CanvasColors,
+  onImageReady: () => void = () => {},
 ): RenderStats {
   const view = visibleBounds(vp, size);
 
@@ -172,18 +255,33 @@ export function renderElements(
   ctx.lineCap = 'round';
 
   let runStart = 0;
-  let runKey = styleKey(onScreen[0]!);
+  let runKey: string | null = null;
 
-  for (let index = 1; index <= onScreen.length; index += 1) {
-    const element = onScreen[index];
-    const key = element ? styleKey(element) : null;
-    if (key === runKey && index - runStart < MAX_RUN) continue;
+  const flush = (end: number) => {
+    if (runKey !== null && end > runStart) paintRun(ctx, onScreen, runStart, end, colors, vp.zoom);
+    runKey = null;
+  };
 
-    paintRun(ctx, onScreen, runStart, index, colors, vp.zoom);
-    if (!element || key === null) break;
-    runStart = index;
-    runKey = key;
+  for (let index = 0; index < onScreen.length; index += 1) {
+    const element = onScreen[index]!;
+
+    if (CONTENT.has(element.type)) {
+      flush(index);
+      drawContent(ctx, element, colors, vp.zoom, onImageReady);
+      continue;
+    }
+
+    const key = styleKey(element);
+    if (runKey === null) {
+      runStart = index;
+      runKey = key;
+    } else if (key !== runKey || index - runStart >= MAX_RUN) {
+      flush(index);
+      runStart = index;
+      runKey = key;
+    }
   }
+  flush(onScreen.length);
 
   ctx.restore();
   return { total: elements.length, visible: onScreen.length };

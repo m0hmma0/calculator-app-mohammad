@@ -69,9 +69,9 @@ export const POLYGONAL: ReadonlySet<ElementType> = new Set([
   'star',
 ]);
 
-/** The two ends of a line or arrow, in local coordinates. */
+/** The two ends of a line or arrow, in local coordinates, start first. */
 export function lineEnds(element: BoardElement): [Point, Point] {
-  return element.style.flipX
+  const diagonal: [Point, Point] = element.style.flipX
     ? [
         { x: 0, y: element.h },
         { x: element.w, y: 0 },
@@ -80,4 +80,29 @@ export function lineEnds(element: BoardElement): [Point, Point] {
         { x: 0, y: 0 },
         { x: element.w, y: element.h },
       ];
+  return element.style.reverse ? [diagonal[1], diagonal[0]] : diagonal;
+}
+
+/**
+ * Encodes a start and end point as a normalised box plus the two flags. Keeping the
+ * box positive lets every transform, hit-test and bounds calculation stay uniform;
+ * the flags carry the direction that would otherwise be lost.
+ */
+export function boxFromEnds(
+  start: Point,
+  end: Point,
+): { x: number; y: number; w: number; h: number; flipX: boolean; reverse: boolean } {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const w = Math.abs(end.x - start.x);
+  const h = Math.abs(end.y - start.y);
+
+  // Opposite signs mean the line runs bottom-left to top-right. A purely vertical or
+  // horizontal line has no diagonal, so it takes the untilted one.
+  const flipX = (end.x - start.x) * (end.y - start.y) < 0;
+  const first = flipX ? { x, y: y + h } : { x, y };
+  const reverse =
+    Math.hypot(start.x - first.x, start.y - first.y) > Math.hypot(end.x - first.x, end.y - first.y);
+
+  return { x, y, w, h, flipX, reverse };
 }

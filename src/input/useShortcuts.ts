@@ -18,6 +18,12 @@ const TOOL_KEYS: Record<string, Tool> = {
   KeyO: 'ellipse',
   KeyL: 'line',
   KeyA: 'arrow',
+  KeyP: 'pen',
+  KeyE: 'eraser',
+  KeyK: 'laser',
+  KeyT: 'text',
+  KeyN: 'sticky',
+  KeyF: 'frame',
 };
 
 const NUDGE: Record<string, [number, number]> = {
@@ -37,6 +43,9 @@ export function useShortcuts(): void {
       if (isTypingTarget(event.target)) return;
       const store = useBoardStore.getState();
       const mod = event.metaKey || event.ctrlKey;
+
+      // While a text box is open, the canvas keeps out of the way entirely.
+      if (store.editingId && event.code !== 'Escape') return;
 
       if (event.code === 'Space') {
         event.preventDefault(); // otherwise the page tries to scroll
@@ -95,8 +104,17 @@ export function useShortcuts(): void {
 
       switch (event.code) {
         case 'Escape':
+          if (store.shortcutsOpen) {
+            store.toggleShortcuts();
+            return;
+          }
           store.clearSelection();
           store.setTool('select');
+          return;
+        case 'Slash':
+          if (!event.shiftKey) return;
+          event.preventDefault();
+          store.toggleShortcuts();
           return;
         case 'Delete':
         case 'Backspace':

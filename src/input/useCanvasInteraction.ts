@@ -1,7 +1,15 @@
 import { useEffect, type RefObject } from 'react';
 import { screenToBoard, type Viewport } from '@/canvas/viewport';
 import { HANDLE_SIZE, ROTATE_ZONE } from '@/canvas/renderOverlay';
-import { clamp, distance, rectFromPoints, unionRects, type Point, type Rect } from '@/geometry';
+import {
+  clamp,
+  distance,
+  rectContainsPoint,
+  rectFromPoints,
+  unionRects,
+  type Point,
+  type Rect,
+} from '@/geometry';
 import { elementAABB, rotateAround } from '@/model/bounds';
 import {
   createElement,
@@ -11,7 +19,8 @@ import {
   type ElementId,
 } from '@/model/element';
 import { frameCentre, handlePoint, selectionFrame, type SelectionFrame } from '@/model/handles';
-import { elementAt, elementsInMarquee } from '@/model/hitTest';
+import { elementAt, elementsInMarquee, hitTestElement } from '@/model/hitTest';
+import { boxFromEnds, lineEnds } from '@/model/shapePath';
 import {
   angleFromCentre,
   cursorForHandle,
@@ -24,12 +33,26 @@ import {
 } from '@/model/transform';
 import { keyBetween } from '@/model/zorder';
 import { snapMove, EMPTY_SNAP } from '@/snapping/snap';
+import { addLaserPoint } from '@/laser/laserTrail';
+import {
+  eraseThrough,
+  fromFlat,
+  simplify,
+  straightenFrom,
+  strokeBounds,
+  strokeHit,
+  toFlat,
+  translatePoints,
+  type InkPoint,
+} from '@/ink/stroke';
+import { STICKY_SIZE, shouldLockAspect } from '@/model/element';
 import { effectiveTool, isShapeTool, useBoardStore } from '@/state/boardStore';
 
 const PICK_SLOP = 6; // screen px of forgiveness when clicking thin shapes
 const SNAP_DISTANCE = 6; // screen px
 const DRAG_THRESHOLD = 3; // screen px before a click becomes a drag
 const DEFAULT_SHAPE = { width: 120, height: 90 }; // placed by a click with no drag
+const ERASER_RADIUS = 12; // screen px
 
 type Drag =
   | { kind: 'none' }
@@ -50,6 +73,15 @@ type Drag =
       frame: SelectionFrame;
       start: BoardElement[];
     }
+  | {
+      kind: 'ink';
+      pointerId: number;
+      points: InkPoint[];
+      /** Index the straight segment pivots on while Shift is held. */
+      shiftAnchor: number | null;
+    }
+  | { kind: 'erase'; pointerId: number }
+  | { kind: 'laser'; pointerId: number }
   | {
       kind: 'rotate';
       pointerId: number;
@@ -74,15 +106,35 @@ const spreadOf = (points: Point[]): number => {
   return a && b ? distance(a, b) : 0;
 };
 
-/** Selection plus everything inside any selected group. */
+/**
+ * Everything a drag should actually move: the selection, the contents of any selected
+ * group, and whatever sits inside a selected frame. Frame membership is judged by
+ * containment at the moment the drag starts rather than by reparenting, so dropping
+ * a shape onto a frame does not silently rewrite its ownership.
+ */
 function transformTargets(): BoardElement[] {
   const { elements, selection } = useBoardStore.getState();
   const ids = new Set(selection);
+
+  const frames = elements.filter((element) => element.type === 'frame' && ids.has(element.id));
+  const captured = new Set<ElementId>();
+  for (const frame of frames) {
+    const box = elementAABB(frame);
+    for (const element of elements) {
+      if (element.id === frame.id || element.type === 'frame') continue;
+      const candidate = elementAABB(element);
+      const centre = { x: candidate.x + candidate.w / 2, y: candidate.y + candidate.h / 2 };
+      if (rectContainsPoint(box, centre)) captured.add(element.id);
+    }
+  }
+
   return elements.filter(
     (element) =>
       isInteractive(element) &&
       element.type !== 'group' &&
-      (ids.has(element.id) || (element.parentId !== null && ids.has(element.parentId))),
+      (ids.has(element.id) ||
+        captured.has(element.id) ||
+        (element.parentId !== null && ids.has(element.parentId))),
   );
 }
 
@@ -167,10 +219,16 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (!isShapeTool(tool)) return;
 
       const origin = board(event);
+      // A frame is a container: it belongs behind whatever it holds, or its fill
+      // would paint over the contents it is supposed to group.
+      const z =
+        tool === 'frame'
+          ? keyBetween(null, store.elements[0]?.z ?? null)
+          : keyBetween(store.elements.at(-1)?.z ?? null, null);
       const element = createElement({
         type: tool,
         box: { x: origin.x, y: origin.y, w: 0, h: 0 },
-        z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+        z,
       });
 
       host.setPointerCapture(event.pointerId);
@@ -188,6 +246,67 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       host.setPointerCapture(event.pointerId);
       drag = { kind: 'move', pointerId: event.pointerId, origin, start, moved: false };
       return true;
+    };
+
+    const pressureOf = (event: PointerEvent): number => {
+      // A mouse reports 0 or a flat 0.5; only a stylus gives anything meaningful.
+      if (event.pointerType === 'mouse') return 0.5;
+      return event.pressure > 0 ? event.pressure : 0.5;
+    };
+
+    const beginInk = (event: PointerEvent) => {
+      host.setPointerCapture(event.pointerId);
+      const start = board(event);
+      drag = {
+        kind: 'ink',
+        pointerId: event.pointerId,
+        points: [{ ...start, pressure: pressureOf(event) }],
+        shiftAnchor: null,
+      };
+      useBoardStore.getState().setDraft(inkDraft(drag.points));
+    };
+
+    const inkDraft = (points: readonly InkPoint[]): BoardElement => {
+      const store = useBoardStore.getState();
+      const bounds = strokeBounds(points);
+      const local = translatePoints(points, -bounds.x, -bounds.y);
+      return {
+        ...createElement({
+          type: 'path',
+          box: bounds,
+          z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+          style: { strokeWidth: store.inkWidth, fill: store.inkColor },
+        }),
+        points: toFlat(local),
+      };
+    };
+
+    const eraseAt = (point: Point) => {
+      const store = useBoardStore.getState();
+      const radius = ERASER_RADIUS / store.viewport.zoom;
+
+      if (store.eraserMode === 'object') {
+        const target = elementAt(store.elements, point, radius);
+        if (target) store.removeElements([target.parentId ?? target.id]);
+        return;
+      }
+
+      // Stroke mode cuts ink where the eraser passes and keeps what survives.
+      for (const element of store.elements) {
+        if (element.locked || element.hidden) continue;
+
+        if (element.type !== 'path') {
+          if (hitTestElement(element, point, radius)) store.removeElements([element.id]);
+          continue;
+        }
+
+        const local = { x: point.x - element.x, y: point.y - element.y };
+        const points = fromFlat(element.points ?? []);
+        if (!strokeHit(points, local, radius)) continue;
+
+        const runs = eraseThrough(points, local, radius);
+        store.splitStroke(element.id, runs);
+      }
     };
 
     const onPointerDown = (event: PointerEvent) => {
@@ -217,6 +336,47 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       if (isShapeTool(tool)) {
         beginDraw(event);
+        return;
+      }
+
+      if (tool === 'pen') {
+        beginInk(event);
+        return;
+      }
+
+      if (tool === 'eraser') {
+        host.setPointerCapture(event.pointerId);
+        drag = { kind: 'erase', pointerId: event.pointerId };
+        eraseAt(board(event));
+        return;
+      }
+
+      if (tool === 'laser') {
+        host.setPointerCapture(event.pointerId);
+        drag = { kind: 'laser', pointerId: event.pointerId };
+        addLaserPoint(board(event), true);
+        return;
+      }
+
+      if (tool === 'text' || tool === 'sticky') {
+        const origin = board(event);
+        const sticky = tool === 'sticky';
+        const element = createElement({
+          type: sticky ? 'sticky' : 'text',
+          box: sticky
+            ? {
+                x: origin.x - STICKY_SIZE / 2,
+                y: origin.y - STICKY_SIZE / 2,
+                w: STICKY_SIZE,
+                h: STICKY_SIZE,
+              }
+            : { x: origin.x, y: origin.y, w: 240, h: 40 },
+          z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+        });
+        element.text = '';
+        store.addElement(element);
+        store.setTool('select');
+        store.beginEditing(element.id);
         return;
       }
 
@@ -350,6 +510,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       }
 
       if (drag.kind === 'none') {
+        const tool = effectiveTool(useBoardStore.getState());
+        if (tool === 'laser') addLaserPoint(board(event), false);
         updateHoverCursor();
         return;
       }
@@ -358,6 +520,33 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const point = board(event);
 
       switch (drag.kind) {
+        case 'ink': {
+          const sample: InkPoint = { ...point, pressure: pressureOf(event) };
+
+          if (event.shiftKey) {
+            // Hold Shift and everything since the key went down straightens, live,
+            // without ending the stroke. Releasing it resumes freehand from there.
+            if (drag.shiftAnchor === null) drag.shiftAnchor = drag.points.length - 1;
+            drag.points = straightenFrom(drag.points, drag.shiftAnchor, sample);
+          } else {
+            drag.shiftAnchor = null;
+            drag.points.push(sample);
+          }
+
+          store.setDraft(inkDraft(drag.points));
+          break;
+        }
+
+        case 'erase': {
+          eraseAt(point);
+          break;
+        }
+
+        case 'laser': {
+          addLaserPoint(point, true);
+          break;
+        }
+
         case 'pan': {
           const now = local(event);
           store.panBy(now.x - drag.last.x, now.y - drag.last.y);
@@ -388,11 +577,11 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
               h: side,
             };
           }
-          const flipX = point.x < drag.origin.x !== point.y < drag.origin.y;
+          const ends = boxFromEnds(drag.origin, point);
           drag.element = {
             ...drag.element,
             ...box,
-            style: { ...drag.element.style, flipX },
+            style: { ...drag.element.style, flipX: ends.flipX, reverse: ends.reverse },
           };
           store.setDraft(drag.element);
           break;
@@ -428,9 +617,11 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
         case 'resize': {
           const { frame, handle } = drag;
+          const subject = drag.start[0];
           const options = {
             fromCentre: event.altKey,
-            lockAspect: event.shiftKey,
+            // Images hold their ratio unless Shift is held — the reverse of shapes.
+            lockAspect: subject ? shouldLockAspect(subject, event.shiftKey) : event.shiftKey,
             minSize: MIN_SIZE,
           };
 
@@ -500,9 +691,40 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
               h: DEFAULT_SHAPE.height,
             };
         store.setDraft(null);
+
+        if (dragged && (element.type === 'arrow' || element.type === 'line')) {
+          // Drawn from one shape to another, the connector binds to both and will
+          // re-route whenever either end moves.
+          const slop = PICK_SLOP / store.viewport.zoom;
+          const [startPoint, endPoint] = lineEnds(element);
+          const startTarget = elementAt(
+            store.elements,
+            { x: element.x + startPoint.x, y: element.y + startPoint.y },
+            slop,
+          );
+          const endTarget = elementAt(
+            store.elements,
+            { x: element.x + endPoint.x, y: element.y + endPoint.y },
+            slop,
+          );
+          if (startTarget) element.from = { elementId: startTarget.id };
+          if (endTarget && endTarget.id !== startTarget?.id) {
+            element.to = { elementId: endTarget.id };
+          }
+        }
+
         // A click without a drag places a default-sized shape rather than a speck.
         store.addElement(element);
         store.setTool('select');
+      }
+
+      if (drag.kind === 'ink') {
+        const simplified = simplify(drag.points, 0.7);
+        store.setDraft(null);
+        if (simplified.length >= 2 || drag.points.length >= 2) {
+          const element = inkDraft(simplified.length >= 2 ? simplified : drag.points);
+          store.addElement(element);
+        }
       }
 
       if (drag.kind === 'marquee') {
@@ -554,6 +776,20 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (drag.kind === 'none') updateHoverCursor();
     });
 
+    const onDoubleClick = (event: MouseEvent) => {
+      if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      const store = useBoardStore.getState();
+      const point = board(event);
+      const target = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom);
+      if (
+        target &&
+        (target.type === 'text' || target.type === 'sticky' || target.type === 'frame')
+      ) {
+        store.beginEditing(target.id);
+      }
+    };
+
+    host.addEventListener('dblclick', onDoubleClick);
     host.addEventListener('wheel', onWheel, { passive: false });
     host.addEventListener('pointerdown', onPointerDown);
     host.addEventListener('pointermove', onPointerMove);
@@ -563,6 +799,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     return () => {
       unsubscribe();
+      host.removeEventListener('dblclick', onDoubleClick);
       host.removeEventListener('wheel', onWheel);
       host.removeEventListener('pointerdown', onPointerDown);
       host.removeEventListener('pointermove', onPointerMove);

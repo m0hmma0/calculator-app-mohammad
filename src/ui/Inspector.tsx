@@ -1,3 +1,5 @@
+import { FONT_LABELS, type FontKey } from '@/canvas/fonts';
+import { isTextual } from '@/model/element';
 import { selectionAABB } from '@/model/bounds';
 import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
@@ -16,6 +18,14 @@ const FILLS = [
 const DASHES: DashStyle[] = ['solid', 'dashed', 'dotted'];
 
 const LAYER_LIMIT = 200;
+
+const FONT_KEYS: FontKey[] = ['sans', 'serif', 'mono'];
+const FONT_SIZES = [12, 16, 20, 28, 40, 64];
+const ALIGN_OPTIONS = [
+  { id: 'start', label: '⇤' },
+  { id: 'center', label: '⇹' },
+  { id: 'end', label: '⇥' },
+] as const;
 
 const ALIGNMENTS = [
   { id: 'left', label: '⇤', title: 'Align left' },
@@ -77,6 +87,137 @@ export function Inspector() {
               <dd data-testid="geo-angle">{degreesOf(first.rotation)}°</dd>
             </dl>
           </div>
+
+          {isTextual(first) ? (
+            <div className={styles.section} data-testid="text-controls">
+              <p className={styles.label}>Text</p>
+              <div className={styles.buttons}>
+                {FONT_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={styles.button}
+                    aria-pressed={first.style.fontFamily === key}
+                    data-testid={`font-${key}`}
+                    onClick={() => styleSelection({ fontFamily: key })}
+                  >
+                    {FONT_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+              <div className={styles.buttons}>
+                {FONT_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className={styles.button}
+                    aria-pressed={first.style.fontSize === size}
+                    data-testid={`size-${size}`}
+                    onClick={() => styleSelection({ fontSize: size })}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+              <div className={styles.buttons}>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={first.style.fontWeight >= 600}
+                  data-testid="text-bold"
+                  onClick={() =>
+                    styleSelection({ fontWeight: first.style.fontWeight >= 600 ? 400 : 700 })
+                  }
+                >
+                  <b>B</b>
+                </button>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={first.style.italic}
+                  data-testid="text-italic"
+                  onClick={() => styleSelection({ italic: !first.style.italic })}
+                >
+                  <i>I</i>
+                </button>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={first.style.underline}
+                  data-testid="text-underline"
+                  onClick={() => styleSelection({ underline: !first.style.underline })}
+                >
+                  <u>U</u>
+                </button>
+              </div>
+              <div className={styles.buttons}>
+                {ALIGN_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={styles.button}
+                    aria-pressed={first.style.align === option.id}
+                    data-testid={`text-align-${option.id}`}
+                    onClick={() => styleSelection({ align: option.id })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className={styles.buttons}>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={first.style.list === 'bullet'}
+                  data-testid="text-bullet"
+                  onClick={() =>
+                    styleSelection({ list: first.style.list === 'bullet' ? 'none' : 'bullet' })
+                  }
+                >
+                  • list
+                </button>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={first.style.list === 'number'}
+                  data-testid="text-number"
+                  onClick={() =>
+                    styleSelection({ list: first.style.list === 'number' ? 'none' : 'number' })
+                  }
+                >
+                  1. list
+                </button>
+              </div>
+              <div className={styles.row}>
+                <input
+                  type="range"
+                  min={1}
+                  max={2.4}
+                  step={0.05}
+                  value={first.style.lineHeight}
+                  aria-label="Line height"
+                  data-testid="line-height"
+                  onChange={(event) => styleSelection({ lineHeight: Number(event.target.value) })}
+                />
+                <span className={styles.value}>{first.style.lineHeight.toFixed(2)}</span>
+              </div>
+              <div className={styles.row}>
+                <input
+                  type="range"
+                  min={-2}
+                  max={12}
+                  step={0.5}
+                  value={first.style.letterSpacing}
+                  aria-label="Letter spacing"
+                  data-testid="letter-spacing"
+                  onChange={(event) =>
+                    styleSelection({ letterSpacing: Number(event.target.value) })
+                  }
+                />
+                <span className={styles.value}>{first.style.letterSpacing}</span>
+              </div>
+            </div>
+          ) : null}
 
           <div className={styles.section}>
             <p className={styles.label}>Fill</p>

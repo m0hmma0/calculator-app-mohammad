@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "fractional-indexing": "^4.0.0",
+    "perfect-freehand": "^1.2.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.15"

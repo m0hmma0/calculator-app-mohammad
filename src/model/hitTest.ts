@@ -1,4 +1,5 @@
 import { rectContainsPoint, rectsIntersect, type Point, type Rect } from '@/geometry';
+import { fromFlat, strokeHit } from '@/ink/stroke';
 import { elementAABB, worldToLocal } from './bounds';
 import { isInteractive, type BoardElement } from './element';
 import { lineEnds, polygonPoints, POLYGONAL } from './shapePath';
@@ -32,6 +33,13 @@ function distanceToSegment(point: Point, a: Point, b: Point): number {
  */
 export function hitTestElement(element: BoardElement, world: Point, tolerance = 0): boolean {
   const local = worldToLocal(element, world);
+
+  if (element.type === 'path') {
+    // Ink is picked off the line itself, not its bounding box — otherwise a single
+    // diagonal scribble would swallow every click in a large rectangle.
+    const points = fromFlat(element.points ?? []);
+    return strokeHit(points, local, tolerance + element.style.strokeWidth / 2);
+  }
 
   if (element.type === 'line' || element.type === 'arrow') {
     const [start, end] = lineEnds(element);

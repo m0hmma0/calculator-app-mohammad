@@ -6,6 +6,7 @@ export interface CanvasColors {
   minimapViewport: string;
   accent: string;
   guide: string;
+  laser: string;
   handleFill: string;
   /** CSS custom-property name to its resolved value, for `var(--x)` in element styles. */
   byToken: Map<string, string>;
@@ -27,7 +28,17 @@ export function getCanvasColors(host: Element): CanvasColors {
     style.getPropertyValue(token).trim() || fallback;
 
   const byToken = new Map<string, string>();
-  for (const token of [...SHAPE_TOKENS, '--text', '--text-muted', '--accent', '--surface']) {
+  for (const token of [
+    ...SHAPE_TOKENS,
+    '--text',
+    '--text-muted',
+    '--accent',
+    '--surface',
+    '--sticky',
+    '--sticky-ink',
+    '--laser',
+    '--border-strong',
+  ]) {
     byToken.set(token, read(token, '#888888'));
   }
 
@@ -38,6 +49,7 @@ export function getCanvasColors(host: Element): CanvasColors {
     minimapFill: read('--text-muted', '#888888'),
     minimapViewport: read('--accent', '#3b45d8'),
     accent: read('--accent', '#3b45d8'),
+    laser: read('--laser', '#ff2d55'),
     guide: read('--guide', '#e0397a'),
     handleFill: read('--surface', '#ffffff'),
     byToken,

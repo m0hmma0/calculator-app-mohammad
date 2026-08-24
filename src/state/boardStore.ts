@@ -22,12 +22,27 @@ import {
   type ElementType,
   type ShapeType,
 } from '@/model/element';
+import { simplify, strokeBounds, toFlat, translatePoints, type InkPoint } from '@/ink/stroke';
+import { routeConnectors } from '@/model/connectors';
 import { scaleBoxInto } from '@/model/transform';
 import { compareZ, keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/zorder';
 import { generateDemoElements } from '@/scene/demoElements';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
-export type Tool = 'select' | 'hand' | ShapeType;
+export type ContentTool = 'pen' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame';
+
+export type Tool = 'select' | 'hand' | ShapeType | ContentTool;
+
+export type EraserMode = 'object' | 'stroke';
+
+export const CONTENT_TOOLS: readonly ContentTool[] = [
+  'pen',
+  'eraser',
+  'laser',
+  'text',
+  'sticky',
+  'frame',
+];
 
 export const SHAPE_TOOLS: readonly ShapeType[] = [
   'rect',
@@ -69,7 +84,15 @@ interface BoardState {
   snapEnabled: boolean;
 
   devPanelOpen: boolean;
+  shortcutsOpen: boolean;
   stats: RenderStatsSnapshot;
+
+  eraserMode: EraserMode;
+  /** Current pen settings, kept between strokes. */
+  inkWidth: number;
+  inkColor: string;
+  /** Element currently open in the text overlay, if any. */
+  editingId: ElementId | null;
 
   setViewport: (viewport: Viewport) => void;
   setStageSize: (size: Size) => void;
@@ -116,7 +139,16 @@ interface BoardState {
   clearBoard: () => void;
 
   toggleDevPanel: () => void;
+  toggleShortcuts: () => void;
   reportStats: (stats: RenderStatsSnapshot) => void;
+
+  setEraserMode: (mode: EraserMode) => void;
+  setInk: (patch: { width?: number; color?: string }) => void;
+  removeElements: (ids: readonly ElementId[]) => void;
+  splitStroke: (id: ElementId, runs: readonly (readonly InkPoint[])[]) => void;
+  beginEditing: (id: ElementId) => void;
+  endEditing: () => void;
+  setElementText: (id: ElementId, text: string) => void;
 }
 
 const ZOOM_STEP = 1.25;
@@ -185,7 +217,13 @@ export const useBoardStore = create<BoardState>((set, get) => {
     snapEnabled: true,
 
     devPanelOpen: false,
+    shortcutsOpen: false,
     stats: { fps: 0, renderMs: 0, visible: 0 },
+
+    eraserMode: 'object',
+    inkWidth: 6,
+    inkColor: 'var(--shape-1)',
+    editingId: null,
 
     setViewport: (viewport) => {
       if (viewportsEqual(get().viewport, viewport)) return;
@@ -242,7 +280,10 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
 
     addElement: (element) =>
-      bump({ elements: sorted([...get().elements, element]), selection: [element.id] }),
+      bump({
+        elements: sorted(routeConnectors([...get().elements, element])),
+        selection: [element.id],
+      }),
 
     patchElements: (patches) => {
       if (patches.size === 0) return;
@@ -253,11 +294,12 @@ export const useBoardStore = create<BoardState>((set, get) => {
         if (patch.z !== undefined && patch.z !== element.z) zChanged = true;
         return { ...element, ...patch };
       });
-      const reconciled = withGroupBounds(next);
+      const reconciled = routeConnectors(withGroupBounds(next));
       bump({ elements: zChanged ? sorted(reconciled) : reconciled });
     },
 
-    replaceElements: (elements) => bump({ elements: sorted(withGroupBounds(elements)) }),
+    replaceElements: (elements) =>
+      bump({ elements: sorted(routeConnectors(withGroupBounds(elements))) }),
 
     deleteSelection: () => {
       const ids = new Set(get().selection);
@@ -485,7 +527,95 @@ export const useBoardStore = create<BoardState>((set, get) => {
       bump({ elements: [], selection: [], draft: null, marquee: null, viewport: DEFAULT_VIEWPORT }),
 
     toggleDevPanel: () => set((state) => ({ devPanelOpen: !state.devPanelOpen })),
+    toggleShortcuts: () => set((state) => ({ shortcutsOpen: !state.shortcutsOpen })),
     reportStats: (stats) => set({ stats }),
+
+    setEraserMode: (eraserMode) => set({ eraserMode }),
+
+    setInk: ({ width, color }) =>
+      set((state) => ({
+        inkWidth: width ?? state.inkWidth,
+        inkColor: color ?? state.inkColor,
+      })),
+
+    removeElements: (ids) => {
+      if (ids.length === 0) return;
+      const doomed = new Set(ids);
+      const selection = get().selection.filter((id) => !doomed.has(id));
+      bump({
+        elements: get().elements.filter(
+          (element) =>
+            !doomed.has(element.id) && !(element.parentId && doomed.has(element.parentId)),
+        ),
+        selection,
+      });
+    },
+
+    /**
+     * Replaces one ink element with whatever survived the eraser. No surviving run
+     * means the stroke is gone; several means the eraser cut through the middle.
+     */
+    splitStroke: (id, runs) => {
+      const { elements } = get();
+      const original = elements.find((element) => element.id === id);
+      if (!original) return;
+
+      const rest = elements.filter((element) => element.id !== id);
+      if (runs.length === 0) {
+        bump({
+          elements: rest,
+          selection: get().selection.filter((candidate) => candidate !== id),
+        });
+        return;
+      }
+
+      const keys = keysBetween(null, original.z, runs.length);
+      const pieces = runs.map((run, index) => {
+        // Erasing densifies the stroke; simplifying puts it back to a sane size.
+        const absolute = translatePoints(simplify(run, 0.7), original.x, original.y);
+        const bounds = strokeBounds(absolute);
+        return {
+          ...original,
+          id: createElementId('path'),
+          x: bounds.x,
+          y: bounds.y,
+          w: bounds.w,
+          h: bounds.h,
+          z: keys[index]!,
+          points: toFlat(translatePoints(absolute, -bounds.x, -bounds.y)),
+        };
+      });
+
+      bump({
+        elements: sorted([...rest, ...pieces]),
+        selection: get().selection.filter((candidate) => candidate !== id),
+      });
+    },
+
+    beginEditing: (id) => bump({ editingId: id, selection: [id] }),
+
+    endEditing: () => {
+      const { editingId, elements } = get();
+      if (!editingId) return;
+      // An empty text box left behind by an accidental click is just litter.
+      const element = elements.find((candidate) => candidate.id === editingId);
+      const empty = element?.type === 'text' && (element.text ?? '').trim() === '';
+      bump({
+        editingId: null,
+        ...(empty
+          ? {
+              elements: elements.filter((candidate) => candidate.id !== editingId),
+              selection: [],
+            }
+          : {}),
+      });
+    },
+
+    setElementText: (id, text) => {
+      const patches = new Map<ElementId, Partial<BoardElement>>();
+      patches.set(id, { text });
+      get().patchElements(patches);
+    },
   };
 });
 
@@ -494,8 +624,17 @@ export function effectiveTool(state: Pick<BoardState, 'tool' | 'spaceHeld'>): To
   return state.spaceHeld ? 'hand' : state.tool;
 }
 
-export function isShapeTool(tool: Tool): tool is ShapeType {
-  return tool !== 'select' && tool !== 'hand';
+/** Tools that create an element by dragging out a box. */
+export type DragTool = ShapeType | 'frame';
+
+const DRAG_TOOLS = new Set<Tool>([...SHAPE_TOOLS, 'frame']);
+
+export function isShapeTool(tool: Tool): tool is DragTool {
+  return DRAG_TOOLS.has(tool);
+}
+
+export function isContentTool(tool: Tool): tool is ContentTool {
+  return (CONTENT_TOOLS as readonly Tool[]).includes(tool);
 }
 
 export function selectedIn(state: BoardState): BoardElement[] {

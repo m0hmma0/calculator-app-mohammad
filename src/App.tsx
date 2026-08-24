@@ -7,7 +7,7 @@ export function App() {
 
   return (
     <>
-      <TopBar boardName="Untitled board" badge="Phase 2" />
+      <TopBar boardName="Untitled board" badge="Phase 3" />
       <CanvasStage />
     </>
   );
