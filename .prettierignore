@@ -1,0 +1,8 @@
+dist
+dist-preview
+preview.html
+coverage
+playwright-report
+test-results
+package-lock.json
+.wrangler

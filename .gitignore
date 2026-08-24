@@ -1,33 +1,17 @@
-# dependencies
 node_modules/
-
-# Expo
-.expo/
 dist/
-web-build/
-expo-env.d.ts
+dist-preview/
+preview.html
+.wrangler/
+.dev.vars
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo
 
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+.env
+.env.*
+!.env.example
 
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
 .DS_Store
-
-# local env
-.env*.local
-
-# Claude Code local settings
-.claude/
+*.log

@@ -1,0 +1,94 @@
+/*
+ * Three theme states, on purpose:
+ *   :root                              → light (the default, always complete)
+ *   prefers-color-scheme: dark         → dark, unless the app is pinned to light
+ *   :root[data-theme="dark"]           → dark, whatever the OS says
+ * Never declare a colour only inside a media block; components read tokens only.
+ */
+:root {
+  --canvas-bg: #fafbfd;
+  --canvas-dot: #d3d8e6;
+
+  --surface: #ffffff;
+  --surface-2: #f1f3f8;
+  --border: #dfe3ec;
+  --border-strong: #c2c8d8;
+
+  --text: #15171f;
+  --text-2: #4a5063;
+  --text-muted: #757c91;
+
+  --accent: #3b45d8;
+  --accent-soft: #e6e8fc;
+  --accent-ink: #2a32a8;
+  --on-accent: #ffffff;
+
+  --danger: #d8375c;
+  --ok: #167a53;
+
+  --shadow-1: 0 1px 2px rgb(21 23 31 / 0.06), 0 1px 3px rgb(21 23 31 / 0.08);
+  --shadow-2: 0 4px 12px rgb(21 23 31 / 0.08), 0 12px 32px rgb(21 23 31 / 0.08);
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+
+  --topbar-h: 52px;
+
+  --font-ui:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+    'Noto Sans Arabic', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --canvas-bg: #14161d;
+    --canvas-dot: #363d52;
+
+    --surface: #1a1d27;
+    --surface-2: #232735;
+    --border: #2b3040;
+    --border-strong: #3d4356;
+
+    --text: #e7e9f1;
+    --text-2: #b4bac9;
+    --text-muted: #868da1;
+
+    --accent: #8a94ff;
+    --accent-soft: #212745;
+    --accent-ink: #aeb5ff;
+    --on-accent: #12142a;
+
+    --danger: #ff7093;
+    --ok: #4ed2a0;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);
+  }
+}
+
+:root[data-theme='dark'] {
+  --canvas-bg: #14161d;
+  --canvas-dot: #363d52;
+
+  --surface: #1a1d27;
+  --surface-2: #232735;
+  --border: #2b3040;
+  --border-strong: #3d4356;
+
+  --text: #e7e9f1;
+  --text-2: #b4bac9;
+  --text-muted: #868da1;
+
+  --accent: #8a94ff;
+  --accent-soft: #212745;
+  --accent-ink: #aeb5ff;
+  --on-accent: #12142a;
+
+  --danger: #ff7093;
+  --ok: #4ed2a0;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);
+}

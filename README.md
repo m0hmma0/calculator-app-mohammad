@@ -1,115 +1,94 @@
-# الآلة الحاسبة — Calculator App
+# Sabboura
 
-تطبيق آلة حاسبة مبني بـ **React Native + Expo SDK 54**، يعمل على:
+A collaborative infinite whiteboard for the browser — real-time editing, folders and
+sharing, images, freehand ink, text, shapes and a laser pointer.
 
-- 🌐 **الويب** (react-native-web)
-- 🤖 **أندرويد** (Google Play)
-- 🍏 **iOS** (App Store)
-- 📱 **Expo Go** بدون مشاكل توافقية (SDK 54)
+Runs entirely on free tiers: Cloudflare Pages, D1, Durable Objects and R2, with Firebase
+for Google sign-in.
 
-بتصميم داكن أنيق يشبه آلة iOS الحاسبة، ودعم لوحة المفاتيح على الويب.
+## Status
 
----
+Built in phases. Each phase ends with a working, checkable deliverable.
 
-## المتطلبات
+| Phase | What it adds                                 | State       |
+| ----- | -------------------------------------------- | ----------- |
+| **0** | Teardown, tooling, test harness, app shell   | ✅ done     |
+| 1     | Infinite canvas — pan, zoom, minimap         | not started |
+| 2     | Shapes, selection, transform handles         | not started |
+| 3     | Freehand, text, images, laser pointer        | not started |
+| 4     | Yjs document, per-user undo, offline, export | not started |
+| 5     | Google sign-in, folders, boards (D1)         | not started |
+| 6     | Image storage (R2)                           | not started |
+| 7     | Real-time collaboration (Durable Objects)    | not started |
+| 8     | Sharing, permissions, comments               | not started |
+| 9     | Presentation mode, workshop tools, embeds    | not started |
+| 10    | Accessibility, Arabic and RTL, polish        | not started |
+| 11    | Hardening, load testing, launch              | not started |
 
-- **Node.js 20 LTS** (SDK 54 يتطلب Node ≥ 20). المشروع مضبوط لاستخدام Node 20 عبر `nvm`.
-- للأجهزة: تطبيق **Expo Go** على هاتفك (من Play Store أو App Store).
+## Getting started
 
-```bash
-nvm use 20      # أو: nvm install 20
-```
-
----
-
-## التشغيل
-
-### الطريقة السريعة (مُوصى بها)
-
-```bash
-./run.sh          # يفتح لوحة Expo كاملة مع رمز QR
-./run.sh web      # الويب مباشرة على http://localhost:8081
-```
-
-### أو يدوياً
+Requires Node 22 or newer.
 
 ```bash
-npm install       # أول مرة فقط
-npx expo start    # لوحة Expo (اضغط w للويب، a لأندرويد، i لـ iOS)
-npx expo start --web   # الويب مباشرة
+npm install
+npm run dev          # http://localhost:5173
 ```
 
-بعد التشغيل:
+## Scripts
 
-| المنصّة | كيف |
-|---------|-----|
-| **الويب** | افتح http://localhost:8081 أو اضغط `w` |
-| **الهاتف (Expo Go)** | امسح رمز QR الظاهر في الطرفية بتطبيق Expo Go |
-| **محاكي أندرويد** | اضغط `a` |
-| **محاكي iOS** (على macOS) | اضغط `i` |
+| Command                 | What it does                                                   |
+| ----------------------- | -------------------------------------------------------------- |
+| `npm run dev`           | Vite dev server with hot reload                                |
+| `npm run build`         | Production build into `dist/`                                  |
+| `npm run build:preview` | Single self-contained `preview.html` for sharing a phase       |
+| `npm run check`         | Format check, lint, typecheck and unit tests — run before push |
+| `npm test`              | Unit tests (Vitest)                                            |
+| `npm run test:e2e`      | Browser tests (Playwright)                                     |
+| `npm run deploy`        | Build and deploy to Cloudflare (Phase 5 onwards)               |
 
-### المعاينة الحية (Fast Refresh)
+### If Playwright cannot find a browser
 
-عند تشغيل `npx expo start`، أي تعديل تحفظه في ملفات الشيفرة **ينعكس فوراً** في المتصفح أو Expo Go دون إعادة تحميل يدوية، مع الحفاظ على حالة التطبيق.
-
----
-
-## بنية المشروع
-
-```
-.
-├── App.js                      # المكوّن الجذر + reducer + دعم لوحة المفاتيح على الويب
-├── index.js                    # نقطة الدخول (registerRootComponent)
-├── app.json                    # إعدادات Expo (الأيقونات، المعرّفات، الويب)
-├── babel.config.js             # babel-preset-expo
-├── run.sh                      # مُشغّل مريح (يضبط Node 20)
-├── assets/                     # الأيقونات وشاشة البداية
-└── src/
-    ├── theme.js                # الألوان والقياسات الموحّدة
-    ├── logic/
-    │   └── calculator.js       # منطق الحساب كدوال نقيّة (قابلة للاختبار)
-    └── components/
-        ├── Display.js          # الشاشة (سطر العملية + النتيجة)
-        ├── Keypad.js           # شبكة الأزرار 5×4
-        └── CalcButton.js       # زر واحد (رقم / وظيفة / عملية)
-```
-
----
-
-## المزايا
-
-- العمليات الأساسية: `+ − × ÷`، النسبة `%`، عكس الإشارة `±`، الحذف `⌫`.
-- سلسلة عمليات متتابعة (مثل `2 + 3 × 4`).
-- عرض العملية الجارية في سطر علوي صغير.
-- تصغير حجم الخط تلقائياً للأرقام الطويلة، وحدّ أقصى لعدد الخانات لتفادي الأخطاء.
-- **دعم لوحة المفاتيح على الويب**: الأرقام، `+ - * /`، `Enter`/`=`، `Backspace`، `Esc` (مسح)، `%`.
-
----
-
-## البناء والنشر للمتاجر (EAS Build)
-
-Expo Go رائع للتطوير، ولنشر نسخة مستقلة على المتاجر استخدم **EAS Build**:
+Containers and CI images sometimes ship a Chromium older than the pinned Playwright
+version. Point the tests at it instead of downloading a second copy:
 
 ```bash
-npm install -g eas-cli
-eas login
-eas build:configure
-
-# بناء للأندرويد (AAB لـ Google Play)
-eas build --platform android
-
-# بناء لـ iOS (يتطلب حساب Apple Developer)
-eas build --platform ios
-
-# النشر التلقائي إلى المتاجر
-eas submit --platform android
-eas submit --platform ios
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 ```
 
-### الويب (نشر ثابت)
+## Layout
 
-```bash
-npx expo export --platform web    # يُخرج مجلد dist/ جاهز للاستضافة
+```
+src/
+  canvas/     renderer and the device-pixel-ratio plumbing
+  geometry/   pure maths — rects, points, intersection, snapping
+  ui/         React components: top bar, canvas stage, panels
+  styles/     design tokens and global CSS
+shared/       types used by both the app and the Worker
+worker/       Cloudflare Worker: API routes, and later the board rooms
+tests/
+  unit/       Vitest
+  e2e/        Playwright
 ```
 
-> قبل النشر، عدّل `bundleIdentifier` (iOS) و `package` (أندرويد) في `app.json` إلى معرّف نطاقك الخاص بدل `com.example.calculator`.
+Directories for `tools/` and `model/` arrive with the phases that need them.
+
+## Architecture
+
+One Cloudflare Worker serves the app, the API and the sync server:
+
+```
+Browser
+  │  static assets (free, unmetered)
+  │  REST calls   ──►  Worker  ──►  D1        folders, boards, sharing
+  │  image reads  ──►  Worker  ──►  R2        cached at the edge
+  └─ WebSocket    ──►  Worker  ──►  Durable Object "board:<id>"
+                                     ├─ Yjs document in memory
+                                     ├─ SQLite: update log + snapshots
+                                     └─ every open socket for this board
+```
+
+## Theming
+
+Three states, handled at the token level in `src/styles/tokens.css`: light on bare
+`:root`, dark under `prefers-color-scheme` (guarded so an explicit light choice wins),
+and dark again under `[data-theme="dark"]`. Components only ever read tokens.
