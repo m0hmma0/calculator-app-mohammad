@@ -76,3 +76,35 @@
     display: none;
   }
 }
+
+.ghost {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ghost:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.ghost[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+@media (max-width: 700px) {
+  .ghost,
+  .badge {
+    display: none;
+  }
+}

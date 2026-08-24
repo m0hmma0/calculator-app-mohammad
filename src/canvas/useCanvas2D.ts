@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { invalidateCanvasColors } from './theme';
 
 export interface CanvasFrame {
   /** CSS pixels, not device pixels — the context is already scaled for you. */
@@ -66,13 +67,17 @@ export function useCanvas2D(draw: DrawFn) {
     observer.observe(host);
 
     const scheme = window.matchMedia('(prefers-color-scheme: dark)');
-    scheme.addEventListener('change', redraw);
+    const onSchemeChange = () => {
+      invalidateCanvasColors();
+      redraw();
+    };
+    scheme.addEventListener('change', onSchemeChange);
 
     redraw();
 
     return () => {
       observer.disconnect();
-      scheme.removeEventListener('change', redraw);
+      scheme.removeEventListener('change', onSchemeChange);
       if (frameRef.current !== 0) cancelAnimationFrame(frameRef.current);
     };
   }, [redraw]);

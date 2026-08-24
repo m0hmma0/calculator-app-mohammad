@@ -1,3 +1,5 @@
+import { useBoardStore } from '@/state/boardStore';
+import { ToolBar } from './ToolBar';
 import styles from './TopBar.module.css';
 
 export interface TopBarProps {
@@ -6,6 +8,9 @@ export interface TopBarProps {
 }
 
 export function TopBar({ boardName, badge }: TopBarProps) {
+  const devPanelOpen = useBoardStore((state) => state.devPanelOpen);
+  const toggleDevPanel = useBoardStore((state) => state.toggleDevPanel);
+
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
@@ -27,6 +32,19 @@ export function TopBar({ boardName, badge }: TopBarProps) {
       <span className={styles.boardName}>{boardName}</span>
 
       <span className={styles.spacer} />
+
+      <ToolBar />
+
+      <button
+        type="button"
+        className={styles.ghost}
+        onClick={toggleDevPanel}
+        aria-pressed={devPanelOpen}
+        title="Renderer stats and test content"
+        data-testid="toggle-dev-panel"
+      >
+        Renderer
+      </button>
 
       {badge ? <span className={styles.badge}>{badge}</span> : null}
     </header>

@@ -59,8 +59,11 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 
 ```
 src/
-  canvas/     renderer and the device-pixel-ratio plumbing
-  geometry/   pure maths — rects, points, intersection, snapping
+  canvas/     renderer, viewport maths, grid, theme colour cache
+  geometry/   pure maths — rects, points, intersection, union
+  input/      pan/zoom gestures and keyboard shortcuts
+  scene/      board content (demo shapes until Phase 2)
+  state/      the board store
   ui/         React components: top bar, canvas stage, panels
   styles/     design tokens and global CSS
 shared/       types used by both the app and the Worker
@@ -71,6 +74,20 @@ tests/
 ```
 
 Directories for `tools/` and `model/` arrive with the phases that need them.
+
+## Shortcuts
+
+| Keys                       | Action                             |
+| -------------------------- | ---------------------------------- |
+| `V` / `H`                  | Select tool / hand tool            |
+| Hold `Space`               | Temporary hand tool                |
+| Scroll                     | Pan · `Shift`+scroll pans sideways |
+| `⌘`/`Ctrl` + scroll, pinch | Zoom toward the pointer            |
+| `+` / `−`                  | Zoom in / out                      |
+| `Shift 0` / `Shift 1`      | Zoom to 100% / zoom to fit         |
+| `Shift 2`                  | Zoom to selection (Phase 2)        |
+
+Shortcuts match on physical key position, so they work on any keyboard layout.
 
 ## Architecture
 

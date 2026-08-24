@@ -1,0 +1,26 @@
+.wrapper {
+  pointer-events: auto;
+  position: relative;
+  width: 184px;
+  height: 124px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+
+@media (max-width: 640px) {
+  .wrapper {
+    width: 132px;
+    height: 92px;
+  }
+}

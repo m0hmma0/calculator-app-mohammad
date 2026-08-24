@@ -1,0 +1,33 @@
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.tool {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  width: 30px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tool:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.tool[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
