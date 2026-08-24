@@ -3,7 +3,8 @@ import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
 import { getCanvasColors } from '@/canvas/theme';
 import { centerOn, visibleBounds, type Size } from '@/canvas/viewport';
 import { expandRect, type Point, type Rect } from '@/geometry';
-import { sceneBounds, type DemoShape } from '@/scene/demoScene';
+import { elementAABB, selectionAABB } from '@/model/bounds';
+import type { BoardElement } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './Minimap.module.css';
 
@@ -40,7 +41,7 @@ const toBoard = (p: Projection, x: number, y: number): Point => ({
  * shapes, redrawing the map every frame of a pan would cost more than the board itself.
  */
 function paintContentCache(
-  shapes: readonly DemoShape[],
+  elements: readonly BoardElement[],
   bounds: Rect,
   size: Size,
   dpr: number,
@@ -59,13 +60,15 @@ function paintContentCache(
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = color;
   ctx.beginPath();
-  for (const shape of shapes) {
-    const topLeft = toMap(projection, shape.x, shape.y);
+  for (const element of elements) {
+    if (element.hidden || element.type === 'group') continue;
+    const box = elementAABB(element);
+    const topLeft = toMap(projection, box.x, box.y);
     ctx.rect(
       topLeft.x,
       topLeft.y,
-      Math.max(1, shape.w * projection.scale),
-      Math.max(1, shape.h * projection.scale),
+      Math.max(1, box.w * projection.scale),
+      Math.max(1, box.h * projection.scale),
     );
   }
   ctx.fill();
@@ -74,7 +77,7 @@ function paintContentCache(
 }
 
 export function Minimap() {
-  const hasShapes = useBoardStore((state) => state.shapes.length > 0);
+  const hasContent = useBoardStore((state) => state.elements.length > 0);
   const cacheRef = useRef<{ canvas: HTMLCanvasElement; key: string } | null>(null);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, frame: CanvasFrame) => {
@@ -82,20 +85,20 @@ export function Minimap() {
     if (!host) return;
 
     const colors = getCanvasColors(host);
-    const { shapes, sceneVersion, viewport, stageSize } = useBoardStore.getState();
+    const { elements, renderVersion, viewport, stageSize } = useBoardStore.getState();
 
     ctx.clearRect(0, 0, frame.width, frame.height);
 
-    const bounds = sceneBounds(shapes);
+    const bounds = selectionAABB(elements);
     if (!bounds) return;
 
     const padded = expandRect(bounds, Math.max(bounds.w, bounds.h) * 0.04);
-    const key = `${sceneVersion}:${Math.round(frame.width)}x${Math.round(frame.height)}:${frame.dpr}:${colors.minimapFill}`;
+    const key = `${renderVersion}:${Math.round(frame.width)}x${Math.round(frame.height)}:${frame.dpr}:${colors.minimapFill}`;
 
     if (cacheRef.current?.key !== key) {
       cacheRef.current = {
         key,
-        canvas: paintContentCache(shapes, padded, frame, frame.dpr, colors.minimapFill),
+        canvas: paintContentCache(elements, padded, frame, frame.dpr, colors.minimapFill),
       };
     }
     ctx.drawImage(cacheRef.current.canvas, 0, 0, frame.width, frame.height);
@@ -120,12 +123,12 @@ export function Minimap() {
 
   useEffect(() => {
     let previousViewport = useBoardStore.getState().viewport;
-    let previousVersion = useBoardStore.getState().sceneVersion;
+    let previousVersion = useBoardStore.getState().renderVersion;
 
     return useBoardStore.subscribe((state) => {
-      if (state.viewport === previousViewport && state.sceneVersion === previousVersion) return;
+      if (state.viewport === previousViewport && state.renderVersion === previousVersion) return;
       previousViewport = state.viewport;
-      previousVersion = state.sceneVersion;
+      previousVersion = state.renderVersion;
       redraw();
     });
   }, [redraw]);
@@ -133,9 +136,9 @@ export function Minimap() {
   const jumpTo = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const host = event.currentTarget;
     const rect = host.getBoundingClientRect();
-    const { shapes, viewport, stageSize, setViewport } = useBoardStore.getState();
+    const { elements, viewport, stageSize, setViewport } = useBoardStore.getState();
 
-    const bounds = sceneBounds(shapes);
+    const bounds = selectionAABB(elements);
     if (!bounds) return;
 
     const padded = expandRect(bounds, Math.max(bounds.w, bounds.h) * 0.04);
@@ -145,7 +148,7 @@ export function Minimap() {
     setViewport(centerOn(viewport, stageSize, target));
   }, []);
 
-  if (!hasShapes) return null;
+  if (!hasContent) return null;
 
   return (
     <div

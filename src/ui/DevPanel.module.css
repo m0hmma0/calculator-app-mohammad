@@ -2,7 +2,7 @@
   pointer-events: auto;
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 12px;
   width: 232px;
   background: var(--surface);
   border: 1px solid var(--border);

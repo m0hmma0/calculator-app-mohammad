@@ -10,10 +10,10 @@ const COUNTS = [500, 5000, 20000];
  */
 export function DevPanel() {
   const stats = useBoardStore((state) => state.stats);
-  const total = useBoardStore((state) => state.shapes.length);
+  const total = useBoardStore((state) => state.elements.length);
   const zoom = useBoardStore((state) => state.viewport.zoom);
-  const loadDemoShapes = useBoardStore((state) => state.loadDemoShapes);
-  const clearShapes = useBoardStore((state) => state.clearShapes);
+  const loadDemoElements = useBoardStore((state) => state.loadDemoElements);
+  const clearBoard = useBoardStore((state) => state.clearBoard);
   const toggleDevPanel = useBoardStore((state) => state.toggleDevPanel);
 
   return (
@@ -44,13 +44,13 @@ export function DevPanel() {
             key={count}
             type="button"
             className={styles.action}
-            onClick={() => loadDemoShapes(count)}
+            onClick={() => loadDemoElements(count)}
             data-testid={`load-${count}`}
           >
             {count.toLocaleString()}
           </button>
         ))}
-        <button type="button" className={styles.action} onClick={clearShapes}>
+        <button type="button" className={styles.action} onClick={clearBoard}>
           Clear
         </button>
       </div>

@@ -27,10 +27,17 @@
   inset: 0;
   pointer-events: none;
   padding: 12px;
+  padding-right: 250px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
+}
+
+@media (max-width: 820px) {
+  .hud {
+    padding-right: 12px;
+  }
 }
 
 .empty {
@@ -38,7 +45,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 20px 250px 20px 20px;
   pointer-events: none;
 }
 
@@ -83,4 +90,40 @@
   border-radius: 4px;
   padding: 1px 5px;
   color: var(--text);
+}
+
+.stage[data-cursor='grab'] {
+  cursor: grab;
+}
+.stage[data-cursor='grabbing'] {
+  cursor: grabbing;
+}
+.stage[data-cursor='move'] {
+  cursor: move;
+}
+.stage[data-cursor='crosshair'] {
+  cursor: crosshair;
+}
+.stage[data-cursor='not-allowed'] {
+  cursor: not-allowed;
+}
+.stage[data-cursor='ew-resize'] {
+  cursor: ew-resize;
+}
+.stage[data-cursor='ns-resize'] {
+  cursor: ns-resize;
+}
+.stage[data-cursor='nwse-resize'] {
+  cursor: nwse-resize;
+}
+.stage[data-cursor='nesw-resize'] {
+  cursor: nesw-resize;
+}
+
+/* No standard cursor means "rotate", so it is drawn. */
+.stage[data-cursor='rotate'] {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><g fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'><path d='M18.4 8.6A7.5 7.5 0 1 0 19.5 12'/><path d='M19.7 4.6v4.2h-4.2'/></g><g fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M18.4 8.6A7.5 7.5 0 1 0 19.5 12'/><path d='M19.7 4.6v4.2h-4.2'/></g></svg>")
+      12 12,
+    grab;
 }

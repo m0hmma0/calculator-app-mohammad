@@ -61,8 +61,10 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 src/
   canvas/     renderer, viewport maths, grid, theme colour cache
   geometry/   pure maths — rects, points, intersection, union
-  input/      pan/zoom gestures and keyboard shortcuts
-  scene/      board content (demo shapes until Phase 2)
+  input/      pointer state machine and keyboard shortcuts
+  model/      elements, bounds, transforms, hit-testing, z-order
+  snapping/   alignment guides and equal-spacing detection
+  scene/      demo content for the renderer panel
   state/      the board store
   ui/         React components: top bar, canvas stage, panels
   styles/     design tokens and global CSS

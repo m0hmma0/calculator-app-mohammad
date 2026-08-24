@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { drawGrid } from '@/canvas/grid';
-import { renderScene } from '@/canvas/renderScene';
+import { renderElements } from '@/canvas/renderElements';
+import { renderOverlay } from '@/canvas/renderOverlay';
 import { getCanvasColors } from '@/canvas/theme';
 import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
-import { usePanZoom } from '@/input/usePanZoom';
-import { effectiveTool, useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
+import { useCanvasInteraction } from '@/input/useCanvasInteraction';
+import { selectionFrame } from '@/model/handles';
+import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
 import { DevPanel } from './DevPanel';
+import { Inspector } from './Inspector';
 import { Minimap } from './Minimap';
 import { ZoomControls } from './ZoomControls';
 import styles from './CanvasStage.module.css';
@@ -19,10 +22,8 @@ export function CanvasStage() {
   const pendingStats = useRef<RenderStatsSnapshot | null>(null);
   const trailingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tool = useBoardStore((state) => effectiveTool(state));
-  const panning = useBoardStore((state) => state.panning);
   const devPanelOpen = useBoardStore((state) => state.devPanelOpen);
-  const isEmpty = useBoardStore((state) => state.shapes.length === 0);
+  const isEmpty = useBoardStore((state) => state.elements.length === 0);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, frame: CanvasFrame) => {
     const host = ctx.canvas.parentElement;
@@ -34,13 +35,32 @@ export function CanvasStage() {
 
     // The stage measures itself here, so "zoom to fit" and the minimap know the size.
     store.setStageSize({ width: frame.width, height: frame.height });
-    const { viewport, shapes } = store;
+    const { viewport, elements, draft, selection } = store;
 
     ctx.fillStyle = colors.background;
     ctx.fillRect(0, 0, frame.width, frame.height);
-
     drawGrid(ctx, viewport, frame, colors.dot, frame.dpr);
-    const { visible } = renderScene(ctx, viewport, frame, shapes, colors.shapes);
+
+    const { visible } = renderElements(ctx, viewport, frame, elements, colors);
+    if (draft) renderElements(ctx, viewport, frame, [draft], colors);
+
+    const selectedIds = new Set(selection);
+    const selected = elements.filter((element) => selectedIds.has(element.id));
+    renderOverlay(
+      ctx,
+      viewport,
+      frame,
+      {
+        selected,
+        frame: selectionFrame(selected),
+        marquee: store.marquee,
+        guides: store.guides,
+        spacing: store.spacing,
+        rotationReadout: store.rotationReadout,
+        lockedSelection: selected.length > 0 && selected.some((element) => element.locked),
+      },
+      colors,
+    );
 
     // Frames drawn in the last second — genuine fps while interacting, zero when idle,
     // because there is nothing to redraw when nothing is moving.
@@ -49,11 +69,7 @@ export function CanvasStage() {
     times.push(finishedAt);
     while (times.length > 0 && finishedAt - times[0]! > 1000) times.shift();
 
-    pendingStats.current = {
-      fps: times.length,
-      renderMs: finishedAt - startedAt,
-      visible,
-    };
+    pendingStats.current = { fps: times.length, renderMs: finishedAt - startedAt, visible };
 
     const flush = () => {
       trailingTimer.current = null;
@@ -71,6 +87,9 @@ export function CanvasStage() {
     }
   }, []);
 
+  const { canvasRef, redraw } = useCanvas2D(draw);
+  useCanvasInteraction(hostRef);
+
   useEffect(
     () => () => {
       if (trailingTimer.current !== null) clearTimeout(trailingTimer.current);
@@ -78,27 +97,22 @@ export function CanvasStage() {
     [],
   );
 
-  const { canvasRef, redraw } = useCanvas2D(draw);
-  usePanZoom(hostRef);
-
-  // Redraw on camera or scene changes only. Subscribing to everything would loop,
+  // Redraw on camera or content changes only. Subscribing to everything would loop,
   // because reporting stats is itself a state change.
   useEffect(() => {
     let previousViewport = useBoardStore.getState().viewport;
-    let previousVersion = useBoardStore.getState().sceneVersion;
+    let previousVersion = useBoardStore.getState().renderVersion;
 
     return useBoardStore.subscribe((state) => {
-      if (state.viewport === previousViewport && state.sceneVersion === previousVersion) return;
+      if (state.viewport === previousViewport && state.renderVersion === previousVersion) return;
       previousViewport = state.viewport;
-      previousVersion = state.sceneVersion;
+      previousVersion = state.renderVersion;
       redraw();
     });
   }, [redraw]);
 
-  const cursor = tool === 'hand' ? (panning ? 'grabbing' : 'grab') : 'default';
-
   return (
-    <div ref={hostRef} className={styles.stage} data-cursor={cursor} data-testid="stage">
+    <div ref={hostRef} className={styles.stage} data-cursor="default" data-testid="stage">
       <canvas
         ref={canvasRef}
         className={styles.canvas}
@@ -110,12 +124,14 @@ export function CanvasStage() {
       {isEmpty ? (
         <div className={styles.empty}>
           <div className={styles.card}>
-            <p className={styles.eyebrow}>Phase 1 · infinite canvas</p>
-            <h2 className={styles.title}>Pan and zoom anywhere</h2>
+            <p className={styles.eyebrow}>Phase 2 · shapes and selection</p>
+            <h2 className={styles.title}>Draw something</h2>
             <p className={styles.body}>
-              Scroll to pan, <span className={styles.key}>⌘</span>-scroll to zoom, hold{' '}
-              <span className={styles.key}>Space</span> to drag the board. Open the renderer panel
-              from the top bar to drop a few thousand shapes in and watch it hold 60fps.
+              Press <span className={styles.key}>R</span> for a rectangle,{' '}
+              <span className={styles.key}>O</span> for an ellipse,{' '}
+              <span className={styles.key}>L</span> or <span className={styles.key}>A</span> for a
+              line or arrow. <span className={styles.key}>V</span> selects,{' '}
+              <span className={styles.key}>Space</span> pans.
             </p>
           </div>
         </div>
@@ -126,6 +142,7 @@ export function CanvasStage() {
         <ZoomControls />
       </div>
 
+      <Inspector />
       {devPanelOpen ? <DevPanel /> : null}
     </div>
   );

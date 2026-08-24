@@ -172,25 +172,75 @@ test.describe('culling and the minimap', () => {
 });
 
 test.describe('performance', () => {
-  test('holds up while panning 5,000 shapes', async ({ page }) => {
+  /** Pans by dispatching one wheel event per animation frame and times the frames. */
+  async function panForFrames(page: Page, frames = 90) {
+    return page.evaluate(async (count) => {
+      const stage = document.querySelector('[data-testid="stage"]')!;
+      const stamps: number[] = [];
+      await new Promise<void>((resolve) => {
+        let drawn = 0;
+        const tick = (time: number) => {
+          stamps.push(time);
+          stage.dispatchEvent(
+            new WheelEvent('wheel', { deltaY: 1, deltaX: 1, bubbles: true, cancelable: true }),
+          );
+          drawn += 1;
+          if (drawn < count) requestAnimationFrame(tick);
+          else resolve();
+        };
+        requestAnimationFrame(tick);
+      });
+      const deltas = stamps
+        .slice(1)
+        .map((t, i) => t - stamps[i]!)
+        .sort((a, b) => a - b);
+      return {
+        median: deltas[Math.floor(deltas.length / 2)] ?? 0,
+        p95: deltas[Math.floor(deltas.length * 0.95)] ?? 0,
+      };
+    }, frames);
+  }
+
+  const drawMs = async (page: Page) =>
+    Number.parseFloat(
+      (await page.evaluate(
+        () => document.querySelectorAll('[data-testid="dev-panel"] dd')[1]?.textContent ?? '',
+      )) || '0',
+    );
+
+  test('draws 5,000 elements within the frame budget', async ({ page }) => {
     await loadShapes(page, 5000);
     await page.keyboard.press('Shift+Digit1');
 
-    await page.mouse.move(600, 400);
-    for (let step = 0; step < 40; step += 1) {
-      await page.mouse.wheel(0, 40);
-    }
+    const timing = await panForFrames(page);
+    await expect.poll(() => drawMs(page)).toBeGreaterThan(0);
+    const cost = await drawMs(page);
 
-    const fps = await page.getByTestId('stat-fps').innerText();
-    const frame = await page.evaluate(() => {
-      const rows = document.querySelectorAll('[data-testid="dev-panel"] dd');
-      return rows[1]?.textContent ?? '';
-    });
-    const renderMs = Number.parseFloat(frame);
+    // The earlier version of this test panned right off the board and measured an
+    // empty screen, so it has to prove there was actually something to draw.
+    const { visible } = await drawnCounts(page);
+    expect(visible).toBeGreaterThan(4000);
 
-    console.log(`5,000 shapes — fps: ${fps}, frame: ${renderMs.toFixed(2)} ms`);
+    console.log(
+      `5,000 elements — draw ${cost.toFixed(1)}ms, frame median ${timing.median.toFixed(1)}ms, p95 ${timing.p95.toFixed(1)}ms, drawn ${visible}`,
+    );
+    expect(cost).toBeLessThan(12);
+  });
 
-    // A frame budget of 16.7ms is 60fps; drawing must leave room for everything else.
-    expect(renderMs).toBeLessThan(12);
+  test('does not choke when every element shares one style', async ({ page }) => {
+    // Regression guard: merging same-styled shapes into one unbounded path cost 145ms
+    // per frame. Real boards are full of identically styled elements, so this matters.
+    await loadShapes(page, 5000);
+    await page.keyboard.press('Shift+Digit1');
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    await page.getByLabel('Fill var(--shape-1)').click();
+    await page.keyboard.press('Escape');
+
+    await panForFrames(page, 60);
+    await expect.poll(() => drawMs(page)).toBeGreaterThan(0);
+    const cost = await drawMs(page);
+
+    console.log(`5,000 elements, one style — draw ${cost.toFixed(1)}ms`);
+    expect(cost).toBeLessThan(12);
   });
 });
