@@ -61,6 +61,8 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 src/
   canvas/     renderer, viewport maths, grid, theme colour cache
   geometry/   pure maths — rects, points, intersection, union
+  doc/        the Yjs document, undo, and the binding into the store
+  export/     PNG, SVG and PDF writers
   ink/        freehand sampling, straightening, simplifying, erasing
   input/      pointer state machine and keyboard shortcuts
   laser/      the ephemeral pointer trail — never saved
@@ -93,6 +95,24 @@ Directories for `tools/` and `model/` arrive with the phases that need them.
 | `Shift 2`                  | Zoom to selection (Phase 2)        |
 
 Shortcuts match on physical key position, so they work on any keyboard layout.
+
+## The document
+
+Board content lives in a [Yjs](https://yjs.dev) document rather than in component
+state. Each element is its own map, so two people editing different fields of the
+same shape both keep their change. Undo is scoped to this tab's origin, which is what
+makes `⌘Z` walk back your own edits and leave everyone else's alone — the same
+mechanism that carries into real-time collaboration in Phase 7.
+
+Two things deliberately stay **out** of the shared document:
+
+- **The camera.** Where you are looking is personal; putting it in the document would
+  drag collaborators around after each other. It goes in `localStorage`.
+- **The laser trail.** Ephemeral by definition — never saved, never undoable.
+
+Boards persist to IndexedDB, so the app keeps working with the network down. It has no
+service worker yet, so a _reload_ while offline will not load the app itself; that
+arrives with the rest of the offline work in Phase 11.
 
 ## Architecture
 

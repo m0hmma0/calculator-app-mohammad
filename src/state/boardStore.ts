@@ -1,4 +1,15 @@
 import { create } from 'zustand';
+import {
+  applyPatches,
+  createBoard,
+  deleteElements,
+  insertElements,
+  replaceAll,
+  transactLocal,
+  type BoardDoc,
+} from '@/doc/board';
+import { bindBoard } from '@/doc/binding';
+import { toYElement } from '@/doc/schema';
 import { unionRects, type Rect } from '@/geometry';
 import {
   clampZoom,
@@ -23,10 +34,10 @@ import {
   type ShapeType,
 } from '@/model/element';
 import { simplify, strokeBounds, toFlat, translatePoints, type InkPoint } from '@/ink/stroke';
-import { routeConnectors } from '@/model/connectors';
 import { scaleBoxInto } from '@/model/transform';
-import { compareZ, keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/zorder';
+import { keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/zorder';
 import { generateDemoElements } from '@/scene/demoElements';
+import { loadViewport, saveViewport } from './viewportStorage';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
 export type ContentTool = 'pen' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame';
@@ -82,9 +93,26 @@ interface BoardState {
   /** Bumped by anything that changes what the canvas should show. */
   renderVersion: number;
   snapEnabled: boolean;
+  /** False until anything saved in this browser has been loaded back. */
+  hydrated: boolean;
+  /** Whether the browser currently has a network connection. */
+  online: boolean;
+
+  undo: () => void;
+  redo: () => void;
+  /** Ends the current undo step, so the next change starts a new one. */
+  commitUndoStep: () => void;
+  /** A patch that is a complete action in itself, rather than one frame of a drag. */
+  applyDiscrete: (patches: ReadonlyMap<ElementId, Partial<BoardElement>>) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  setUndoState: (state: { canUndo: boolean; canRedo: boolean }) => void;
+  setOnline: (online: boolean) => void;
 
   devPanelOpen: boolean;
   shortcutsOpen: boolean;
+  paletteOpen: boolean;
+  contextMenu: { x: number; y: number } | null;
   stats: RenderStatsSnapshot;
 
   eraserMode: EraserMode;
@@ -140,6 +168,9 @@ interface BoardState {
 
   toggleDevPanel: () => void;
   toggleShortcuts: () => void;
+  togglePalette: () => void;
+  openContextMenu: (at: { x: number; y: number }) => void;
+  closeContextMenu: () => void;
   reportStats: (stats: RenderStatsSnapshot) => void;
 
   setEraserMode: (mode: EraserMode) => void;
@@ -153,36 +184,15 @@ interface BoardState {
 
 const ZOOM_STEP = 1.25;
 
-/** Elements are stored back-to-front so the renderer never has to sort per frame. */
-const sorted = (elements: BoardElement[]): BoardElement[] => [...elements].sort(compareZ);
-
 /**
- * A group has no geometry of its own — it is exactly the box around its children. Any
- * change to a child has to be followed by this, or the group's frame drifts away from
- * what it contains.
+ * The board document is the source of truth from here on. The array in this store is
+ * a derived view of it, kept up to date by the binding — which is what makes undo,
+ * offline persistence and (in Phase 7) collaboration all work off the same model
+ * rather than three parallel ones.
  */
-function withGroupBounds(elements: BoardElement[]): BoardElement[] {
-  const hasGroups = elements.some((element) => element.type === 'group');
-  if (!hasGroups) return elements;
-
-  const children = new Map<ElementId, BoardElement[]>();
-  for (const element of elements) {
-    if (!element.parentId) continue;
-    const list = children.get(element.parentId);
-    if (list) list.push(element);
-    else children.set(element.parentId, [element]);
-  }
-
-  return elements.map((element) => {
-    if (element.type !== 'group') return element;
-    const box = selectionAABB(children.get(element.id) ?? []);
-    if (!box) return element;
-    if (box.x === element.x && box.y === element.y && box.w === element.w && box.h === element.h) {
-      return element;
-    }
-    return { ...element, ...box };
-  });
-}
+export const board: BoardDoc = createBoard({
+  persistenceKey: typeof indexedDB === 'undefined' ? undefined : 'sabboura-board',
+});
 
 export const useBoardStore = create<BoardState>((set, get) => {
   const bump = (patch: Partial<BoardState>) =>
@@ -197,7 +207,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
   const topZ = (): string | null => get().elements.at(-1)?.z ?? null;
 
   return {
-    viewport: DEFAULT_VIEWPORT,
+    viewport: typeof localStorage === 'undefined' ? DEFAULT_VIEWPORT : loadViewport(),
     stageSize: { width: 1, height: 1 },
 
     tool: 'select',
@@ -215,9 +225,41 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
     renderVersion: 0,
     snapEnabled: true,
+    hydrated: false,
+    online: typeof navigator === 'undefined' ? true : navigator.onLine,
+
+    canUndo: false,
+    canRedo: false,
+
+    undo: () => {
+      get().endEditing();
+      board.undoManager.undo();
+    },
+
+    redo: () => {
+      get().endEditing();
+      board.undoManager.redo();
+    },
+
+    /**
+     * The capture window folds a drag's frames into one undo step, but it would just
+     * as happily fold two unrelated actions together. Discrete actions close their
+     * step explicitly so each is undone on its own.
+     */
+    commitUndoStep: () => board.undoManager.stopCapturing(),
+
+    applyDiscrete: (patches) => {
+      applyPatches(board, patches);
+      board.undoManager.stopCapturing();
+    },
+
+    setUndoState: ({ canUndo, canRedo }) => set({ canUndo, canRedo }),
+    setOnline: (online) => set({ online }),
 
     devPanelOpen: false,
     shortcutsOpen: false,
+    paletteOpen: false,
+    contextMenu: null,
     stats: { fps: 0, renderMs: 0, visible: 0 },
 
     eraserMode: 'object',
@@ -279,38 +321,27 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setPanning: (panning) => set({ panning }),
     setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
 
-    addElement: (element) =>
-      bump({
-        elements: sorted(routeConnectors([...get().elements, element])),
-        selection: [element.id],
-      }),
-
-    patchElements: (patches) => {
-      if (patches.size === 0) return;
-      let zChanged = false;
-      const next = get().elements.map((element) => {
-        const patch = patches.get(element.id);
-        if (!patch) return element;
-        if (patch.z !== undefined && patch.z !== element.z) zChanged = true;
-        return { ...element, ...patch };
-      });
-      const reconciled = routeConnectors(withGroupBounds(next));
-      bump({ elements: zChanged ? sorted(reconciled) : reconciled });
+    addElement: (element) => {
+      insertElements(board, [element]);
+      bump({ selection: [element.id] });
     },
 
-    replaceElements: (elements) =>
-      bump({ elements: sorted(routeConnectors(withGroupBounds(elements))) }),
+    patchElements: (patches) => applyPatches(board, patches),
+
+    replaceElements: (elements) => replaceAll(board, elements),
 
     deleteSelection: () => {
       const ids = new Set(get().selection);
       if (ids.size === 0) return;
       // Deleting a group takes its children with it.
-      bump({
-        elements: get().elements.filter(
-          (element) => !ids.has(element.id) && !(element.parentId && ids.has(element.parentId)),
-        ),
-        selection: [],
-      });
+      const doomed = get()
+        .elements.filter(
+          (element) => ids.has(element.id) || (element.parentId && ids.has(element.parentId)),
+        )
+        .map((element) => element.id);
+
+      deleteElements(board, doomed);
+      bump({ selection: [] });
     },
 
     duplicateSelection: (offset = 16) => {
@@ -327,10 +358,8 @@ export const useBoardStore = create<BoardState>((set, get) => {
         parentId: null,
       }));
 
-      bump({
-        elements: sorted([...get().elements, ...copies]),
-        selection: copies.map((copy) => copy.id),
-      });
+      insertElements(board, copies);
+      bump({ selection: copies.map((copy) => copy.id) });
     },
 
     nudgeSelection: (dx, dy) => {
@@ -344,7 +373,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
           }
         }
       }
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     selectOnly: (ids) => bump({ selection: [...ids] }),
@@ -382,15 +411,14 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const group = createElement({ type: 'group', box: bounds, z: keyBetween(topZ(), null) });
       const ids = new Set(chosen.map((element) => element.id));
 
-      bump({
-        elements: sorted([
-          ...get().elements.map((element) =>
-            ids.has(element.id) ? { ...element, parentId: group.id } : element,
-          ),
-          group,
-        ]),
-        selection: [group.id],
+      transactLocal(board, () => {
+        for (const id of ids) {
+          const map = board.elements.get(id);
+          if (map) map.set('parentId', group.id);
+        }
+        board.elements.set(group.id, toYElement(group));
       });
+      bump({ selection: [group.id] });
     },
 
     ungroupSelection: () => {
@@ -398,18 +426,15 @@ export const useBoardStore = create<BoardState>((set, get) => {
       if (groups.length === 0) return;
       const groupIds = new Set(groups.map((group) => group.id));
 
-      const freed: ElementId[] = [];
-      const elements = get()
-        .elements.filter((element) => !groupIds.has(element.id))
-        .map((element) => {
-          if (element.parentId && groupIds.has(element.parentId)) {
-            freed.push(element.id);
-            return { ...element, parentId: null };
-          }
-          return element;
-        });
+      const freed = get()
+        .elements.filter((element) => element.parentId && groupIds.has(element.parentId))
+        .map((element) => element.id);
 
-      bump({ elements, selection: freed });
+      transactLocal(board, () => {
+        for (const id of freed) board.elements.get(id)?.set('parentId', null);
+        for (const id of groupIds) board.elements.delete(id);
+      });
+      bump({ selection: freed });
     },
 
     toggleLockSelection: () => {
@@ -418,7 +443,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const locking = chosen.some((element) => !element.locked);
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of chosen) patches.set(element.id, { locked: locking });
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     toggleHiddenSelection: () => {
@@ -427,7 +452,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const hiding = chosen.some((element) => !element.hidden);
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of chosen) patches.set(element.id, { hidden: hiding });
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     reorderSelection: (command) => {
@@ -435,7 +460,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const keys = reorder(elements, new Set(selection), command);
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const [id, z] of keys) patches.set(id, { z });
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     alignSelection: (edge) => {
@@ -470,7 +495,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
             break;
         }
       }
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     distributeSelection: (axis) => {
@@ -501,7 +526,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
         patches.set(element.id, axis === 'x' ? { x: cursor + offset } : { y: cursor + offset });
         cursor += (axis === 'x' ? box.w : box.h) + gap;
       }
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     styleSelection: (patch) => {
@@ -509,25 +534,31 @@ export const useBoardStore = create<BoardState>((set, get) => {
       for (const element of selectedElements()) {
         patches.set(element.id, { style: { ...element.style, ...patch } });
       }
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     setSelectionOpacity: (opacity) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of selectedElements()) patches.set(element.id, { opacity });
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
 
     loadDemoElements: (count) => {
-      bump({ elements: sorted(generateDemoElements(count, count)), selection: [] });
+      replaceAll(board, generateDemoElements(count, count));
+      bump({ selection: [] });
       get().zoomToFit();
     },
 
-    clearBoard: () =>
-      bump({ elements: [], selection: [], draft: null, marquee: null, viewport: DEFAULT_VIEWPORT }),
+    clearBoard: () => {
+      replaceAll(board, []);
+      bump({ selection: [], draft: null, marquee: null, viewport: DEFAULT_VIEWPORT });
+    },
 
     toggleDevPanel: () => set((state) => ({ devPanelOpen: !state.devPanelOpen })),
     toggleShortcuts: () => set((state) => ({ shortcutsOpen: !state.shortcutsOpen })),
+    togglePalette: () => set((state) => ({ paletteOpen: !state.paletteOpen })),
+    openContextMenu: (at) => set({ contextMenu: at }),
+    closeContextMenu: () => set({ contextMenu: null }),
     reportStats: (stats) => set({ stats }),
 
     setEraserMode: (eraserMode) => set({ eraserMode }),
@@ -586,10 +617,11 @@ export const useBoardStore = create<BoardState>((set, get) => {
         };
       });
 
-      bump({
-        elements: sorted([...rest, ...pieces]),
-        selection: get().selection.filter((candidate) => candidate !== id),
+      transactLocal(board, () => {
+        board.elements.delete(id);
+        for (const piece of pieces) board.elements.set(piece.id, toYElement(piece));
       });
+      bump({ selection: get().selection.filter((candidate) => candidate !== id) });
     },
 
     beginEditing: (id) => bump({ editingId: id, selection: [id] }),
@@ -600,6 +632,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       // An empty text box left behind by an accidental click is just litter.
       const element = elements.find((candidate) => candidate.id === editingId);
       const empty = element?.type === 'text' && (element.text ?? '').trim() === '';
+      board.undoManager.stopCapturing();
       bump({
         editingId: null,
         ...(empty
@@ -614,7 +647,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setElementText: (id, text) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       patches.set(id, { text });
-      get().patchElements(patches);
+      get().applyDiscrete(patches);
     },
   };
 });
@@ -648,3 +681,41 @@ export function childrenOf(state: BoardState, id: ElementId): BoardElement[] {
 
 export { clampZoom, scaleBoxInto };
 export type { ElementType };
+
+/**
+ * Keeps the store's element array in step with the document. Every change — local,
+ * replayed from storage, or (from Phase 7) from someone else — arrives here.
+ */
+bindBoard(board, (elements) => {
+  useBoardStore.setState((state) => ({
+    elements,
+    renderVersion: state.renderVersion + 1,
+    // Drop anything from the selection that no longer exists.
+    selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
+  }));
+});
+
+void board.whenReady.then(() => {
+  useBoardStore.setState({ hydrated: true });
+});
+
+const syncUndoState = () => {
+  useBoardStore
+    .getState()
+    .setUndoState({ canUndo: board.undoManager.canUndo(), canRedo: board.undoManager.canRedo() });
+};
+
+board.undoManager.on('stack-item-added', syncUndoState);
+board.undoManager.on('stack-item-popped', syncUndoState);
+board.undoManager.on('stack-cleared', syncUndoState);
+
+if (typeof window !== 'undefined') {
+  const report = () => useBoardStore.getState().setOnline(navigator.onLine);
+  window.addEventListener('online', report);
+  window.addEventListener('offline', report);
+}
+
+// The camera follows you back after a reload, but stays out of the shared document.
+useBoardStore.subscribe((state, previous) => {
+  if (state.viewport !== previous.viewport) saveViewport(state.viewport);
+});

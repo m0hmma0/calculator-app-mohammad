@@ -6,6 +6,7 @@ import { renderOverlay } from '@/canvas/renderOverlay';
 import { getCanvasColors } from '@/canvas/theme';
 import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
 import { useCanvasInteraction } from '@/input/useCanvasInteraction';
+import { useClipboard } from '@/input/useClipboard';
 import { useImageImport } from '@/input/useImageImport';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
@@ -13,7 +14,10 @@ import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
 import { DevPanel } from './DevPanel';
 import { Inspector } from './Inspector';
 import { Minimap } from './Minimap';
+import { CommandPalette } from './CommandPalette';
+import { ContextMenu } from './ContextMenu';
 import { ShortcutSheet } from './ShortcutSheet';
+import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
 import { ToolOptions } from './ToolOptions';
 import { ZoomControls } from './ZoomControls';
@@ -105,6 +109,7 @@ export function CanvasStage() {
   const { canvasRef, redraw } = useCanvas2D(draw);
   useCanvasInteraction(hostRef);
   useImageImport(hostRef);
+  useClipboard(hostRef);
 
   // The draw callback needs to ask for another frame — when an image finishes
   // decoding, and while a laser trail is still fading.
@@ -185,6 +190,9 @@ export function CanvasStage() {
       <TextEditor viewport={viewport} />
       <Inspector />
       <ShortcutSheet />
+      <CommandPalette />
+      <ContextMenu />
+      <StatusBar />
       {devPanelOpen ? <DevPanel /> : null}
     </div>
   );

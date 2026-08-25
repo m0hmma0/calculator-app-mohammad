@@ -46,6 +46,8 @@ export function useShortcuts(): void {
 
       // While a text box is open, the canvas keeps out of the way entirely.
       if (store.editingId && event.code !== 'Escape') return;
+      // The palette owns the keyboard while it is up.
+      if (store.paletteOpen && event.code !== 'Escape') return;
 
       if (event.code === 'Space') {
         event.preventDefault(); // otherwise the page tries to scroll
@@ -55,6 +57,19 @@ export function useShortcuts(): void {
 
       if (mod) {
         switch (event.code) {
+          case 'KeyZ':
+            event.preventDefault();
+            if (event.shiftKey) store.redo();
+            else store.undo();
+            return;
+          case 'KeyY':
+            event.preventDefault();
+            store.redo();
+            return;
+          case 'KeyK':
+            event.preventDefault();
+            store.togglePalette();
+            return;
           case 'KeyA':
             event.preventDefault();
             store.selectAll();
@@ -104,6 +119,14 @@ export function useShortcuts(): void {
 
       switch (event.code) {
         case 'Escape':
+          if (store.paletteOpen) {
+            store.togglePalette();
+            return;
+          }
+          if (store.contextMenu) {
+            store.closeContextMenu();
+            return;
+          }
           if (store.shortcutsOpen) {
             store.toggleShortcuts();
             return;

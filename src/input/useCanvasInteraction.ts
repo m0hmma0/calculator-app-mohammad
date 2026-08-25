@@ -743,6 +743,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (drag.kind === 'move') store.setSnapFeedback([], []);
       if (drag.kind === 'rotate') store.setRotationReadout(null);
 
+      // A whole gesture is one undo step; the next one starts fresh.
+      if (drag.kind !== 'none') store.commitUndoStep();
+
       drag = { kind: 'none' };
     };
 
@@ -776,6 +779,29 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (drag.kind === 'none') updateHoverCursor();
     });
 
+    const onContextMenu = (event: MouseEvent) => {
+      if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      event.preventDefault();
+
+      const store = useBoardStore.getState();
+      const point = board(event);
+      const target = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
+        includeLocked: true,
+      });
+
+      // Right-clicking something that is not selected selects it first, so the menu
+      // always acts on what was clicked.
+      if (target) {
+        const id = target.parentId ?? target.id;
+        if (!store.selection.includes(id)) store.selectOnly([id]);
+      } else {
+        store.clearSelection();
+      }
+
+      const rect = host.getBoundingClientRect();
+      store.openContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+    };
+
     const onDoubleClick = (event: MouseEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
       const store = useBoardStore.getState();
@@ -789,6 +815,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       }
     };
 
+    host.addEventListener('contextmenu', onContextMenu);
     host.addEventListener('dblclick', onDoubleClick);
     host.addEventListener('wheel', onWheel, { passive: false });
     host.addEventListener('pointerdown', onPointerDown);
@@ -799,6 +826,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     return () => {
       unsubscribe();
+      host.removeEventListener('contextmenu', onContextMenu);
       host.removeEventListener('dblclick', onDoubleClick);
       host.removeEventListener('wheel', onWheel);
       host.removeEventListener('pointerdown', onPointerDown);

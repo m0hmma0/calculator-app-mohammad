@@ -42,7 +42,20 @@ if (/<link[^>]+href=["']https?:/i.test(preamble)) {
 }
 
 const title = /<title>[\s\S]*?<\/title>/i.exec(preamble)?.[0] ?? '<title>Sabboura</title>';
-const fragment = `${title}\n${body.trim()}\n${assets.trim()}\n`;
+
+/*
+ * Yjs writes a literal U+FFFD when it splits a surrogate pair, so the character ends
+ * up inside the bundle's string literals. The artifact host rejects a document
+ * containing one, so it is rewritten as the equivalent JavaScript escape — same
+ * string value at runtime, no invalid character in the file.
+ */
+const escaped = `${title}\n${body.trim()}\n${assets.trim()}\n`.replaceAll('\uFFFD', '\\uFFFD');
+
+if (escaped.includes('\uFFFD')) {
+  throw new Error('Preview still contains a replacement character after escaping.');
+}
+
+const fragment = escaped;
 
 if (!fragment.includes('id="root"')) {
   throw new Error('Preview is missing the #root mount point.');

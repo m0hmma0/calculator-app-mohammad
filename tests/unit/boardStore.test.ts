@@ -22,8 +22,10 @@ function seed(boxes: Array<{ x: number; y: number; w?: number; h?: number }>): B
 const byId = (id: string) => store().elements.find((element) => element.id === id)!;
 
 beforeEach(() => {
+  // The document outlives each test, so it has to be emptied through the real path
+  // rather than by overwriting the store's derived array.
+  store().clearBoard();
   useBoardStore.setState({
-    elements: [],
     selection: [],
     draft: null,
     marquee: null,
