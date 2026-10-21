@@ -61,7 +61,11 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 src/
   canvas/     renderer, viewport maths, grid, theme colour cache
   geometry/   pure maths — rects, points, intersection, union
-  doc/        the Yjs document, undo, and the binding into the store
+  api/        typed client for the Worker
+  auth/       Firebase sign-in and the current token
+  doc/        the Yjs document, undo, the binding into the store, server sync
+  pages/      sign-in, dashboard, board, and the signed-out local board
+  router/     three routes over the History API
   export/     PNG, SVG and PDF writers
   ink/        freehand sampling, straightening, simplifying, erasing
   input/      pointer state machine and keyboard shortcuts
@@ -74,7 +78,8 @@ src/
   ui/         React components: top bar, canvas stage, panels
   styles/     design tokens and global CSS
 shared/       types used by both the app and the Worker
-worker/       Cloudflare Worker: API routes, and later the board rooms
+worker/       Cloudflare Worker: auth, API routes, and later the board rooms
+migrations/   D1 schema
 tests/
   unit/       Vitest
   e2e/        Playwright
@@ -113,6 +118,34 @@ Two things deliberately stay **out** of the shared document:
 Boards persist to IndexedDB, so the app keeps working with the network down. It has no
 service worker yet, so a _reload_ while offline will not load the app itself; that
 arrives with the rest of the offline work in Phase 11.
+
+## Accounts and storage
+
+Signing in is Firebase (Google); every request carries that ID token and the Worker
+verifies it against Google's published keys, pinning the audience and issuer. Nothing
+is trusted from the browser — a board belongs to the account that owns the row.
+
+| Where        | What                                                                     |
+| ------------ | ------------------------------------------------------------------------ |
+| D1           | users, folders, boards — anything that has to be queried                 |
+| R2           | each board's Yjs snapshot and its thumbnail                              |
+| IndexedDB    | the same board locally, so it opens instantly and survives going offline |
+| localStorage | the camera, which is personal rather than shared                         |
+
+**A build with no Firebase project configured is still a whiteboard.** It falls back
+to a single local board saved in the browser, which is what the published preview
+shows. Set `VITE_FIREBASE_*` (see `.env.example`) to turn accounts on.
+
+### Running the backend locally
+
+```bash
+npm run build
+node scripts/test-backend.mjs   # Worker + local D1 + R2 on :8788
+```
+
+That script also serves a JWKS and mints tokens on `:8799`, so the end-to-end tests
+exercise the real verification path — same code, different key owner — rather than a
+bypass of it.
 
 ## Architecture
 

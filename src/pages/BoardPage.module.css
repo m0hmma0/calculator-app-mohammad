@@ -1,0 +1,37 @@
+.back {
+  color: var(--text-2);
+  font-size: 13px;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.back:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.missing {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+  background: var(--canvas-bg);
+}
+
+.missing h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.missing p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}

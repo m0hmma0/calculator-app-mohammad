@@ -1,12 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 4173;
+const STATIC_PORT = 4173;
+const BACKEND_PORT = 8788;
 const isCI = !!process.env.CI;
 
 // Sandboxes and CI images sometimes ship a Chromium that predates the pinned
 // Playwright version. Point PLAYWRIGHT_CHROMIUM_EXECUTABLE at it to reuse it
 // instead of downloading a second copy; unset, Playwright resolves its own.
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+const launchOptions = executablePath ? { launchOptions: { executablePath } } : {};
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -15,23 +17,43 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   workers: isCI ? 1 : undefined,
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list']],
-  use: {
-    baseURL: `http://localhost:${PORT}`,
-    trace: 'on-first-retry',
-  },
+  use: { trace: 'on-first-retry' },
+
   projects: [
     {
-      name: 'chromium',
+      // The canvas, which needs no backend at all.
+      name: 'canvas',
+      testIgnore: /workspace\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
-        ...(executablePath ? { launchOptions: { executablePath } } : {}),
+        ...launchOptions,
+        baseURL: `http://localhost:${STATIC_PORT}`,
+      },
+    },
+    {
+      // Accounts, folders and boards, against the real Worker on local D1 and R2.
+      name: 'workspace',
+      testMatch: /workspace\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        ...launchOptions,
+        baseURL: `http://localhost:${BACKEND_PORT}`,
       },
     },
   ],
-  webServer: {
-    command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !isCI,
-    timeout: 120_000,
-  },
+
+  webServer: [
+    {
+      command: `npm run build && npm run preview -- --port ${STATIC_PORT} --strictPort`,
+      url: `http://localhost:${STATIC_PORT}`,
+      reuseExistingServer: !isCI,
+      timeout: 120_000,
+    },
+    {
+      command: 'node scripts/test-backend.mjs',
+      url: `http://localhost:${BACKEND_PORT}/api/health`,
+      reuseExistingServer: !isCI,
+      timeout: 180_000,
+    },
+  ],
 });

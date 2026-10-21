@@ -190,9 +190,18 @@ const ZOOM_STEP = 1.25;
  * offline persistence and (in Phase 7) collaboration all work off the same model
  * rather than three parallel ones.
  */
-export const board: BoardDoc = createBoard({
-  persistenceKey: typeof indexedDB === 'undefined' ? undefined : 'sabboura-board',
+const canPersist = typeof indexedDB !== 'undefined';
+
+/**
+ * Mutable, because opening a board swaps the whole document. Actions close over the
+ * module binding rather than a snapshot of it, so they always write to whichever
+ * board is currently open.
+ */
+let board: BoardDoc = createBoard({
+  persistenceKey: canPersist ? 'sabboura-local' : undefined,
 });
+
+export const boardDoc = (): BoardDoc => board;
 
 export const useBoardStore = create<BoardState>((set, get) => {
   const bump = (patch: Partial<BoardState>) =>
@@ -683,31 +692,55 @@ export { clampZoom, scaleBoxInto };
 export type { ElementType };
 
 /**
- * Keeps the store's element array in step with the document. Every change — local,
- * replayed from storage, or (from Phase 7) from someone else — arrives here.
+ * Connects a document to the store: element changes flow in, undo availability is
+ * reported, and anything previously attached is released. Called once at startup and
+ * again each time a different board is opened.
  */
-bindBoard(board, (elements) => {
-  useBoardStore.setState((state) => ({
-    elements,
-    renderVersion: state.renderVersion + 1,
-    // Drop anything from the selection that no longer exists.
-    selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
-  }));
-});
+let binding: ReturnType<typeof bindBoard> | null = null;
 
-void board.whenReady.then(() => {
-  useBoardStore.setState({ hydrated: true });
-});
+function attachDocument(doc: BoardDoc): void {
+  binding?.destroy();
 
-const syncUndoState = () => {
-  useBoardStore
-    .getState()
-    .setUndoState({ canUndo: board.undoManager.canUndo(), canRedo: board.undoManager.canRedo() });
-};
+  binding = bindBoard(doc, (elements) => {
+    useBoardStore.setState((state) => ({
+      elements,
+      renderVersion: state.renderVersion + 1,
+      // Drop anything from the selection that no longer exists.
+      selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
+    }));
+  });
 
-board.undoManager.on('stack-item-added', syncUndoState);
-board.undoManager.on('stack-item-popped', syncUndoState);
-board.undoManager.on('stack-cleared', syncUndoState);
+  const syncUndoState = () =>
+    useBoardStore
+      .getState()
+      .setUndoState({ canUndo: doc.undoManager.canUndo(), canRedo: doc.undoManager.canRedo() });
+
+  doc.undoManager.on('stack-item-added', syncUndoState);
+  doc.undoManager.on('stack-item-popped', syncUndoState);
+  doc.undoManager.on('stack-cleared', syncUndoState);
+  syncUndoState();
+
+  useBoardStore.setState({ hydrated: false });
+  void doc.whenReady.then(() => useBoardStore.setState({ hydrated: true }));
+}
+
+attachDocument(board);
+
+/**
+ * Swaps in the document for a different board. The previous one is detached and
+ * destroyed, so its IndexedDB handle and observers do not linger.
+ */
+export function openBoardDocument(boardId: string | null): BoardDoc {
+  const key = boardId ? `sabboura-board-${boardId}` : 'sabboura-local';
+  const previous = board;
+
+  board = createBoard({ persistenceKey: canPersist ? key : undefined });
+  attachDocument(board);
+  useBoardStore.setState({ selection: [], editingId: null, draft: null, marquee: null });
+
+  previous.destroy();
+  return board;
+}
 
 if (typeof window !== 'undefined') {
   const report = () => useBoardStore.getState().setOnline(navigator.onLine);

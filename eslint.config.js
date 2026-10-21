@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       'dist',
       'dist-preview',
+      'dist-test',
       'preview.html',
       'coverage',
       'playwright-report',

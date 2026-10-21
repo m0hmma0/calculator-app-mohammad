@@ -8,6 +8,7 @@ import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
 import { useCanvasInteraction } from '@/input/useCanvasInteraction';
 import { useClipboard } from '@/input/useClipboard';
 import { useImageImport } from '@/input/useImageImport';
+import { useShortcuts } from '@/input/useShortcuts';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
@@ -110,6 +111,9 @@ export function CanvasStage() {
   useCanvasInteraction(hostRef);
   useImageImport(hostRef);
   useClipboard(hostRef);
+  // Shortcuts belong to the canvas, not the app shell: wherever a board is on screen
+  // — a signed-in board or the local one — the keys work.
+  useShortcuts();
 
   // The draw callback needs to ask for another frame — when an image finishes
   // decoding, and while a laser trail is still fading.
