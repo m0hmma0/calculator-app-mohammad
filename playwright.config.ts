@@ -48,6 +48,13 @@ export default defineConfig({
       url: `http://localhost:${STATIC_PORT}`,
       reuseExistingServer: !isCI,
       timeout: 120_000,
+      // The canvas tests run the signed-out local board. A developer's .env would turn
+      // this build into a sign-in page; variables set here take precedence over it.
+      env: {
+        VITE_FIREBASE_API_KEY: '',
+        VITE_FIREBASE_AUTH_DOMAIN: '',
+        VITE_FIREBASE_PROJECT_ID: '',
+      },
     },
     {
       command: 'node scripts/test-backend.mjs',

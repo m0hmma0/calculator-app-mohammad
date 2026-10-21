@@ -78,6 +78,16 @@ export const api = {
   duplicateBoard: (id: string) =>
     request<{ board: BoardRecord }>(`/api/boards/${id}/duplicate`, { method: 'POST' }),
 
+  /**
+   * An <img> cannot send the sign-in token, so a thumbnail is fetched like any other
+   * private resource and handed back as an object URL. The caller revokes it.
+   */
+  async thumbnail(path: string): Promise<string | null> {
+    const response = await fetch(path, { headers: await authHeaders() });
+    if (!response.ok) return null;
+    return URL.createObjectURL(await response.blob());
+  },
+
   /** Returns null for a board that has never been saved. */
   async loadSnapshot(id: string): Promise<Uint8Array | null> {
     const response = await fetch(`/api/boards/${id}/snapshot`, { headers: await authHeaders() });

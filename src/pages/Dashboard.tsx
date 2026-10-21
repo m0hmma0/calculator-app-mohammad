@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { api } from '@/api/client';
 import { signOutOfGoogle } from '@/auth/firebase';
 import { Link, useRouter } from '@/router/router';
 import { folderPath, useWorkspace } from '@/state/workspaceStore';
@@ -47,27 +48,68 @@ function FolderTree({
   );
 }
 
+/** The thumbnail endpoint needs the sign-in token, so it cannot be a plain src. */
+function Thumbnail({ url }: { url: string | null }) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!url) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void api.thumbnail(url).then((next) => {
+      if (cancelled) {
+        if (next) URL.revokeObjectURL(next);
+        return;
+      }
+      objectUrl = next;
+      setSrc(next);
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url]);
+
+  if (!url) return <span className={styles.empty}>Empty board</span>;
+  return src ? <img src={src} alt="" /> : null;
+}
+
+/** Every folder, labelled with its full path so two folders named "Q4" stay apart. */
+function folderChoices(folders: FolderRecord[]) {
+  return folders
+    .map((folder) => ({
+      id: folder.id,
+      label: folderPath(folders, folder.id)
+        .map((step) => step.name)
+        .join(' / '),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function BoardCard({
   board,
+  folders,
   onStar,
   onRename,
+  onMove,
   onDuplicate,
   onTrash,
 }: {
   board: BoardRecord;
+  folders: FolderRecord[];
   onStar: () => void;
   onRename: () => void;
+  onMove: (folderId: string | null) => void;
   onDuplicate: () => void;
   onTrash: () => void;
 }) {
+  const [moving, setMoving] = useState(false);
+  const choices = useMemo(() => folderChoices(folders), [folders]);
+
   return (
     <article className={styles.card} data-testid={`board-${board.id}`}>
       <Link to={{ name: 'board', boardId: board.id }} className={styles.thumb}>
-        {board.thumbnailUrl ? (
-          <img src={board.thumbnailUrl} alt="" loading="lazy" />
-        ) : (
-          <span className={styles.empty}>Empty board</span>
-        )}
+        <Thumbnail url={board.thumbnailUrl} />
       </Link>
 
       <div className={styles.cardFoot}>
@@ -90,6 +132,14 @@ function BoardCard({
         <button type="button" onClick={onRename} data-testid={`rename-${board.id}`}>
           Rename
         </button>
+        <button
+          type="button"
+          aria-expanded={moving}
+          onClick={() => setMoving((current) => !current)}
+          data-testid={`move-${board.id}`}
+        >
+          Move
+        </button>
         <button type="button" onClick={onDuplicate} data-testid={`duplicate-${board.id}`}>
           Duplicate
         </button>
@@ -97,6 +147,27 @@ function BoardCard({
           Delete
         </button>
       </div>
+
+      {moving ? (
+        <label className={styles.moveTo}>
+          <span>Move to</span>
+          <select
+            value={board.folderId ?? ''}
+            data-testid={`move-to-${board.id}`}
+            onChange={(event) => {
+              setMoving(false);
+              onMove(event.target.value === '' ? null : event.target.value);
+            }}
+          >
+            <option value="">All boards (top level)</option>
+            {choices.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
     </article>
   );
 }
@@ -275,11 +346,13 @@ export function Dashboard({ view }: { view: View }) {
                 <BoardCard
                   key={board.id}
                   board={board}
+                  folders={workspace.folders}
                   onStar={() => void workspace.starBoard(board.id, !board.starred)}
                   onRename={() => {
                     const title = window.prompt('Rename board', board.title);
                     if (title !== null) void workspace.renameBoard(board.id, title);
                   }}
+                  onMove={(folderId) => void workspace.moveBoard(board.id, folderId)}
                   onDuplicate={() => void workspace.duplicateBoard(board.id)}
                   onTrash={() => void workspace.trashBoard(board.id)}
                 />

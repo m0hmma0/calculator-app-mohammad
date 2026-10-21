@@ -32,6 +32,17 @@ async function createBoard(page: Page) {
   return new URL(page.url()).pathname.replace('/b/', '');
 }
 
+/** Visible is not enough: a broken image is visible too. This one has to decode. */
+async function expectThumbnailLoaded(page: Page, boardId: string) {
+  const image = page.getByTestId(`board-${boardId}`).locator('img');
+  await expect(image).toBeVisible({ timeout: 15_000 });
+  await expect
+    .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(0);
+}
+
 async function drawRectangle(page: Page, from: [number, number], to: [number, number]) {
   await page.keyboard.press('KeyR');
   await page.mouse.move(from[0], from[1]);
@@ -105,9 +116,23 @@ test.describe('folders and boards', () => {
     await expect(boardCards(page)).toHaveCount(2);
     await expect(page.getByText('Roadmap copy')).toBeVisible();
 
+    page.removeAllListeners('dialog');
+    page.on('dialog', (dialog) => void dialog.accept('Archive'));
+    await page.getByTestId('new-folder').click();
+    await expect(page.getByText('Archive')).toBeVisible();
+
+    await page.getByTestId(`move-${id}`).click();
+    await page.getByTestId(`move-to-${id}`).selectOption({ label: 'Archive' });
+    await expect(page.getByTestId(`board-${id}`)).toHaveCount(0);
+    await expect(boardCards(page)).toHaveCount(1);
+
     // All of it survives a reload, because it lives on the server.
     await page.reload();
-    await expect(boardCards(page)).toHaveCount(2);
+    await expect(boardCards(page)).toHaveCount(1);
+    await expect(page.getByText('Roadmap copy')).toBeVisible();
+
+    await page.getByText('Archive').first().click();
+    await expect(page.getByTestId(`board-${id}`)).toBeVisible();
     await expect(page.getByText('Roadmap', { exact: true })).toBeVisible();
   });
 
@@ -159,7 +184,7 @@ test.describe('board content', () => {
   // Checklist item 3.
   test('saves what you drew and shows it as a thumbnail', async ({ page }) => {
     await signIn(page, newAccount('draw'));
-    await createBoard(page);
+    const id = await createBoard(page);
 
     await drawRectangle(page, [360, 300], [520, 420]);
     await drawRectangle(page, [560, 300], [700, 420]);
@@ -168,9 +193,21 @@ test.describe('board content', () => {
     await expect(boardCards(page)).toHaveCount(1);
 
     // The thumbnail is written with the snapshot, so it appears after the save lands.
-    const thumbnail = page.locator('[data-testid^="board-brd_"] img');
-    await expect(thumbnail).toBeVisible({ timeout: 15_000 });
-    expect(await thumbnail.getAttribute('src')).toContain('/thumbnail');
+    await expectThumbnailLoaded(page, id);
+
+    // And it survives a reload, which is when it has to come from the server alone.
+    await page.reload();
+    await expectThumbnailLoaded(page, id);
+
+    // A duplicate shows the same picture straight away, not an empty card.
+    await page.getByTestId(`duplicate-${id}`).click();
+    await expect(boardCards(page)).toHaveCount(2);
+    const copy = (
+      await boardCards(page).evaluateAll((cards) => cards.map((card) => card.dataset.testid))
+    )
+      .map((testId) => testId!.replace('board-', ''))
+      .find((cardId) => cardId !== id)!;
+    await expectThumbnailLoaded(page, copy);
   });
 
   // Checklist item 4 — the gate. A second browser is a second device.
@@ -182,7 +219,7 @@ test.describe('board content', () => {
 
     // Leaving the board flushes whatever has not been sent.
     await page.getByTestId('back-to-boards').click();
-    await expect(page.locator('[data-testid^="board-brd_"] img')).toBeVisible({ timeout: 15_000 });
+    await expectThumbnailLoaded(page, id);
 
     const elsewhere = await browser.newContext();
     const second = await elsewhere.newPage();

@@ -82,6 +82,7 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
   const now = Date.now();
   const copyId = newId('brd');
   let copiedSnapshot: string | null = null;
+  let copiedThumbnail: string | null = null;
 
   if (source.snapshot_key) {
     const object = await env.FILES.get(source.snapshot_key);
@@ -91,18 +92,29 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
     }
   }
 
+  if (source.thumbnail_key) {
+    const object = await env.FILES.get(source.thumbnail_key);
+    if (object) {
+      copiedThumbnail = thumbnailKey(copyId);
+      await env.FILES.put(copiedThumbnail, await object.arrayBuffer(), {
+        httpMetadata: { contentType: 'image/png' },
+      });
+    }
+  }
+
   await env.DB.prepare(
     `INSERT INTO boards (id, owner_id, folder_id, title, starred, search_text, snapshot_key,
-                         created_at, updated_at, opened_at)
-     VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7, ?7, ?7)`,
+                         thumbnail_key, created_at, updated_at, opened_at)
+     VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7, ?8, ?8, ?8)`,
   )
     .bind(
       copyId,
       account.uid,
       source.folder_id,
       `${source.title} copy`.slice(0, 120),
-      '',
+      source.search_text,
       copiedSnapshot,
+      copiedThumbnail,
       now,
     )
     .run();
