@@ -7,9 +7,9 @@ with something the user checks themselves against a written checklist.
 
 ## Where things stand
 
-Phases 0–5 are done, each verified by its checklist and green CI. The next phase is
-**6 (images on R2)**, but see _Blocked_ below — Phase 5 is written and tested but has
-never been deployed.
+Phases 0–5 are done, each verified by its checklist and green CI. Phase 5 is deployed
+at <https://sabboura.mh-hamad.workers.dev> (D1 `sabboura`, R2 `sabboura-files`,
+migration 0001 applied remotely). The next phase is **6 (images on R2)**.
 
 The full plan, including every phase's checklist, lives in an artifact:
 <https://claude.ai/code/artifact/5e80f000-99d0-42bf-9525-7e76a632abdb>
@@ -20,14 +20,16 @@ A live preview of the current build (signed-out local mode) is published at:
 `git log` is the other source of truth — each phase is one commit whose message says
 what it added and what it fixed.
 
-## Blocked on the user
+## Deploying
 
-- **Deploying Phase 5.** Needs `CLOUDFLARE_API_TOKEN` as an environment secret
-  (Workers Scripts: Edit, D1: Edit, R2: Edit). `CLOUDFLARE_ACCOUNT_ID` is already
-  set; the token is not — check with `npx wrangler whoami`.
-- **Firebase web config** — `apiKey`, `authDomain`, `projectId` for a `.env` file.
-  These are public by design, so they can come through chat. Without them the app
-  falls back to a single local board, which is deliberate.
+`npm run deploy` builds and runs `wrangler deploy`. It needs `CLOUDFLARE_API_TOKEN` as
+an environment secret (Workers Scripts: Edit, D1: Edit, R2: Edit) and `.env` with the
+Firebase web config (see `.env.example`; values are public: project `r4m-whiteboard`).
+`.env` is gitignored, so a fresh container must recreate it before building, or the
+bundle falls back to local-only mode. The container's proxy blocks `*.workers.dev`, so
+the live site cannot be fetched from here; `npx wrangler deployments list` confirms a
+deploy. Google sign-in needs `sabboura.mh-hamad.workers.dev` in Firebase's authorised
+domains.
 
 Never ask for a token, key or password in chat; direct the user to environment
 secrets instead.
