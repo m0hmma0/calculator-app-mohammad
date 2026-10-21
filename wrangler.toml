@@ -16,13 +16,13 @@ enabled = true
 # The Firebase project whose ID tokens this Worker will accept. Public by design —
 # it only says which issuer is trusted, and every token is still verified against
 # Google's published keys.
-FIREBASE_PROJECT_ID = ""
+FIREBASE_PROJECT_ID = "r4m-whiteboard"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "sabboura"
-# Replaced with the real id at deploy time; local dev emulates D1 and ignores it.
-database_id = "local-dev"
+# Local dev emulates D1 and ignores this id.
+database_id = "c8af5b61-10c3-4ef5-9348-03a6d5b856a4"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
