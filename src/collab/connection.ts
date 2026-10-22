@@ -34,7 +34,15 @@ export interface RoomEvents {
 
 /** Local edits are gathered for this long and sent as one update. */
 const BATCH_MS = 30;
-const PING_MS = 25_000;
+/**
+ * How often the room is asked "still there?", and how long an answer may take. A
+ * socket whose network has quietly gone — wifi off with no "offline" event from the
+ * system, a laptop lid closed — still looks open; only a missing answer shows it.
+ */
+const PING_MS = 10_000;
+const PONG_TIMEOUT_MS = 5_000;
+/** A connection that opens but never gets as far as "ready" is retried after this. */
+const HANDSHAKE_TIMEOUT_MS = 10_000;
 const BACKOFF_MS = [300, 1000, 2000, 4000, 8000, 15_000];
 
 /**
@@ -53,6 +61,7 @@ export class RoomConnection {
   private attempts = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private batch: Uint8Array[] = [];
   private batchTimer: ReturnType<typeof setTimeout> | null = null;
   private unacked = 0;
@@ -70,6 +79,8 @@ export class RoomConnection {
     this.doc.doc.on('update', this.onLocalUpdate);
     window.addEventListener('online', this.onOnline);
     window.addEventListener('offline', this.onOffline);
+    window.addEventListener('focus', this.onReturn);
+    document.addEventListener('visibilitychange', this.onReturn);
     this.connect();
   }
 
@@ -78,6 +89,8 @@ export class RoomConnection {
     this.doc.doc.off('update', this.onLocalUpdate);
     window.removeEventListener('online', this.onOnline);
     window.removeEventListener('offline', this.onOffline);
+    window.removeEventListener('focus', this.onReturn);
+    document.removeEventListener('visibilitychange', this.onReturn);
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.batchTimer) clearTimeout(this.batchTimer);
     this.stopPing();
@@ -138,10 +151,15 @@ export class RoomConnection {
     };
     ws.onmessage = (event) => this.onMessage(ws, event);
     ws.onclose = (event) => this.onClose(ws, event);
+    // Cleared by the room's first word; if that never comes, start again.
+    this.clearPongTimer();
+    this.pongTimer = setTimeout(this.declareDead, HANDSHAKE_TIMEOUT_MS);
   }
 
   private onMessage(ws: WebSocket, event: MessageEvent): void {
     if (ws !== this.ws) return;
+    // Anything at all from the room proves the line is alive.
+    this.clearPongTimer();
 
     if (typeof event.data === 'string') {
       if (event.data === 'pong') return;
@@ -192,35 +210,87 @@ export class RoomConnection {
 
   private onClose(ws: WebSocket, event: CloseEvent): void {
     if (ws !== this.ws) return;
+    this.lost(event.code);
+  }
+
+  /** The connection is gone, however that was discovered. Try again. */
+  private lost(code: number): void {
     this.ws = null;
     this.ready = false;
     this.stopPing();
     this.resolveSettled();
     if (this.stopped) return;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
 
     // 4401: the token was refused. Worth one retry with a fresh token; after that, and
     // for 4404 (not this person's board), stop rather than hammer the room.
-    if (event.code === 4404 || (event.code === 4401 && this.attempts > 0)) {
+    if (code === 4404 || (code === 4401 && this.attempts > 0)) {
       this.setStatus('refused');
       return;
     }
-    if (!navigator.onLine) {
-      this.setStatus('offline');
-      return;
-    }
 
-    this.setStatus(this.everConnected ? 'reconnecting' : 'connecting');
+    // The system's "online" flag is a hint, not a promise, so retries continue either
+    // way; coming back online just makes the next one happen at once.
+    this.setStatus(
+      !navigator.onLine ? 'offline' : this.everConnected ? 'reconnecting' : 'connecting',
+    );
     const base = BACKOFF_MS[Math.min(this.attempts, BACKOFF_MS.length - 1)]!;
     this.attempts += 1;
     // Jitter, so a room that restarts is not hit by everyone in the same instant.
     this.retryTimer = setTimeout(() => this.connect(), base * (0.6 + Math.random() * 0.4));
   }
 
+  /**
+   * No answer to a ping: the socket is open in name only. Drop it and reconnect —
+   * the browser may not fire its own close event for minutes.
+   */
+  private readonly declareDead = () => {
+    this.pongTimer = null;
+    const ws = this.ws;
+    if (!ws) return;
+    ws.onclose = null;
+    ws.onmessage = null;
+    try {
+      ws.close(4000, 'No answer');
+    } catch {
+      // Already closing.
+    }
+    this.lost(4000);
+  };
+
+  /** Asks the room whether it is still there, unless a question is already out. */
+  private probe(): void {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN || this.pongTimer) return;
+    try {
+      ws.send('ping');
+    } catch {
+      this.declareDead();
+      return;
+    }
+    this.pongTimer = setTimeout(this.declareDead, PONG_TIMEOUT_MS);
+  }
+
+  private clearPongTimer(): void {
+    if (this.pongTimer) clearTimeout(this.pongTimer);
+    this.pongTimer = null;
+  }
+
   private readonly onOnline = () => {
-    if (this.stopped || this.ws) return;
+    if (this.stopped) return;
+    // A socket that survived the outage is checked rather than trusted.
+    if (this.ws) {
+      this.probe();
+      return;
+    }
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.attempts = 0;
     this.connect();
+  };
+
+  /** Coming back to the tab — or the laptop waking — is when a stale socket shows. */
+  private readonly onReturn = () => {
+    if (document.visibilityState === 'visible') this.probe();
   };
 
   /**
@@ -234,7 +304,10 @@ export class RoomConnection {
     this.ws = null;
     this.ready = false;
     this.stopPing();
-    ws?.close(1000, 'Offline');
+    if (ws) {
+      ws.onclose = null;
+      ws.close(1000, 'Offline');
+    }
     this.setStatus('offline');
   };
 
@@ -269,16 +342,15 @@ export class RoomConnection {
 
   private startPing(): void {
     this.stopPing();
-    // Answered by the room without waking it, and keeps proxies from dropping an
-    // idle socket. If it does drop anyway, the reconnect is silent.
-    this.pingTimer = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) this.ws.send('ping');
-    }, PING_MS);
+    // Answered by the room without waking it (an auto-response), so an idle board
+    // still costs nothing; it also keeps proxies from dropping an idle socket.
+    this.pingTimer = setInterval(() => this.probe(), PING_MS);
   }
 
   private stopPing(): void {
     if (this.pingTimer) clearInterval(this.pingTimer);
     this.pingTimer = null;
+    this.clearPongTimer();
   }
 
   private resolveSettled(): void {

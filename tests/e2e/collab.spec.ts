@@ -297,6 +297,87 @@ test.describe('two windows on one board', () => {
     await close();
   });
 
+  /**
+   * What actually happens when wifi drops: often no "offline" event at all, and both
+   * sockets — two windows on one laptop — stay open in name only. Here every frame
+   * in both directions is silently dropped, and the browser is never told.
+   */
+  test('a connection that dies silently is noticed, and both windows catch up without a reload', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const account = newAccount('silent');
+    const line = { cut: false };
+    const contexts = [await browser.newContext(), await browser.newContext()];
+    for (const context of contexts) {
+      await context.routeWebSocket(/\/room$/, (socket) => {
+        const server = socket.connectToServer();
+        socket.onMessage((message) => {
+          if (!line.cut) server.send(message);
+        });
+        server.onMessage((message) => {
+          if (!line.cut) socket.send(message);
+        });
+      });
+    }
+    const [a, b] = [await contexts[0]!.newPage(), await contexts[1]!.newPage()];
+    await signIn(a, account);
+    const boardId = await createBoard(a);
+    await signIn(b, account);
+    await b.goto(`/b/${boardId}`);
+    for (const page of [a, b]) {
+      await expect(page.getByTestId('connection-status')).toHaveAttribute(
+        'data-status',
+        'connected',
+      );
+    }
+
+    // A healthy line stays Live: the room answers every ping.
+    const watch = (page: Page) =>
+      page.evaluate(() => {
+        const seen: string[] = [];
+        const node = document.querySelector('[data-testid="connection-status"]')!;
+        new MutationObserver(() => seen.push(node.getAttribute('data-status')!)).observe(node, {
+          attributes: true,
+        });
+        (window as unknown as { statuses: string[] }).statuses = seen;
+      });
+    const statuses = (page: Page) =>
+      page.evaluate(() => (window as unknown as { statuses: string[] }).statuses);
+    await watch(a);
+    await a.waitForTimeout(22_000);
+    expect(await statuses(a)).toEqual([]);
+
+    // The line goes dead. Nothing tells either browser.
+    line.cut = true;
+    await drawRect(a, [300, 300], [400, 380]);
+    expect(await a.evaluate(() => navigator.onLine)).toBe(true);
+
+    // Both notice on their own, within a ping and its timeout.
+    for (const page of [a, b]) {
+      await expect(page.getByTestId('connection-status')).not.toHaveAttribute(
+        'data-status',
+        'connected',
+        { timeout: 20_000 },
+      );
+      await expect(page.getByTestId('status-reconnecting')).toBeVisible();
+    }
+
+    // The line comes back: both reconnect, and B has A's shape — no reload.
+    line.cut = false;
+    for (const page of [a, b]) {
+      await expect(page.getByTestId('connection-status')).toHaveAttribute(
+        'data-status',
+        'connected',
+        { timeout: 30_000 },
+      );
+    }
+    await expect(layers(b)).toHaveCount(1);
+    expect(await layerIds(b)).toEqual(await layerIds(a));
+
+    for (const context of contexts) await context.close();
+  });
+
   // Checklist item 8.
   test("the laser shows on everyone's screen, in its owner's colour", async ({ browser }) => {
     const { a, b, account, close } = await twoWindows(browser, 'laser');
