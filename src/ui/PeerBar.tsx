@@ -1,4 +1,6 @@
 import { openHistory, useHistory } from '@/collab/history';
+import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import { useComments } from '@/sharing/comments';
 import { peerList, presenter, usePresence, type Peer } from '@/collab/presence';
 import type { PeerIdentity } from '@shared/collab';
 import styles from './PeerBar.module.css';
@@ -12,7 +14,11 @@ const STATUS_LABEL = {
 } as const;
 
 function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
+  // "Layla (guest)" is Layla: the note in brackets is not part of the name.
+  const parts = name
+    .replace(/\(.*?\)/g, '')
+    .trim()
+    .split(/\s+/);
   return (
     ((parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : '')).toUpperCase() ||
     '?'
@@ -51,6 +57,13 @@ export function PeerBar() {
   const spotlight = usePresence((state) => state.spotlight);
   const dismissed = usePresence((state) => state.dismissedSpotlight);
   const historyOpen = useHistory((state) => state.open);
+  const editable = useBoardAccess(selectCanEdit);
+  const commentsOpen = useComments((state) => state.visible);
+  const openThreads = useComments(
+    (state) =>
+      state.comments.filter((comment) => comment.threadId === comment.id && !comment.resolvedAt)
+        .length,
+  );
 
   if (!status) return null;
   const list = peerList(peers);
@@ -112,14 +125,28 @@ export function PeerBar() {
       <button
         type="button"
         className={styles.action}
-        aria-pressed={historyOpen}
-        disabled={status !== 'connected'}
-        title="Version history"
-        data-testid="open-history"
-        onClick={openHistory}
+        aria-pressed={commentsOpen}
+        title="Comments"
+        data-testid="open-comments"
+        onClick={() =>
+          useComments.setState({ visible: !commentsOpen, placing: false, draftAt: null })
+        }
       >
-        History
+        Comments{openThreads > 0 ? ` (${openThreads})` : ''}
       </button>
+      {editable ? (
+        <button
+          type="button"
+          className={styles.action}
+          aria-pressed={historyOpen}
+          disabled={status !== 'connected'}
+          title="Version history"
+          data-testid="open-history"
+          onClick={openHistory}
+        >
+          History
+        </button>
+      ) : null}
     </div>
   );
 }

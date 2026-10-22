@@ -16,6 +16,7 @@ import { useShortcuts } from '@/input/useShortcuts';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
+import { CommentPins } from './CommentPins';
 import { DevPanel } from './DevPanel';
 import { PeersLayer } from './PeersLayer';
 import { Inspector } from './Inspector';
@@ -243,6 +244,7 @@ export function CanvasStage() {
       </div>
 
       <PeersLayer hostRef={hostRef} />
+      <CommentPins />
       <ToolOptions />
       <TextEditor viewport={viewport} />
       <Inspector />

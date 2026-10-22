@@ -1,3 +1,4 @@
+import type { OpenBoardResponse } from '@shared/sharing';
 import { api, ApiError } from '@/api/client';
 import { fileUrl } from '@shared/files';
 import { RoomConnection, type RoomEvents } from '@/collab/connection';
@@ -19,6 +20,8 @@ const THUMBNAIL_WIDTH = 480;
  */
 export interface BoardSync {
   room: RoomConnection;
+  /** What the server said about this board and this person; null when offline. */
+  opened: OpenBoardResponse | null;
   /** Sends anything outstanding — called before leaving a board. */
   flush: () => Promise<void>;
   stop: () => void;
@@ -57,6 +60,8 @@ async function moveInlineImages(doc: BoardDoc, boardId: string): Promise<void> {
     if (image?.src.startsWith('data:') && !image.fileId) inline.push([id, image.src]);
   });
 
+  // Repointing an element is an edit; someone who can only view leaves it be.
+  if (doc.readOnly) return;
   for (const [id, src] of inline) {
     try {
       const prepared = await prepareImage(await dataUrlToBlob(src));
@@ -98,6 +103,7 @@ export interface BoardSyncOptions {
   events: Omit<RoomEvents, 'synced'> & { synced?: () => void };
   /** A new thumbnail is stored. */
   onSaved?: () => void;
+  onOpened?: (opened: OpenBoardResponse | null) => void;
 }
 
 /**
@@ -110,9 +116,12 @@ export async function startBoardSync(
   boardId: string,
   options: BoardSyncOptions,
 ): Promise<BoardSync> {
-  await api.openBoard(boardId).catch((error: unknown) => {
+  const opened = await api.openBoard(boardId).catch((error: unknown) => {
     if (error instanceof ApiError && (error.status === 404 || error.status === 401)) throw error;
+    return null;
   });
+  // Known before the room connects, so a viewer never gets a moment of editing.
+  options.onOpened?.(opened);
 
   let stopped = false;
   let thumbnailTimer: ReturnType<typeof setTimeout> | null = null;
@@ -165,6 +174,7 @@ export async function startBoardSync(
 
   return {
     room,
+    opened,
     flush: async () => {
       if (thumbnailTimer !== null) {
         clearTimeout(thumbnailTimer);

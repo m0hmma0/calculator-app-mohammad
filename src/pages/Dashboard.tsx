@@ -4,9 +4,83 @@ import { signOutOfGoogle } from '@/auth/firebase';
 import { Link, useRouter } from '@/router/router';
 import { folderPath, useWorkspace } from '@/state/workspaceStore';
 import type { BoardRecord, FolderRecord } from '@shared/api';
+import { ROLE_LABEL, type ResourceType, type SharedItem } from '@shared/sharing';
+import { NotificationBell } from '@/ui/NotificationBell';
+import { ShareDialog } from '@/ui/ShareDialog';
 import styles from './Dashboard.module.css';
 
-type View = { kind: 'folder'; folderId: string | null } | { kind: 'trash' };
+type View = { kind: 'folder'; folderId: string | null } | { kind: 'trash' } | { kind: 'shared' };
+
+/** Boards and folders other people have shared with this account, by email. */
+function SharedList() {
+  const [items, setItems] = useState<SharedItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .sharedWithMe()
+      .then(({ items: next }) => live && setItems(next))
+      .catch(
+        (reason: unknown) =>
+          live && setError(reason instanceof Error ? reason.message : 'Could not load'),
+      );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <p className={styles.error} role="alert">
+        {error}
+      </p>
+    );
+  }
+  if (!items) return null;
+  if (items.length === 0) {
+    return (
+      <p className={styles.blank} data-testid="empty-state">
+        Nothing has been shared with you yet. When someone shares a board or folder with your Google
+        account, it shows up here.
+      </p>
+    );
+  }
+  return (
+    <div className={styles.grid}>
+      {items.map((item) => {
+        const to =
+          item.type === 'board'
+            ? ({ name: 'board', boardId: item.id } as const)
+            : ({ name: 'folder', folderId: item.id } as const);
+        return (
+          <article
+            key={`${item.type}:${item.id}`}
+            className={styles.card}
+            data-testid={`shared-item-${item.id}`}
+          >
+            <Link to={to} className={styles.thumb}>
+              {item.type === 'board' ? (
+                <Thumbnail url={item.thumbnailUrl} />
+              ) : (
+                <span className={styles.empty}>Folder</span>
+              )}
+            </Link>
+            <div className={styles.cardFoot}>
+              <Link to={to} className={styles.cardTitle}>
+                {item.title}
+              </Link>
+            </div>
+            <p className={styles.sharedMeta}>
+              {ROLE_LABEL[item.role]}
+              {item.ownerName ? ` · from ${item.ownerName}` : ''}
+            </p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
 
 function FolderTree({
   folders,
@@ -49,7 +123,7 @@ function FolderTree({
 }
 
 /** The thumbnail endpoint needs the sign-in token, so it cannot be a plain src. */
-function Thumbnail({ url }: { url: string | null }) {
+export function Thumbnail({ url }: { url: string | null }) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -100,6 +174,7 @@ function BoardCard({
   onMove,
   onDuplicate,
   onTrash,
+  onShare,
 }: {
   board: BoardRecord;
   folders: FolderRecord[];
@@ -108,6 +183,7 @@ function BoardCard({
   onMove: (folderId: string | null) => void;
   onDuplicate: () => void;
   onTrash: () => void;
+  onShare: () => void;
 }) {
   const [moving, setMoving] = useState(false);
   const choices = useMemo(() => folderChoices(folders), [folders]);
@@ -158,6 +234,9 @@ function BoardCard({
         <button type="button" onClick={onDuplicate} data-testid={`duplicate-${board.id}`}>
           Duplicate
         </button>
+        <button type="button" onClick={onShare} data-testid={`share-${board.id}`}>
+          Share
+        </button>
         <button type="button" onClick={onTrash} data-testid={`trash-${board.id}`}>
           Delete
         </button>
@@ -207,8 +286,13 @@ export function Dashboard({ view }: { view: View }) {
     [workspace.folders, activeFolderId],
   );
 
+  const [sharing, setSharing] = useState<{ type: ResourceType; id: string; title: string } | null>(
+    null,
+  );
+
   const visible = useMemo(() => {
     if (view.kind === 'trash') return workspace.trashedBoards;
+    if (view.kind === 'shared') return [];
 
     const term = query.trim().toLowerCase();
     return workspace.boards.filter((board) => {
@@ -242,6 +326,7 @@ export function Dashboard({ view }: { view: View }) {
           <span className={styles.accountName} data-testid="account-name">
             {workspace.account?.name ?? workspace.account?.email ?? 'Signed in'}
           </span>
+          <NotificationBell />
           <button
             type="button"
             className={styles.signOut}
@@ -271,6 +356,14 @@ export function Dashboard({ view }: { view: View }) {
             Starred
           </button>
           <Link
+            to={{ name: 'shared' }}
+            className={styles.navItem}
+            aria-current={view.kind === 'shared' ? 'page' : undefined}
+            data-testid="nav-shared"
+          >
+            Shared with me
+          </Link>
+          <Link
             to={{ name: 'trash' }}
             className={styles.navItem}
             aria-current={view.kind === 'trash' ? 'page' : undefined}
@@ -292,7 +385,13 @@ export function Dashboard({ view }: { view: View }) {
       <main className={styles.main}>
         <header className={styles.toolbar}>
           <nav className={styles.breadcrumb} data-testid="breadcrumb" aria-label="Breadcrumb">
-            <Link to={{ name: 'dashboard' }}>{view.kind === 'trash' ? 'Trash' : 'All boards'}</Link>
+            <Link to={{ name: 'dashboard' }}>
+              {view.kind === 'trash'
+                ? 'Trash'
+                : view.kind === 'shared'
+                  ? 'Shared with me'
+                  : 'All boards'}
+            </Link>
             {path.map((folder) => (
               <span key={folder.id}>
                 <span className={styles.sep} aria-hidden="true">
@@ -313,7 +412,24 @@ export function Dashboard({ view }: { view: View }) {
             onChange={(event) => setQuery(event.target.value)}
           />
 
-          {view.kind === 'trash' ? (
+          {activeFolderId ? (
+            <button
+              type="button"
+              className={styles.secondary}
+              data-testid="share-folder"
+              onClick={() =>
+                setSharing({
+                  type: 'folder',
+                  id: activeFolderId,
+                  title: path.at(-1)?.name ?? 'Folder',
+                })
+              }
+            >
+              Share folder
+            </button>
+          ) : null}
+
+          {view.kind === 'shared' ? null : view.kind === 'trash' ? (
             <button
               type="button"
               className={styles.secondary}
@@ -345,7 +461,9 @@ export function Dashboard({ view }: { view: View }) {
           </p>
         ) : null}
 
-        {visible.length === 0 ? (
+        {view.kind === 'shared' ? (
+          <SharedList />
+        ) : visible.length === 0 ? (
           <p className={styles.blank} data-testid="empty-state">
             {view.kind === 'trash'
               ? 'The trash is empty.'
@@ -384,12 +502,21 @@ export function Dashboard({ view }: { view: View }) {
                   onMove={(folderId) => void workspace.moveBoard(board.id, folderId)}
                   onDuplicate={() => void workspace.duplicateBoard(board.id)}
                   onTrash={() => void workspace.trashBoard(board.id)}
+                  onShare={() => setSharing({ type: 'board', id: board.id, title: board.title })}
                 />
               ),
             )}
           </div>
         )}
       </main>
+
+      {sharing ? (
+        <ShareDialog
+          resource={sharing}
+          onClose={() => setSharing(null)}
+          onTransferred={() => void workspace.refresh()}
+        />
+      ) : null}
     </div>
   );
 }

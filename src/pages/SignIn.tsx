@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { readSettings, signInWithGoogle } from '@/auth/firebase';
 import styles from './SignIn.module.css';
 
-export function SignIn() {
+/** `message` says why sign-in is needed here — a share link that wants an account. */
+export function SignIn({ message }: { message?: string | null } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const configured = readSettings() !== null;
@@ -37,8 +38,9 @@ export function SignIn() {
         </span>
 
         <h1 className={styles.title}>Sabboura</h1>
-        <p className={styles.blurb}>
-          A collaborative whiteboard. Sign in to keep your boards and reach them from anywhere.
+        <p className={styles.blurb} data-testid="sign-in-message">
+          {message ??
+            'A collaborative whiteboard. Sign in to keep your boards and reach them from anywhere.'}
         </p>
 
         {configured ? (

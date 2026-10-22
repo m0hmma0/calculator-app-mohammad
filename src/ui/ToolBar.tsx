@@ -1,4 +1,5 @@
-import { useBoardStore, type Tool } from '@/state/boardStore';
+import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import { useBoardStore, VIEWER_TOOLS, type Tool } from '@/state/boardStore';
 import styles from './ToolBar.module.css';
 
 interface ToolSpec {
@@ -76,10 +77,13 @@ const TOOLS: ToolSpec[] = [
 export function ToolBar() {
   const tool = useBoardStore((state) => state.tool);
   const setTool = useBoardStore((state) => state.setTool);
+  const editable = useBoardAccess(selectCanEdit);
+  // Viewers keep the tools that change nothing: looking around, and pointing.
+  const tools = editable ? TOOLS : TOOLS.filter((spec) => VIEWER_TOOLS.has(spec.id));
 
   return (
     <div className={styles.tools} role="toolbar" aria-label="Tools">
-      {TOOLS.map((spec) => (
+      {tools.map((spec) => (
         <button
           key={spec.id}
           type="button"

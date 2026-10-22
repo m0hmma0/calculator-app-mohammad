@@ -1,8 +1,9 @@
 import { IMAGE_TYPES, isFileId, MAX_FILE_BYTES } from '@shared/files';
 import type { Account } from '../auth';
-import { getBoard } from '../db';
+import { atLeast, boardAccess } from '../access';
 import type { Env } from '../env';
 import { fail, json } from '../http';
+import { viewerOf } from './sharing';
 
 const fileKey = (hash: string) => `files/${hash}`;
 
@@ -54,10 +55,16 @@ export async function getFile(request: Request, env: Env, hash: string): Promise
   return new Response(object.body, { headers });
 }
 
-async function ownedBoard(env: Env, account: Account, boardId: string | null) {
-  if (!boardId) return null;
-  const board = await getBoard(env, account.uid, boardId);
-  return board && board.deleted_at === null ? board : null;
+/** Adding an image to a board is editing it: the owner, or anyone it lets edit. */
+async function editableBoard(
+  env: Env,
+  account: Account | null,
+  linkToken: string | null,
+  boardId: string | null,
+) {
+  if (!boardId) return false;
+  const access = await boardAccess(env, viewerOf(account), boardId, linkToken);
+  return atLeast(access.role, 'editor');
 }
 
 const recordUse = (env: Env, boardId: string, hash: string) =>
@@ -74,12 +81,15 @@ const recordUse = (env: Env, boardId: string, hash: string) =>
 export async function attachFile(
   request: Request,
   env: Env,
-  account: Account,
+  account: Account | null,
+  linkToken: string | null,
   hash: string,
 ): Promise<Response> {
   if (!isFileId(hash)) return fail('Not a file id', 400);
   const boardId = new URL(request.url).searchParams.get('board');
-  if (!(await ownedBoard(env, account, boardId))) return fail('That board does not exist', 404);
+  if (!(await editableBoard(env, account, linkToken, boardId))) {
+    return fail('That board does not exist', 404);
+  }
 
   const file = await env.DB.prepare('SELECT size FROM files WHERE hash = ?1')
     .bind(hash)
@@ -98,12 +108,15 @@ export async function attachFile(
 export async function putFile(
   request: Request,
   env: Env,
-  account: Account,
+  account: Account | null,
+  linkToken: string | null,
   hash: string,
 ): Promise<Response> {
   if (!isFileId(hash)) return fail('Not a file id', 400);
   const boardId = new URL(request.url).searchParams.get('board');
-  if (!(await ownedBoard(env, account, boardId))) return fail('That board does not exist', 404);
+  if (!(await editableBoard(env, account, linkToken, boardId))) {
+    return fail('That board does not exist', 404);
+  }
 
   const contentType = (request.headers.get('content-type') ?? '').split(';')[0]!.trim();
   if (!(IMAGE_TYPES as readonly string[]).includes(contentType)) {
@@ -131,7 +144,7 @@ export async function putFile(
     env.DB.prepare(
       `INSERT OR IGNORE INTO files (hash, size, content_type, uploaded_by, created_at)
        VALUES (?1, ?2, ?3, ?4, ?5)`,
-    ).bind(hash, body.byteLength, contentType, account.uid, Date.now()),
+    ).bind(hash, body.byteLength, contentType, account?.uid ?? 'guest', Date.now()),
     recordUse(env, boardId!, hash),
   ]);
 

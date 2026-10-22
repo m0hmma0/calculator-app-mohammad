@@ -10,6 +10,7 @@ import {
 } from '@shared/collab';
 import { currentIdToken } from '@/auth/session';
 import { REMOTE_ORIGIN, type BoardDoc } from '@/doc/board';
+import { guestIdentity, shareLink } from '@/sharing/linkSession';
 
 export type ConnectionStatus =
   /** First attempt, not yet in sync. */
@@ -147,7 +148,14 @@ export class RoomConnection {
       // A refreshed token if the old one has expired; Firebase handles that.
       const token = await currentIdToken(this.attempts > 0);
       if (ws !== this.ws) return;
-      ws.send(JSON.stringify({ t: 'auth', token: token ?? '' } satisfies ClientMessage));
+      ws.send(
+        JSON.stringify({
+          t: 'auth',
+          token: token ?? '',
+          link: shareLink(),
+          guest: token ? null : guestIdentity(),
+        } satisfies ClientMessage),
+      );
     };
     ws.onmessage = (event) => this.onMessage(ws, event);
     ws.onclose = (event) => this.onClose(ws, event);

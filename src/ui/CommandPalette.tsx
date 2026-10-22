@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useBoardAccess } from '@/sharing/boardAccess';
 import { exportBlob, downloadBlob, type ExportFormat } from '@/export/exporters';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 import styles from './CommandPalette.module.css';
@@ -37,6 +38,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
 
+  const canExport = useBoardAccess((state) => state.canExport);
   const commands = useMemo<Command[]>(() => {
     const store = useBoardStore.getState;
 
@@ -81,14 +83,19 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       { id: 'hundred', label: 'Zoom to 100%', hint: '⇧0', run: () => store().zoomTo100() },
       { id: 'select-all', label: 'Select all', hint: '⌘A', run: () => store().selectAll() },
       { id: 'group', label: 'Group selection', hint: '⌘G', run: () => store().groupSelection() },
-      { id: 'export-png', label: 'Export board as PNG', run: () => save('png', false) },
-      { id: 'export-svg', label: 'Export board as SVG', run: () => save('svg', false) },
-      { id: 'export-pdf', label: 'Export board as PDF', run: () => save('pdf', false) },
-      {
-        id: 'export-png-selection',
-        label: 'Export selection as PNG',
-        run: () => save('png', true),
-      },
+      // Only where the owner allows it — the menu is where "no export" shows.
+      ...(canExport
+        ? [
+            { id: 'export-png', label: 'Export board as PNG', run: () => save('png', false) },
+            { id: 'export-svg', label: 'Export board as SVG', run: () => save('svg', false) },
+            { id: 'export-pdf', label: 'Export board as PDF', run: () => save('pdf', false) },
+            {
+              id: 'export-png-selection',
+              label: 'Export selection as PNG',
+              run: () => save('png', true),
+            },
+          ]
+        : []),
       {
         id: 'shortcuts',
         label: 'Keyboard shortcuts',
@@ -97,7 +104,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       },
       { id: 'clear', label: 'Clear the board', run: () => store().clearBoard() },
     ];
-  }, []);
+  }, [canExport]);
 
   const results = useMemo(
     () => commands.filter((command) => matches(query, command.label)),

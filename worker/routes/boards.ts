@@ -1,9 +1,11 @@
 import type { CreateBoardBody, SnapshotMeta, UpdateBoardBody } from '@shared/api';
 import type { Account } from '../auth';
 import { fileIdsInUpdate } from '@shared/files';
+import { atLeast, boardAccess } from '../access';
 import { BOARD_COLUMNS, getBoard, getFolder, toBoard } from '../db';
 import type { Env } from '../env';
 import { cleanName, fail, json, newId } from '../http';
+import { tellRooms, viewerOf } from './sharing';
 
 const snapshotKey = (id: string) => `boards/${id}/snapshot.bin`;
 const thumbnailKey = (id: string) => `boards/${id}/thumb.png`;
@@ -56,6 +58,8 @@ export async function trashBoard(env: Env, account: Account, id: string) {
   await env.DB.prepare('UPDATE boards SET deleted_at = ?1 WHERE id = ?2 AND owner_id = ?3')
     .bind(Date.now(), id, account.uid)
     .run();
+  // Anyone else in the room loses it now, not at their next reload.
+  await tellRooms(env, [id], '/reauthorize');
   return json({ ok: true });
 }
 
@@ -127,23 +131,18 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
   return json({ board: toBoard((await getBoard(env, account.uid, copyId))!) }, 201);
 }
 
-/**
- * Opening a board: the record, and a note that it was opened. The content itself
- * comes from the board's room over its WebSocket.
- */
-export async function openBoard(env: Env, account: Account, id: string) {
-  const row = await getBoard(env, account.uid, id);
-  if (!row || row.deleted_at !== null) return fail('That board does not exist', 404);
-  await env.DB.prepare('UPDATE boards SET opened_at = ?1 WHERE id = ?2').bind(Date.now(), id).run();
-  return json({ board: toBoard(row) });
-}
-
 const MAX_THUMBNAIL_BYTES = 1024 * 1024;
 
-/** A small PNG of the board, drawn by whichever browser last changed it. */
-export async function putThumbnail(request: Request, env: Env, account: Account, id: string) {
-  const row = await getBoard(env, account.uid, id);
-  if (!row || row.deleted_at !== null) return fail('That board does not exist', 404);
+/** A small PNG of the board, drawn by whichever editor last changed it. */
+export async function putThumbnail(
+  request: Request,
+  env: Env,
+  account: Account,
+  linkToken: string | null,
+  id: string,
+) {
+  const access = await boardAccess(env, viewerOf(account), id, linkToken);
+  if (!atLeast(access.role, 'editor')) return fail('That board does not exist', 404);
   if ((request.headers.get('content-type') ?? '') !== 'image/png') {
     return fail('A thumbnail is a PNG', 415);
   }
@@ -161,13 +160,23 @@ export async function putThumbnail(request: Request, env: Env, account: Account,
  * The stored snapshot, as the room last wrote it. The app reads boards through their
  * rooms now; this stays for tools and tests that want the saved bytes.
  */
-export async function getSnapshot(env: Env, account: Account, id: string) {
-  const row = await getBoard(env, account.uid, id);
-  if (!row) return fail('That board does not exist', 404);
+export async function getSnapshot(
+  env: Env,
+  account: Account | null,
+  linkToken: string | null,
+  id: string,
+) {
+  const access = await boardAccess(env, viewerOf(account), id, linkToken);
+  if (!access.role || !access.board) return fail('That board does not exist', 404);
+  // Downloading the whole board is exporting it, and the owner can switch that off.
+  if (!atLeast(access.role, 'editor') && access.board.viewer_export !== 1) {
+    return fail('The owner has turned off exporting for viewers', 403);
+  }
 
-  await env.DB.prepare('UPDATE boards SET opened_at = ?1 WHERE id = ?2').bind(Date.now(), id).run();
-
-  if (!row.snapshot_key) return new Response(null, { status: 204 });
+  const row = await env.DB.prepare('SELECT snapshot_key FROM boards WHERE id = ?1')
+    .bind(id)
+    .first<{ snapshot_key: string | null }>();
+  if (!row?.snapshot_key) return new Response(null, { status: 204 });
 
   const object = await env.FILES.get(row.snapshot_key);
   if (!object) return new Response(null, { status: 204 });
@@ -235,8 +244,17 @@ export async function putSnapshot(request: Request, env: Env, account: Account, 
   return json({ ok: true });
 }
 
-export async function getThumbnail(env: Env, account: Account, id: string) {
-  const row = await getBoard(env, account.uid, id);
+export async function getThumbnail(
+  env: Env,
+  account: Account | null,
+  linkToken: string | null,
+  id: string,
+) {
+  const access = await boardAccess(env, viewerOf(account), id, linkToken);
+  if (!access.role) return new Response(null, { status: 404 });
+  const row = await env.DB.prepare('SELECT thumbnail_key FROM boards WHERE id = ?1')
+    .bind(id)
+    .first<{ thumbnail_key: string | null }>();
   if (!row?.thumbnail_key) return new Response(null, { status: 404 });
 
   const object = await env.FILES.get(row.thumbnail_key);

@@ -184,6 +184,9 @@ interface BoardState {
 
 const ZOOM_STEP = 1.25;
 
+/** What a viewer may still pick up: looking around, and pointing. */
+export const VIEWER_TOOLS: ReadonlySet<Tool> = new Set<Tool>(['select', 'hand', 'laser']);
+
 /**
  * The board document is the source of truth from here on. The array in this store is
  * a derived view of it, kept up to date by the binding — which is what makes undo,
@@ -242,12 +245,12 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
     undo: () => {
       get().endEditing();
-      board.undoManager.undo();
+      if (!board.readOnly) board.undoManager.undo();
     },
 
     redo: () => {
       get().endEditing();
-      board.undoManager.redo();
+      if (!board.readOnly) board.undoManager.redo();
     },
 
     /**
@@ -325,7 +328,11 @@ export const useBoardStore = create<BoardState>((set, get) => {
       if (bounds) set({ viewport: fitToRect(bounds, get().stageSize) });
     },
 
-    setTool: (tool) => bump({ tool }),
+    // Someone who may only view keeps the tools that change nothing.
+    setTool: (tool) => {
+      if (board.readOnly && !VIEWER_TOOLS.has(tool)) return;
+      bump({ tool });
+    },
     setSpaceHeld: (spaceHeld) => set({ spaceHeld }),
     setPanning: (panning) => set({ panning }),
     setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
@@ -631,7 +638,10 @@ export const useBoardStore = create<BoardState>((set, get) => {
       bump({ selection: get().selection.filter((candidate) => candidate !== id) });
     },
 
-    beginEditing: (id) => bump({ editingId: id, selection: [id] }),
+    beginEditing: (id) => {
+      if (board.readOnly) return;
+      bump({ editingId: id, selection: [id] });
+    },
 
     endEditing: () => {
       const { editingId, elements } = get();
@@ -695,6 +705,24 @@ let openBoardId: string | null = null;
 
 export function currentBoardId(): string | null {
   return openBoardId;
+}
+
+/**
+ * Switches the open board between editable and read-only — when it opens, and again
+ * if the owner changes this person's access while they are on it.
+ */
+export function setBoardReadOnly(readOnly: boolean): void {
+  if (board.readOnly === readOnly) return;
+  board.readOnly = readOnly;
+  const state = useBoardStore.getState();
+  if (readOnly) {
+    state.endEditing();
+    useBoardStore.setState({
+      tool: VIEWER_TOOLS.has(state.tool) ? state.tool : 'select',
+      draft: null,
+    });
+  }
+  useBoardStore.setState((current) => ({ renderVersion: current.renderVersion + 1 }));
 }
 
 function attachDocument(doc: BoardDoc): void {

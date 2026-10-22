@@ -8,14 +8,23 @@ export interface TopBarProps {
   leading?: ReactNode;
   children?: ReactNode;
   onRenameBoard?: () => void;
+  /** Many controls: drop the wordmark on narrower screens to make room. */
+  compact?: boolean;
 }
 
-export function TopBar({ boardName, badge, leading, children, onRenameBoard }: TopBarProps) {
+export function TopBar({
+  boardName,
+  badge,
+  leading,
+  children,
+  onRenameBoard,
+  compact,
+}: TopBarProps) {
   const devPanelOpen = useBoardStore((state) => state.devPanelOpen);
   const toggleDevPanel = useBoardStore((state) => state.toggleDevPanel);
 
   return (
-    <header className={styles.bar}>
+    <header className={compact ? `${styles.bar} ${styles.compact}` : styles.bar}>
       <div className={styles.brand}>
         <span className={styles.mark} aria-hidden="true">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none">

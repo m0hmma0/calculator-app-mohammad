@@ -1,6 +1,10 @@
 .tools {
   display: flex;
   align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 2px;
   padding: 2px;
   background: var(--surface-2);

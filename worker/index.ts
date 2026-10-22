@@ -1,11 +1,10 @@
 import type { ApiErrorResponse, HealthResponse } from '@shared/types';
-import { AuthError, requireAccount, type Account } from './auth';
+import { AuthError, optionalAccount, shareKeyFrom, type Account } from './auth';
 import {
   createBoard,
   duplicateBoard,
   getSnapshot,
   getThumbnail,
-  openBoard,
   putSnapshot,
   putThumbnail,
   restoreBoard,
@@ -15,6 +14,22 @@ import {
 } from './routes/boards';
 import { attachFile, getFile, putFile } from './routes/files';
 import { createFolder, restoreFolder, trashFolder, updateFolder } from './routes/folders';
+import { addComment, listComments, listPeople, resolveThread } from './routes/comments';
+import {
+  folderContents,
+  getShares,
+  listNotifications,
+  openBoard,
+  putLink,
+  putPerson,
+  readNotifications,
+  removePerson,
+  resolveLink,
+  revokeLink,
+  setViewerExport,
+  sharedWithMe,
+  transferBoard,
+} from './routes/sharing';
 import { emptyTrash, getTrash, getWorkspace } from './routes/workspace';
 import { upsertUser } from './db';
 import type { Env } from './env';
@@ -59,13 +74,60 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
     return stub.fetch(forwarded);
   }
 
-  let account: Account;
+  // Everything below needs to know who is asking — possibly nobody: a guest holding
+  // a share link. A token that is present but does not verify is refused outright.
+  let maybe: Account | null;
   try {
-    account = await requireAccount(request, env);
+    maybe = await optionalAccount(request, env);
   } catch (error) {
     if (error instanceof AuthError) return fail(error.message, 401);
     throw error;
   }
+  const linkToken = shareKeyFrom(request);
+
+  const link = /^\/api\/links\/([\w-]+)$/.exec(pathname);
+  if (link && method === 'GET') return resolveLink(env, maybe, link[1]!);
+
+  const contents = /^\/api\/folders\/([\w-]+)\/contents$/.exec(pathname);
+  if (contents && method === 'GET') return folderContents(env, maybe, linkToken, contents[1]!);
+
+  const comment = /^\/api\/comments\/([\w-]+)$/.exec(pathname);
+  if (comment && method === 'PATCH') {
+    return resolveThread(request, env, maybe, linkToken, comment[1]!);
+  }
+
+  // Board routes open to anyone the board is shared with, guests included. Each one
+  // checks what this person may do; nothing here assumes ownership.
+  const shared = /^\/api\/boards\/([\w-]+)(?:\/(snapshot|thumbnail|comments|people))?$/.exec(
+    pathname,
+  );
+  if (shared && method === 'GET') {
+    const id = shared[1]!;
+    switch (shared[2]) {
+      case undefined:
+        return openBoard(env, maybe, linkToken, id);
+      case 'snapshot':
+        return getSnapshot(env, maybe, linkToken, id);
+      case 'thumbnail':
+        return getThumbnail(env, maybe, linkToken, id);
+      case 'comments':
+        return listComments(env, maybe, linkToken, id);
+      case 'people':
+        return listPeople(env, maybe, linkToken, id);
+    }
+  }
+  if (shared?.[2] === 'comments' && method === 'POST') {
+    return addComment(request, env, maybe, linkToken, shared[1]!);
+  }
+
+  // Adding images: anyone who may edit the board, guests with an edit link included.
+  if (file) {
+    if (file[2] && method === 'POST') return attachFile(request, env, maybe, linkToken, file[1]!);
+    if (!file[2] && method === 'PUT') return putFile(request, env, maybe, linkToken, file[1]!);
+  }
+
+  if (!maybe) return fail('Not signed in', 401);
+  const account: Account = maybe;
 
   // Folders and boards reference a user row, so it has to exist before anything can
   // be created. Reads skip the write; the dashboard's own request refreshes it.
@@ -77,14 +139,39 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (pathname === '/api/trash' && method === 'GET') return getTrash(env, account);
   if (pathname === '/api/trash' && method === 'DELETE') return emptyTrash(env, account);
 
-  if (file) {
-    if (file[2] && method === 'POST') return attachFile(request, env, account, file[1]!);
-    if (!file[2] && method === 'PUT') return putFile(request, env, account, file[1]!);
-  }
-
   if (pathname === '/api/search' && method === 'GET') {
     const query = new URL(request.url).searchParams.get('q') ?? '';
     return query.trim() === '' ? json({ boards: [] }) : searchBoards(env, account, query.trim());
+  }
+
+  if (pathname === '/api/shared' && method === 'GET') return sharedWithMe(env, account);
+  if (pathname === '/api/notifications' && method === 'GET') return listNotifications(env, account);
+  if (pathname === '/api/notifications/read' && method === 'POST') {
+    return readNotifications(env, account);
+  }
+
+  const share =
+    /^\/api\/shares\/(board|folder)\/([\w-]+)(?:\/(link|link\/reset|people)(?:\/([\w-]+))?)?$/.exec(
+      pathname,
+    );
+  if (share) {
+    const [, type, id, part, shareId] = share as unknown as [
+      string,
+      string,
+      string,
+      string?,
+      string?,
+    ];
+    if (!part && method === 'GET') return getShares(env, account, type, id);
+    if (part === 'link' && method === 'PUT') return putLink(request, env, account, type, id);
+    if (part === 'link' && method === 'DELETE') return revokeLink(env, account, type, id, false);
+    if (part === 'link/reset' && method === 'POST') return revokeLink(env, account, type, id, true);
+    if (part === 'people' && !shareId && method === 'POST') {
+      return putPerson(request, env, account, type, id);
+    }
+    if (part === 'people' && shareId && method === 'DELETE') {
+      return removePerson(env, account, type, id, shareId);
+    }
   }
 
   if (pathname === '/api/folders' && method === 'POST') return createFolder(request, env, account);
@@ -99,9 +186,10 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
 
   if (pathname === '/api/boards' && method === 'POST') return createBoard(request, env, account);
 
-  const board = /^\/api\/boards\/([\w-]+)(?:\/(restore|duplicate|snapshot|thumbnail))?$/.exec(
-    pathname,
-  );
+  const board =
+    /^\/api\/boards\/([\w-]+)(?:\/(restore|duplicate|snapshot|thumbnail|settings|transfer))?$/.exec(
+      pathname,
+    );
   if (board) {
     const id = board[1]!;
     switch (board[2]) {
@@ -112,15 +200,18 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
         if (method === 'POST') return duplicateBoard(env, account, id);
         break;
       case 'snapshot':
-        if (method === 'GET') return getSnapshot(env, account, id);
         if (method === 'PUT') return putSnapshot(request, env, account, id);
         break;
       case 'thumbnail':
-        if (method === 'GET') return getThumbnail(env, account, id);
-        if (method === 'PUT') return putThumbnail(request, env, account, id);
+        if (method === 'PUT') return putThumbnail(request, env, account, linkToken, id);
+        break;
+      case 'settings':
+        if (method === 'PATCH') return setViewerExport(request, env, account, id);
+        break;
+      case 'transfer':
+        if (method === 'POST') return transferBoard(request, env, account, id);
         break;
       default:
-        if (method === 'GET') return openBoard(env, account, id);
         if (method === 'PATCH') return updateBoard(request, env, account, id);
         if (method === 'DELETE') return trashBoard(env, account, id);
     }

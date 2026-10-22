@@ -1,0 +1,46 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 4;
+}
+
+.pin {
+  position: absolute;
+  pointer-events: auto;
+  transform: translate(-4px, -100%);
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 2px solid var(--surface);
+  border-radius: 13px 13px 13px 3px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+}
+
+.pin[aria-current='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.draft {
+  pointer-events: none;
+  background: var(--surface);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+.placing {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: crosshair;
+}

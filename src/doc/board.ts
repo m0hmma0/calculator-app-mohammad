@@ -26,6 +26,12 @@ export interface BoardDoc {
   undoManager: Y.UndoManager;
   /** Resolves once anything already in storage has been loaded. */
   whenReady: Promise<void>;
+  /**
+   * Set for someone who may view or comment but not edit. Local edits are ignored
+   * here, at the one place they all pass through — the room refuses them anyway, but
+   * without this a viewer would see changes that nobody else ever does.
+   */
+  readOnly: boolean;
   destroy: () => void;
 }
 
@@ -61,6 +67,7 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
     elements,
     undoManager,
     whenReady,
+    readOnly: false,
     destroy: () => {
       undoManager.destroy();
       persistence?.destroy();
@@ -71,6 +78,7 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
 
 /** Every local mutation goes through here so it carries the right origin. */
 export function transactLocal(board: BoardDoc, mutate: () => void): void {
+  if (board.readOnly) return;
   board.doc.transact(mutate, LOCAL_ORIGIN);
 }
 

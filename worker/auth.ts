@@ -78,3 +78,20 @@ export async function requireAccount(request: Request, env: Env): Promise<Accoun
   if (!token) throw new AuthError('Not signed in');
   return verifyIdToken(token, env);
 }
+
+/**
+ * For routes a guest may use — someone holding a share link but no account. No
+ * token means a guest; a token that does not verify is still refused, rather than
+ * quietly treated as a guest.
+ */
+export async function optionalAccount(request: Request, env: Env): Promise<Account | null> {
+  const token = bearerFrom(request);
+  if (!token) return null;
+  return verifyIdToken(token, env);
+}
+
+/** The share link presented with a request, if any. */
+export function shareKeyFrom(request: Request): string | null {
+  const key = request.headers.get('x-share-key')?.trim();
+  return key && /^[\w-]{16,64}$/.test(key) ? key : null;
+}

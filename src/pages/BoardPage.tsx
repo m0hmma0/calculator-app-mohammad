@@ -4,11 +4,16 @@ import { applyServerMessage, resetPresence, usePresence } from '@/collab/presenc
 import { startPresence, type PresenceHandle } from '@/collab/publish';
 import { startBoardSync, type BoardSync } from '@/doc/sync';
 import { Link } from '@/router/router';
-import { openBoardDocument, useBoardStore } from '@/state/boardStore';
+import { useBoardAccess } from '@/sharing/boardAccess';
+import { useComments } from '@/sharing/comments';
+import { ROLE_LABEL, canEdit, type Role } from '@shared/sharing';
+import { openBoardDocument, setBoardReadOnly, useBoardStore } from '@/state/boardStore';
 import { useWorkspace } from '@/state/workspaceStore';
 import { CanvasStage } from '@/ui/CanvasStage';
 import { ToolBar } from '@/ui/ToolBar';
+import { CommentsPanel } from '@/ui/CommentsPanel';
 import { HistoryPanel } from '@/ui/HistoryPanel';
+import { ShareDialog } from '@/ui/ShareDialog';
 import { PeerBar } from '@/ui/PeerBar';
 import { TopBar } from '@/ui/TopBar';
 import styles from './BoardPage.module.css';
@@ -26,6 +31,10 @@ function BoardView({ boardId }: { boardId: string }) {
   const renameBoard = useWorkspace((state) => state.renameBoard);
   const markBoardSaved = useWorkspace((state) => state.markBoardSaved);
   const [status, setStatus] = useState<'opening' | 'ready' | 'missing'>('opening');
+  const [sharing, setSharing] = useState(false);
+  const role = useBoardAccess((state) => state.role);
+  const sharedTitle = useBoardAccess((state) => state.title);
+  const signedIn = useWorkspace((state) => state.account !== null);
 
   const record = boards.find((board) => board.id === boardId);
 
@@ -38,11 +47,34 @@ function BoardView({ boardId }: { boardId: string }) {
     resetPresence();
     usePresence.setState({ status: 'connecting' });
 
+    const applyRole = (nextRole: Role | null, canExport: boolean) => {
+      useBoardAccess.setState({ role: nextRole, canExport });
+      setBoardReadOnly(!canEdit(nextRole));
+    };
+    // A board in this person's own workspace is theirs: they can draw from the first
+    // instant. Anyone else waits for the server, so a viewer never gets a moment in
+    // which their changes seem to land.
+    const owns = useWorkspace.getState().boards.some((board) => board.id === boardId);
+    useBoardAccess.setState({ ownerName: null, title: null });
+    applyRole(owns ? 'owner' : null, owns);
+
     void (async () => {
       try {
         const started = await startBoardSync(doc, boardId, {
           elementsNow: () => useBoardStore.getState().elements,
           onSaved: () => markBoardSaved(boardId),
+          onOpened: (opened) => {
+            if (cancelled) return;
+            if (!opened) {
+              // Offline: the boards this person owns are in their workspace; anything
+              // else opens read-only until the room says more.
+              const owns = useWorkspace.getState().boards.some((board) => board.id === boardId);
+              applyRole(owns ? 'owner' : 'viewer', owns);
+              return;
+            }
+            useBoardAccess.setState({ ownerName: opened.ownerName, title: opened.board.title });
+            applyRole(opened.role, opened.canExport);
+          },
           events: {
             status: (status) => {
               usePresence.setState({ status });
@@ -52,6 +84,8 @@ function BoardView({ boardId }: { boardId: string }) {
             message: (message) => {
               applyServerMessage(message);
               applyHistoryMessage(message);
+              if (message.t === 'role') applyRole(message.role, message.canExport);
+              if (message.t === 'comments') void useComments.getState().refresh();
               // Someone new should see everyone at once, not at their next movement.
               if (message.t === 'join' || message.t === 'ready') presence?.publishNow();
             },
@@ -66,6 +100,7 @@ function BoardView({ boardId }: { boardId: string }) {
         sync = started;
         presence = startPresence(started.room);
         attachHistory(started.room, doc);
+        void useComments.getState().open(boardId);
         setStatus('ready');
       } catch {
         if (!cancelled) setStatus('missing');
@@ -76,6 +111,9 @@ function BoardView({ boardId }: { boardId: string }) {
       cancelled = true;
       presence?.stop();
       attachHistory(null, null);
+      useComments.getState().close();
+      setBoardReadOnly(false);
+      useBoardAccess.setState({ role: 'owner', canExport: true, ownerName: null, title: null });
       resetPresence();
       // Leaving the board sends whatever has not been sent yet.
       void sync?.flush().finally(() => sync?.stop());
@@ -94,39 +132,66 @@ function BoardView({ boardId }: { boardId: string }) {
     return (
       <main className={styles.missing} data-testid="board-missing">
         <h1>That board is not available</h1>
-        <p>It may have been deleted, or it belongs to someone else.</p>
-        <Link to={{ name: 'dashboard' }} className={styles.back}>
-          Back to your boards
-        </Link>
+        <p>
+          It may have been deleted, your access may have been removed, or it belongs to someone
+          else.
+        </p>
+        {signedIn ? (
+          <Link to={{ name: 'dashboard' }} className={styles.back}>
+            Back to your boards
+          </Link>
+        ) : null}
       </main>
     );
   }
 
+  const owner = role === 'owner' && record !== undefined;
+  // Someone else's board: back to what is shared with them, or — a guest — nowhere.
+  const back = owner
+    ? record.folderId
+      ? ({ name: 'folder', folderId: record.folderId } as const)
+      : ({ name: 'dashboard' } as const)
+    : signedIn
+      ? ({ name: 'shared' } as const)
+      : null;
+
   return (
     <>
       <TopBar
-        boardName={record?.title ?? 'Board'}
-        badge="Phase 7"
-        onRenameBoard={record ? rename : undefined}
+        boardName={record?.title ?? sharedTitle ?? 'Board'}
+        badge={role && role !== 'owner' ? ROLE_LABEL[role] : 'Phase 8'}
+        onRenameBoard={owner ? rename : undefined}
+        compact
         leading={
-          <Link
-            to={
-              record?.folderId
-                ? { name: 'folder', folderId: record.folderId }
-                : { name: 'dashboard' }
-            }
-            className={styles.back}
-            data-testid="back-to-boards"
-          >
-            ← Boards
-          </Link>
+          back ? (
+            <Link to={back} className={styles.back} data-testid="back-to-boards">
+              ← Boards
+            </Link>
+          ) : null
         }
       >
         <ToolBar />
         <PeerBar />
+        {owner ? (
+          <button
+            type="button"
+            className={styles.share}
+            data-testid="open-share"
+            onClick={() => setSharing(true)}
+          >
+            Share
+          </button>
+        ) : null}
       </TopBar>
       <CanvasStage />
       <HistoryPanel />
+      <CommentsPanel boardId={boardId} />
+      {sharing ? (
+        <ShareDialog
+          resource={{ type: 'board', id: boardId, title: record?.title ?? 'this board' }}
+          onClose={() => setSharing(false)}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,8 +1,10 @@
 import type { CreateFolderBody, UpdateFolderBody } from '@shared/api';
 import type { Account } from '../auth';
 import { getFolder, toFolder } from '../db';
+import { boardsUnder } from '../access';
 import type { Env } from '../env';
 import { cleanName, fail, json, newId } from '../http';
+import { tellRooms } from './sharing';
 
 export async function createFolder(request: Request, env: Env, account: Account) {
   const body = (await request.json().catch(() => ({}))) as CreateFolderBody;
@@ -86,6 +88,8 @@ export async function trashFolder(env: Env, account: Account, id: string) {
     for (const row of results) branch.push(row.id);
   }
 
+  // Collected before they are marked deleted, so their rooms can be told after.
+  const affected = await boardsUnder(env, id);
   const placeholders = branch.map((_, index) => `?${index + 2}`).join(',');
   await env.DB.batch([
     env.DB.prepare(
@@ -95,6 +99,7 @@ export async function trashFolder(env: Env, account: Account, id: string) {
       `UPDATE boards SET deleted_at = ?1 WHERE folder_id IN (${placeholders}) AND deleted_at IS NULL`,
     ).bind(now, ...branch),
   ]);
+  await tellRooms(env, affected, '/reauthorize');
 
   return json({ ok: true });
 }

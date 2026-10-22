@@ -1,3 +1,5 @@
+import type { Role } from './sharing';
+
 /**
  * The wire protocol between a browser and a board's room (a Durable Object).
  *
@@ -123,7 +125,11 @@ export interface HistoryCheckpoint {
 }
 
 export type ClientMessage =
-  | { t: 'auth'; token: string }
+  /**
+   * The handshake. `token` is a Firebase ID token, or empty for a guest; `link` is
+   * the share link they came in by, if any; `guest` is the name a guest gave.
+   */
+  | { t: 'auth'; token: string; link?: string | null; guest?: { id: string; name: string } | null }
   | { t: 'presence'; state: PresenceState }
   | { t: 'history' }
   | { t: 'history-state'; seq: number; req: number }
@@ -134,8 +140,14 @@ export type ServerMessage =
       t: 'ready';
       session: string;
       you: PeerIdentity;
+      /** What this person may do here. A viewer's edits are refused by the room. */
+      role: Role;
       peers: Array<{ session: string; user: PeerIdentity }>;
     }
+  /** Sharing changed while connected: this is what they may do now. */
+  | { t: 'role'; role: Role; canExport: boolean }
+  /** Comments on the board changed; fetch them again. */
+  | { t: 'comments' }
   | { t: 'join'; session: string; user: PeerIdentity }
   | { t: 'leave'; session: string }
   | { t: 'presence'; session: string; user: PeerIdentity; state: PresenceState }
@@ -151,7 +163,12 @@ export type ServerMessage =
     }
   /** Precedes the binary HISTORY frame it describes. */
   | { t: 'history-state'; req: number; seq: number; at: number }
-  | { t: 'error'; message: string; code: 'unauthorised' | 'not-found' | 'bad-request' };
+  | {
+      t: 'error';
+      message: string;
+      /** `read-only`: an edit from someone who may not edit, dropped. The socket stays. */
+      code: 'unauthorised' | 'not-found' | 'bad-request' | 'read-only' | 'revoked';
+    };
 
 /**
  * A colour per person, the same in every window and on every device, so "the purple

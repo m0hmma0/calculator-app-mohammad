@@ -12,6 +12,7 @@ import {
   type ServerMessage,
 } from '@shared/collab';
 import { fileIdsInDoc, searchTextInDoc } from '@shared/files';
+import { atLeast, boardAccess, type Role, type Viewer } from './access';
 import { AuthError, verifyIdToken } from './auth';
 import type { Env } from './env';
 
@@ -19,6 +20,11 @@ import type { Env } from './env';
 interface Attachment {
   session: string;
   user: PeerIdentity | null;
+  /** What they may do. Rechecked whenever sharing changes or a link runs out. */
+  role: Role | null;
+  /** Who they are to the access rule — null for a guest — and the link they used. */
+  viewer: Viewer | null;
+  link: string | null;
 }
 
 /** Take a full snapshot after this many updates, so loading never replays thousands. */
@@ -214,7 +220,8 @@ export class BoardRoom extends DurableObject<Env> {
     this.putBlob(BLOB_UPDATE, seq, effective);
     this.sinceSnapshot += 1;
     if (this.sinceSnapshot >= SNAPSHOT_EVERY) this.takeSnapshot(null);
-    void this.schedulePersist();
+    this.setMeta('dirty', '1');
+    void this.scheduleAlarm(Date.now() + PERSIST_DELAY_MS);
     return effective;
   }
 
@@ -243,9 +250,24 @@ export class BoardRoom extends DurableObject<Env> {
     if (!this.meta('created')) this.setMeta('created', String(Date.now()));
   }
 
-  private async schedulePersist(): Promise<void> {
+  /** One alarm serves two jobs — saving and rechecking access — so it fires at the sooner. */
+  private async scheduleAlarm(at: number): Promise<void> {
     const pending = await this.ctx.storage.getAlarm();
-    if (pending === null) await this.ctx.storage.setAlarm(Date.now() + PERSIST_DELAY_MS);
+    if (pending === null || at < pending) await this.ctx.storage.setAlarm(at);
+  }
+
+  async alarm(): Promise<void> {
+    if (this.meta('dirty')) {
+      this.sql.exec("DELETE FROM meta WHERE key = 'dirty'");
+      await this.persist();
+    }
+    const recheckAt = Number(this.meta('recheckAt') ?? 0);
+    if (recheckAt && recheckAt <= Date.now()) {
+      this.sql.exec("DELETE FROM meta WHERE key = 'recheckAt'");
+      await this.reauthorize();
+    } else if (recheckAt) {
+      await this.scheduleAlarm(recheckAt);
+    }
   }
 
   /**
@@ -253,7 +275,7 @@ export class BoardRoom extends DurableObject<Env> {
    * duplicates and the first load of a new room), and in D1 the words to search by
    * and the images it uses.
    */
-  async alarm(): Promise<void> {
+  private async persist(): Promise<void> {
     const boardId = this.meta('boardId');
     if (!boardId) return;
     const key = `boards/${boardId}/snapshot.bin`;
@@ -279,6 +301,19 @@ export class BoardRoom extends DurableObject<Env> {
     const url = new URL(request.url);
     const boardId = request.headers.get('x-board-id');
 
+    // Sharing changed somewhere above this board: everyone connected is checked again.
+    if (url.pathname === '/reauthorize') {
+      await this.reauthorize();
+      return new Response(null, { status: 204 });
+    }
+
+    // Something everyone here should hear about — comments changed, say.
+    if (url.pathname === '/notify') {
+      const message = (await request.json().catch(() => null)) as ServerMessage | null;
+      if (message) for (const socket of this.others(null)) this.sendJson(socket, message);
+      return new Response(null, { status: 204 });
+    }
+
     // The board was emptied from the trash: nothing of it should outlive that.
     if (url.pathname === '/destroy') {
       await this.ctx.storage.deleteAlarm();
@@ -297,7 +332,13 @@ export class BoardRoom extends DurableObject<Env> {
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server);
-    const attachment: Attachment = { session: crypto.randomUUID().slice(0, 12), user: null };
+    const attachment: Attachment = {
+      session: crypto.randomUUID().slice(0, 12),
+      user: null,
+      role: null,
+      viewer: null,
+      link: null,
+    };
     server.serializeAttachment(attachment);
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -332,53 +373,159 @@ export class BoardRoom extends DurableObject<Env> {
 
   private refuse(
     ws: WebSocket,
-    code: 'unauthorised' | 'not-found' | 'bad-request',
+    code: 'unauthorised' | 'not-found' | 'bad-request' | 'revoked',
     message: string,
   ) {
     this.sendJson(ws, { t: 'error', code, message });
-    ws.close(code === 'not-found' ? 4404 : code === 'unauthorised' ? 4401 : 4400, message);
+    const close = { 'not-found': 4404, unauthorised: 4401, 'bad-request': 4400, revoked: 4403 };
+    ws.close(close[code], message);
+  }
+
+  private async canExport(role: Role): Promise<boolean> {
+    if (atLeast(role, 'editor')) return true;
+    const row = await this.env.DB.prepare('SELECT viewer_export FROM boards WHERE id = ?1')
+      .bind(this.meta('boardId'))
+      .first<{ viewer_export: number }>();
+    return row?.viewer_export === 1;
   }
 
   /**
-   * The handshake. A socket can do nothing until it presents a token the room can
-   * verify and that token's account may open this board. Phase 8 widens "may".
+   * Runs the access rule again for everyone connected. Anyone who has lost access is
+   * told and disconnected; anyone whose role changed is told the new one. Also notes
+   * when the soonest link in use runs out, so that is checked again on time.
    */
-  private async authenticate(ws: WebSocket, token: string): Promise<void> {
-    let account;
-    try {
-      account = await verifyIdToken(token, this.env);
-    } catch (error) {
-      if (error instanceof AuthError) return this.refuse(ws, 'unauthorised', error.message);
-      throw error;
-    }
-
+  private async reauthorize(): Promise<void> {
     const boardId = this.meta('boardId');
-    const board = await this.env.DB.prepare('SELECT owner_id, deleted_at FROM boards WHERE id = ?1')
-      .bind(boardId)
-      .first<{ owner_id: string; deleted_at: number | null }>();
-    if (!board || board.deleted_at !== null || board.owner_id !== account.uid) {
-      return this.refuse(ws, 'not-found', 'That board is not available');
+    if (!boardId) return;
+    let soonest: number | null = null;
+
+    for (const ws of this.ctx.getWebSockets()) {
+      const attachment = this.attachment(ws);
+      if (!attachment.user) continue;
+      const access = await boardAccess(this.env, attachment.viewer, boardId, attachment.link);
+      if (!access.role) {
+        this.refuse(ws, 'revoked', 'Your access to this board has been removed');
+        continue;
+      }
+      if (access.expiresAt !== null) soonest = Math.min(soonest ?? Infinity, access.expiresAt);
+      if (access.role !== attachment.role) {
+        ws.serializeAttachment({ ...attachment, role: access.role });
+        this.sendJson(ws, {
+          t: 'role',
+          role: access.role,
+          canExport: await this.canExport(access.role),
+        });
+        // Newly able to edit: the room asks for anything they did while they could not.
+        if (atLeast(access.role, 'editor') && !atLeast(attachment.role, 'editor')) {
+          this.sendBinary(ws, frame(FRAME.SYNC_STEP1, Y.encodeStateVector(this.doc)));
+        }
+      } else {
+        // Export may have been switched without the role changing.
+        this.sendJson(ws, {
+          t: 'role',
+          role: access.role,
+          canExport: await this.canExport(access.role),
+        });
+      }
+    }
+    await this.noteExpiry(soonest);
+  }
+
+  private async noteExpiry(at: number | null): Promise<void> {
+    if (at === null) return;
+    const current = Number(this.meta('recheckAt') ?? 0);
+    if (current && current <= at) return;
+    this.setMeta('recheckAt', String(at + 250));
+    await this.scheduleAlarm(at + 250);
+  }
+
+  /**
+   * The handshake. A socket can do nothing until it says who it is: a token the room
+   * can verify, or — for a guest — no token and a share link. The same access rule
+   * as every API route decides what, if anything, they may do here.
+   */
+  private async authenticate(
+    ws: WebSocket,
+    message: Extract<ClientMessage, { t: 'auth' }>,
+  ): Promise<void> {
+    let account = null;
+    if (message.token) {
+      try {
+        account = await verifyIdToken(message.token, this.env);
+      } catch (error) {
+        if (error instanceof AuthError) return this.refuse(ws, 'unauthorised', error.message);
+        throw error;
+      }
     }
 
-    const user: PeerIdentity = {
-      uid: account.uid,
-      name: account.name ?? account.email,
-      picture: account.picture,
-      color: colorFor(account.uid),
+    const link =
+      typeof message.link === 'string' && /^[\w-]{16,64}$/.test(message.link) ? message.link : null;
+    const viewer: Viewer | null = account
+      ? { uid: account.uid, email: account.email.toLowerCase() }
+      : null;
+    const access = await boardAccess(this.env, viewer, this.meta('boardId') ?? '', link);
+    if (!access.role) {
+      // A guest turned away may simply need to sign in; anyone else is not let in.
+      return account
+        ? this.refuse(ws, 'not-found', 'That board is not available')
+        : this.refuse(ws, 'unauthorised', 'Sign in to open this board');
+    }
+
+    const guestId =
+      String(message.guest?.id ?? '')
+        .replace(/[^\w-]/g, '')
+        .slice(0, 32) || 'anon';
+    const guestName = String(message.guest?.name ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 40);
+    const user: PeerIdentity = account
+      ? {
+          uid: account.uid,
+          name: account.name ?? account.email,
+          picture: account.picture,
+          color: colorFor(account.uid),
+        }
+      : {
+          uid: `guest:${guestId}`,
+          name: `${guestName || 'Guest'} (guest)`,
+          picture: null,
+          color: colorFor(`guest:${guestId}`),
+        };
+    const attachment: Attachment = {
+      ...this.attachment(ws),
+      user,
+      role: access.role,
+      viewer,
+      link,
     };
-    const attachment = { ...this.attachment(ws), user };
     ws.serializeAttachment(attachment);
+    await this.noteExpiry(access.expiresAt);
 
     const peers = this.others(ws).map((other) => {
       const { session, user: peer } = this.attachment(other);
       return { session, user: peer! };
     });
-    this.sendJson(ws, { t: 'ready', session: attachment.session, you: user, peers });
+    this.sendJson(ws, {
+      t: 'ready',
+      session: attachment.session,
+      you: user,
+      role: access.role,
+      peers,
+    });
+    this.sendJson(ws, {
+      t: 'role',
+      role: access.role,
+      canExport: await this.canExport(access.role),
+    });
     for (const other of this.others(ws)) {
       this.sendJson(other, { t: 'join', session: attachment.session, user });
     }
     // The room asks for what it is missing, too: that is how offline work comes in.
-    this.sendBinary(ws, frame(FRAME.SYNC_STEP1, Y.encodeStateVector(this.doc)));
+    // Not from someone who may not edit: there is nothing of theirs it would accept.
+    if (atLeast(access.role, 'editor')) {
+      this.sendBinary(ws, frame(FRAME.SYNC_STEP1, Y.encodeStateVector(this.doc)));
+    }
   }
 
   private history(ws: WebSocket): void {
@@ -403,7 +550,7 @@ export class BoardRoom extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const { session, user } = this.attachment(ws);
+    const { session, user, role } = this.attachment(ws);
 
     if (typeof message === 'string') {
       let parsed: ClientMessage;
@@ -415,7 +562,7 @@ export class BoardRoom extends DurableObject<Env> {
 
       if (!user) {
         if (parsed.t === 'auth' && typeof parsed.token === 'string') {
-          return this.authenticate(ws, parsed.token);
+          return this.authenticate(ws, parsed);
         }
         return this.refuse(ws, 'unauthorised', 'Sign in first');
       }
@@ -433,9 +580,12 @@ export class BoardRoom extends DurableObject<Env> {
           }
           return;
         }
+        // History is for people who can restore from it.
         case 'history':
+          if (!atLeast(role, 'editor')) return;
           return this.history(ws);
         case 'history-state': {
+          if (!atLeast(role, 'editor')) return;
           const seq = Math.max(0, Math.min(Math.floor(Number(parsed.seq)) || 0, this.lastSeq()));
           const past = this.docAt(seq);
           const at =
@@ -453,6 +603,7 @@ export class BoardRoom extends DurableObject<Env> {
           return;
         }
         case 'checkpoint': {
+          if (!atLeast(role, 'editor')) return;
           const name = String(parsed.name ?? '')
             .replace(/\s+/g, ' ')
             .trim()
@@ -484,6 +635,16 @@ export class BoardRoom extends DurableObject<Env> {
         return;
       case FRAME.SYNC_STEP2:
       case FRAME.UPDATE: {
+        // The gate. Hiding the toolbar from a viewer is a courtesy; this is the rule.
+        // Their change is not applied, not stored and not passed on, and they are told.
+        if (!atLeast(role, 'editor')) {
+          this.sendJson(ws, {
+            t: 'error',
+            code: 'read-only',
+            message: 'You can view this board but not change it',
+          });
+          return;
+        }
         let effective: Uint8Array | null;
         try {
           effective = this.record(payload, user.uid);

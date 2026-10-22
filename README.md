@@ -19,8 +19,8 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **4** | Yjs document, per-user undo, offline, export | ✅ done     |
 | **5** | Google sign-in, folders, boards (D1)         | ✅ done     |
 | **6** | Image storage (R2)                           | built       |
-| **7** | Real-time collaboration (Durable Objects)    | built       |
-| 8     | Sharing, permissions, comments               | not started |
+| **7** | Real-time collaboration (Durable Objects)    | ✅ done     |
+| **8** | Sharing, permissions, comments               | built       |
 | 9     | Presentation mode, workshop tools, embeds    | not started |
 | 10    | Accessibility, Arabic and RTL, polish        | not started |
 | 11    | Hardening, load testing, launch              | not started |
@@ -135,6 +135,21 @@ room's log; restoring is a new change, so nothing after it is lost. Sockets use 
 hibernation API, so an idle board costs nothing and wakes on the next message.
 
 `/` opens cursor chat; clicking someone's avatar follows their view.
+
+## Sharing
+
+A board or folder is private until its owner shares it. The share dialog offers a link —
+for anyone who has it, anyone signed in, or anyone at one email domain; to view, comment
+or edit; optionally expiring — and named Google accounts by email. Sharing a folder
+covers every board inside it, including ones added later, and a board can override what
+it inherits. One rule decides access everywhere (`worker/access.ts`), and the board's
+room enforces it: a viewer's edits are refused by the server, not just hidden in the
+interface. Turning a link off, or removing someone, drops them from an open board within
+seconds.
+
+Also here: comment threads pinned to the board with @mentions, in-app notifications,
+a switch for whether viewers may export, handing a board to another owner, and a log of
+every sharing change.
 
 ## Accounts and storage
 

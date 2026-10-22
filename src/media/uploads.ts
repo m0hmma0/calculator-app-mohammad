@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { fileUrl } from '@shared/files';
-import { currentIdToken } from '@/auth/session';
+import { authHeaders } from '@/api/client';
 import { primeImage } from './images';
 import { loadPending, removePending, savePending } from './pendingUploads';
 
@@ -51,10 +51,9 @@ class UploadError extends Error {
 
 /** Already stored? Then this board simply starts using it and nothing is sent. */
 async function attach(fileId: string, boardId: string): Promise<boolean> {
-  const token = await currentIdToken();
   const response = await fetch(`${fileUrl(fileId)}/attach?board=${encodeURIComponent(boardId)}`, {
     method: 'POST',
-    headers: token ? { authorization: `Bearer ${token}` } : {},
+    headers: await authHeaders(),
   });
   if (response.ok) return true;
   if (response.status === 404) {
@@ -68,11 +67,11 @@ async function attach(fileId: string, boardId: string): Promise<boolean> {
 
 /** XMLHttpRequest rather than fetch, because only it reports upload progress. */
 async function send(fileId: string, boardId: string, blob: Blob): Promise<void> {
-  const token = await currentIdToken();
+  const headers = await authHeaders();
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', `${fileUrl(fileId)}?board=${encodeURIComponent(boardId)}`);
-    if (token) request.setRequestHeader('authorization', `Bearer ${token}`);
+    headers.forEach((value, name) => request.setRequestHeader(name, value));
     request.setRequestHeader('content-type', blob.type || 'application/octet-stream');
 
     request.upload.onprogress = (event) => {

@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react';
+import { useBoardAccess } from '@/sharing/boardAccess';
 import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
 import { createElementId, type BoardElement } from '@/model/element';
@@ -77,6 +78,8 @@ export function useClipboard(hostRef: RefObject<HTMLElement | null>): void {
 
     const onCopy = (event: ClipboardEvent) => {
       if (isTyping(event.target)) return;
+      // Copying out is exporting, and the owner can switch that off for viewers.
+      if (!useBoardAccess.getState().canExport) return;
       if (writeClipboard(event)) event.preventDefault();
     };
 

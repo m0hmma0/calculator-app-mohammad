@@ -377,7 +377,7 @@ test.describe('the file API', () => {
     expect(await fileStatus(request, sha256(real))).toBe(404);
   });
 
-  test('refuses uploads without sign-in, to boards that are not yours, and non-images', async ({
+  test('refuses uploads from anyone who cannot edit the board, and non-images', async ({
     request,
   }) => {
     const owner = await boardFor(request, 'files-owner');
@@ -385,7 +385,8 @@ test.describe('the file API', () => {
     const bytes = Buffer.from(`guarded-${Math.random()}`);
     const hash = sha256(bytes);
 
-    expect((await put(request, hash, bytes, { boardId: owner.boardId })).status()).toBe(401);
+    // No sign-in and no share link: nothing says this person may edit the board.
+    expect((await put(request, hash, bytes, { boardId: owner.boardId })).status()).toBe(404);
     expect(
       (await put(request, hash, bytes, { token: intruder.token, boardId: owner.boardId })).status(),
     ).toBe(404);

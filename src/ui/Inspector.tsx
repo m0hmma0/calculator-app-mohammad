@@ -1,4 +1,5 @@
 import { FONT_LABELS, type FontKey } from '@/canvas/fonts';
+import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { isTextual } from '@/model/element';
 import { selectionAABB } from '@/model/bounds';
 import { degreesOf } from '@/model/transform';
@@ -41,6 +42,7 @@ export function Inspector() {
   const elements = useBoardStore((state) => state.elements);
   const selection = useBoardStore((state) => state.selection);
   const historyOpen = useHistory((state) => state.open);
+  const editable = useBoardAccess(selectCanEdit);
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
   const selectOnly = useBoardStore((state) => state.selectOnly);
@@ -69,7 +71,8 @@ export function Inspector() {
   const hiddenLayerCount = topLevel.length - visibleLayers.length;
 
   // The history panel takes this place, and the inspector describes the live board.
-  if (historyOpen) return null;
+  // Nothing to adjust for someone who can only look.
+  if (historyOpen || !editable) return null;
 
   return (
     <aside className={styles.panel} data-hud data-testid="inspector">

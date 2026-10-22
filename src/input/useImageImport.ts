@@ -6,7 +6,7 @@ import { keyBetween } from '@/model/zorder';
 import { fileUrl } from '@shared/files';
 import { blobToDataUrl, imageBlobsFrom, initialImageBox, prepareImage } from '@/media/images';
 import { sha256Hex, uploadImage } from '@/media/uploads';
-import { currentBoardId, useBoardStore } from '@/state/boardStore';
+import { boardDoc, currentBoardId, useBoardStore } from '@/state/boardStore';
 import type { ImageRef } from '@/model/element';
 
 /**
@@ -51,6 +51,8 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
     };
 
     const placeAt = async (blobs: Blob[], screenPoint: Point) => {
+      // A viewer's paste would only be refused; do not upload anything for it.
+      if (boardDoc().readOnly) return;
       const store = useBoardStore.getState();
       let cursor = screenToBoard(store.viewport, screenPoint);
 

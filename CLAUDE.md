@@ -7,11 +7,10 @@ with something the user checks themselves against a written checklist.
 
 ## Where things stand
 
-Phases 0–5 are done, each verified by its checklist and green CI. **Phase 6 (images on
-R2)** and **Phase 7 (real-time)** are built, tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> but not yet checked by the user. The next phase
-is **8 (sharing)** — the user has asked for it: anyone-with-link view/edit, or named
-Google accounts, on a board or a folder, private by default.
+Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
+back on. **Phase 8 (sharing, permissions, comments)** is built, tested and deployed at
+<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0003 applied remotely) but not
+yet checked by the user. The next phase is **9 (workshop tools and rich content)**.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -23,8 +22,16 @@ updates, from which version history is read. It writes the R2 snapshot and the D
 search text and image references itself, two seconds after changes (an alarm). The
 browser only uploads the thumbnail. A room with no storage seeds itself from the R2
 snapshot, which is how pre-Phase-7 boards and duplicates arrive. Sockets hibernate;
-auth is the first message (a browser cannot put a token on a WebSocket). Access is
-owner-only until Phase 8 widens `authenticate()` in the room and the REST checks.
+auth is the first message (a browser cannot put a token on a WebSocket).
+
+**Access is one rule, `worker/access.ts`,** used by every REST route and by the room. A
+board's chain is the board then each folder above it; a person grant (by email) applies
+from the nearest resource that has one, a link applies if its token was presented and
+its audience admits this person, and the stronger of the two wins. Guests (a link, no
+account) send `x-share-key` and a chosen name; the room labels them "(guest)". The room
+refuses edits from anyone below editor (the Phase 8 gate) and re-checks every open
+socket when sharing changes (`tellRooms(..., '/reauthorize')`) or a link expires (its
+alarm). Comments, notifications (in-app only; no email) and the audit log live in D1.
 
 The full plan, including every phase's checklist, lives in an artifact:
 <https://claude.ai/code/artifact/5e80f000-99d0-42bf-9525-7e76a632abdb>
@@ -100,6 +107,10 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   open (moving inline images, resuming uploads) must wait for the room's first sync,
   not just IndexedDB — on a device that never opened the board, IndexedDB is empty.
 - `test-backend.mjs` builds `dist-test/` once at startup; restart it to see UI changes.
+- **Controlled checkboxes that wait for the server** do not change on click, so
+  Playwright's `.check()` fails; tests click and wait for the result instead.
+- **An owner must never wait for the server to draw.** Boards open read-only until the
+  role is known, except boards already in the owner's own workspace.
 - A new migration must be applied remotely **before** `npm run deploy`
   (`npx wrangler d1 migrations apply sabboura --remote`), or the new Worker queries
   tables that do not exist yet.

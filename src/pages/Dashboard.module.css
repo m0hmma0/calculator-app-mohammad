@@ -378,3 +378,10 @@
   color: var(--danger);
   font-size: 13.5px;
 }
+
+.sharedMeta {
+  margin: 0;
+  padding: 0 11px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}

@@ -8,7 +8,22 @@ import type {
   UpdateFolderBody,
   WorkspaceResponse,
 } from '@shared/api';
+import type {
+  CommentRecord,
+  FolderContents,
+  GrantRole,
+  LinkInfo,
+  NewCommentBody,
+  NotificationRecord,
+  OpenBoardResponse,
+  Person,
+  PutLinkBody,
+  ResourceType,
+  ShareState,
+  SharedItem,
+} from '@shared/sharing';
 import { currentIdToken } from '@/auth/session';
+import { guestIdentity, shareLink } from '@/sharing/linkSession';
 
 export class ApiError extends Error {
   constructor(
@@ -20,10 +35,21 @@ export class ApiError extends Error {
   }
 }
 
-async function authHeaders(extra: Record<string, string> = {}): Promise<Headers> {
+/**
+ * Who is asking: their sign-in token if they have one, the share link they came by
+ * if any, and a guest's chosen name. The server weighs all three.
+ */
+export async function authHeaders(extra: Record<string, string> = {}): Promise<Headers> {
   const token = await currentIdToken();
   const headers = new Headers(extra);
   if (token) headers.set('authorization', `Bearer ${token}`);
+  const link = shareLink();
+  if (link) headers.set('x-share-key', link);
+  const guest = token ? null : guestIdentity();
+  if (guest) {
+    headers.set('x-guest-id', guest.id);
+    headers.set('x-guest-name', encodeURIComponent(guest.name));
+  }
   return headers;
 }
 
@@ -91,8 +117,58 @@ export const api = {
     return URL.createObjectURL(await response.blob());
   },
 
-  /** Checks a board is there and this person's, and marks it opened. */
-  openBoard: (id: string) => request<{ board: BoardRecord }>(`/api/boards/${id}`),
+  /** What this board is, and what this person may do with it. */
+  openBoard: (id: string) => request<OpenBoardResponse>(`/api/boards/${id}`),
+
+  resolveLink: (token: string) => request<LinkInfo>(`/api/links/${token}`),
+
+  shares: (type: ResourceType, id: string) => request<ShareState>(`/api/shares/${type}/${id}`),
+  putLink: (type: ResourceType, id: string, body: PutLinkBody) =>
+    request<ShareState>(`/api/shares/${type}/${id}/link`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  revokeLink: (type: ResourceType, id: string) =>
+    request<ShareState>(`/api/shares/${type}/${id}/link`, { method: 'DELETE' }),
+  resetLink: (type: ResourceType, id: string) =>
+    request<ShareState>(`/api/shares/${type}/${id}/link/reset`, { method: 'POST' }),
+  addPerson: (type: ResourceType, id: string, email: string, role: GrantRole) =>
+    request<ShareState>(`/api/shares/${type}/${id}/people`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+  removePerson: (type: ResourceType, id: string, shareId: string) =>
+    request<ShareState>(`/api/shares/${type}/${id}/people/${shareId}`, { method: 'DELETE' }),
+  setViewerExport: (id: string, viewerExport: boolean) =>
+    request<ShareState>(`/api/boards/${id}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify({ viewerExport }),
+    }),
+  transfer: (id: string, email: string) =>
+    request<{ ok: true }>(`/api/boards/${id}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  sharedWithMe: () => request<{ items: SharedItem[] }>('/api/shared'),
+  folderContents: (id: string) => request<FolderContents>(`/api/folders/${id}/contents`),
+
+  comments: (boardId: string) =>
+    request<{ comments: CommentRecord[] }>(`/api/boards/${boardId}/comments`),
+  addComment: (boardId: string, body: NewCommentBody) =>
+    request<{ comments: CommentRecord[] }>(`/api/boards/${boardId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  resolveThread: (threadId: string, resolved: boolean) =>
+    request<{ comments: CommentRecord[] }>(`/api/comments/${threadId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resolved }),
+    }),
+  people: (boardId: string) => request<{ people: Person[] }>(`/api/boards/${boardId}/people`),
+
+  notifications: () => request<{ notifications: NotificationRecord[] }>('/api/notifications'),
+  readNotifications: () => request<{ ok: true }>('/api/notifications/read', { method: 'POST' }),
 
   async saveThumbnail(id: string, png: Blob): Promise<void> {
     const response = await fetch(`/api/boards/${id}/thumbnail`, {
