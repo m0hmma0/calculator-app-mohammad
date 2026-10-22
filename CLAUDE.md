@@ -8,9 +8,19 @@ with something the user checks themselves against a written checklist.
 ## Where things stand
 
 Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
-back on. **Phase 8 (sharing, permissions, comments)** is built, tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0003 applied remotely) but not
-yet checked by the user. The next phase is **9 (workshop tools and rich content)**.
+back on. **Phase 8 (sharing, permissions, comments)** and **Phase 9 (workshop tools and
+rich content)** are built, tested and deployed at <https://sabboura.mh-hamad.workers.dev>
+(migrations 0001–0004 applied remotely) but not yet checked by the user. The next phase
+is **10 (accessibility, Arabic and RTL, polish)**.
+
+Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
+stored per page), presentation (`src/workshop/presentation.ts`, followers fit the
+presenter's frame via presence `present`), a timer and dot votes in the document's
+meta map and `votes` map (`src/workshop/workshop.ts`; the room's clock comes in the
+welcome message as `now`), tables/code/embeds as element types, `/api/unfurl` for link
+cards, a per-account library (`worker/routes/library.ts`, migration 0004), and SVG/PDF
+import (`src/importers/`). Not built from the original plan: LaTeX, `.excalidraw`
+import, emoji reactions.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -107,6 +117,11 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   open (moving inline images, resuming uploads) must wait for the room's first sync,
   not just IndexedDB — on a device that never opened the board, IndexedDB is empty.
 - `test-backend.mjs` builds `dist-test/` once at startup; restart it to see UI changes.
+- **A control inside the stage needs `data-hud`** on it or an ancestor, or the canvas
+  takes the pointer on pointerdown and the click never arrives.
+- **Tests that open one board in two windows as the same person** share that
+  person's identity — vote budgets, `self.uid` — so use two accounts when the point is
+  two people (see `twoWindows(..., true)` in `workshop.spec.ts`).
 - **Controlled checkboxes that wait for the server** do not change on click, so
   Playwright's `.check()` fails; tests click and wait for the result instead.
 - **An owner must never wait for the server to draw.** Boards open read-only until the

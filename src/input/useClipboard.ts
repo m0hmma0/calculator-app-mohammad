@@ -2,8 +2,9 @@ import { useEffect, type RefObject } from 'react';
 import { useBoardAccess } from '@/sharing/boardAccess';
 import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
-import { createElementId, type BoardElement } from '@/model/element';
-import { keysBetween } from '@/model/zorder';
+import { asUrl, placeLink } from '@/media/embeds';
+import { copiesOf } from '@/model/copies';
+import type { BoardElement } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
 
 const MIME = 'application/x-sabboura+json';
@@ -97,6 +98,19 @@ export function useClipboard(hostRef: RefObject<HTMLElement | null>): void {
         event.clipboardData?.getData(MIME) || event.clipboardData?.getData('text/plain') || '';
       let elements = decode(fromEvent);
 
+      // A link becomes a video or a preview card rather than text.
+      const link = elements ? null : asUrl(event.clipboardData?.getData('text/plain') ?? '');
+      if (link) {
+        event.preventDefault();
+        const store = useBoardStore.getState();
+        const centre = {
+          x: store.viewport.x + store.stageSize.width / (2 * store.viewport.zoom),
+          y: store.viewport.y + store.stageSize.height / (2 * store.viewport.zoom),
+        };
+        placeLink(link, lastPointer ? screenToBoard(store.viewport, lastPointer) : centre);
+        return;
+      }
+
       if (!elements) {
         try {
           elements = decode(localStorage.getItem(FALLBACK_KEY) ?? '');
@@ -116,30 +130,10 @@ export function useClipboard(hostRef: RefObject<HTMLElement | null>): void {
         ? screenToBoard(store.viewport, lastPointer)
         : { x: minX + PASTE_OFFSET, y: minY + PASTE_OFFSET };
 
-      const keys = keysBetween(store.elements.at(-1)?.z ?? null, null, elements.length);
-      const remap = new Map<string, string>();
-      for (const element of elements) remap.set(element.id, createElementId(element.type));
+      const copies = copiesOf(elements, target, store.elements.at(-1)?.z ?? null);
 
-      const copies = elements.map((element, index) => ({
-        ...element,
-        id: remap.get(element.id)!,
-        // Keep relationships inside the pasted set; drop ones pointing outside it.
-        parentId: element.parentId ? (remap.get(element.parentId) ?? null) : null,
-        from:
-          element.from && remap.has(element.from.elementId)
-            ? { elementId: remap.get(element.from.elementId)! }
-            : undefined,
-        to:
-          element.to && remap.has(element.to.elementId)
-            ? { elementId: remap.get(element.to.elementId)! }
-            : undefined,
-        x: element.x - minX + target.x,
-        y: element.y - minY + target.y,
-        z: keys[index]!,
-      }));
-
-      store.replaceElements([...store.elements, ...copies]);
-      store.selectOnly(copies.filter((copy) => copy.parentId === null).map((copy) => copy.id));
+      // Only the copies are written: rewriting the page would trample anyone editing it.
+      store.addElements(copies);
     };
 
     host.addEventListener('pointermove', trackPointer);

@@ -23,6 +23,7 @@
     "firebase": "^13.0.0",
     "fractional-indexing": "^4.0.0",
     "jose": "^6.2.13",
+    "pdfjs-dist": "^4.10.38",
     "perfect-freehand": "^1.2.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

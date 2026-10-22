@@ -1,7 +1,14 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
 import * as Y from 'yjs';
-import type { BoardElement, ElementId } from '@/model/element';
-import { elementsOf, fromYElement, patchYElement, toYElement, type YElement } from './schema';
+import { FIRST_PAGE, type BoardElement, type ElementId } from '@/model/element';
+import {
+  elementsOf,
+  fromYElement,
+  pagesOf,
+  patchYElement,
+  toYElement,
+  type YElement,
+} from './schema';
 
 /**
  * Marks every change this tab makes. The undo manager tracks only this origin, so
@@ -32,6 +39,8 @@ export interface BoardDoc {
    * without this a viewer would see changes that nobody else ever does.
    */
   readOnly: boolean;
+  /** The page this tab is looking at. New elements land on it; others are left alone. */
+  currentPage: string;
   destroy: () => void;
 }
 
@@ -49,7 +58,8 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
   const doc = new Y.Doc();
   const elements = elementsOf(doc);
 
-  const undoManager = new Y.UndoManager(elements, {
+  // Pages are in scope too, so deleting a page — and everything on it — can be undone.
+  const undoManager = new Y.UndoManager([elements, pagesOf(doc)], {
     trackedOrigins: new Set([LOCAL_ORIGIN]),
     captureTimeout: options.captureTimeout ?? 400,
   });
@@ -68,6 +78,7 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
     undoManager,
     whenReady,
     readOnly: false,
+    currentPage: FIRST_PAGE,
     destroy: () => {
       undoManager.destroy();
       persistence?.destroy();
@@ -95,7 +106,12 @@ export function readElements(board: BoardDoc): BoardElement[] {
  */
 export function insertElements(board: BoardDoc, incoming: readonly BoardElement[]): void {
   transactLocal(board, () => {
-    for (const element of incoming) board.elements.set(element.id, toYElement(element));
+    // Whatever page it was copied from, something new arrives on the page in view.
+    // The first page stays implicit, as it is for everything from before pages.
+    const page = board.currentPage === FIRST_PAGE ? undefined : board.currentPage;
+    for (const element of incoming) {
+      board.elements.set(element.id, toYElement({ ...element, page }));
+    }
   });
   board.undoManager.stopCapturing();
 }
@@ -120,11 +136,65 @@ export function applyPatches(
   });
 }
 
-/** Replaces the whole board — used by "clear" and by loading demo content. */
+/** Replaces the page in view — used by "clear" and by loading demo content. */
 export function replaceAll(board: BoardDoc, incoming: readonly BoardElement[]): void {
   transactLocal(board, () => {
-    board.elements.clear();
-    for (const element of incoming) board.elements.set(element.id, toYElement(element));
+    const doomed: string[] = [];
+    board.elements.forEach((map, id) => {
+      if ((map.get('page') ?? FIRST_PAGE) === board.currentPage) doomed.push(id);
+    });
+    for (const id of doomed) board.elements.delete(id);
+    // The first page stays implicit, as it is for everything from before pages.
+    const page = board.currentPage === FIRST_PAGE ? undefined : board.currentPage;
+    for (const element of incoming) {
+      board.elements.set(element.id, toYElement({ ...element, page }));
+    }
+  });
+  board.undoManager.stopCapturing();
+}
+
+/**
+ * Pages. The list lives in the document, so everyone sees the same pages; which one
+ * a person is looking at is theirs alone. The implicit first page is written out the
+ * first time a second one is added.
+ */
+export function addPage(board: BoardDoc, name: string): string | null {
+  if (board.readOnly) return null;
+  const id = `pg_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  transactLocal(board, () => {
+    const pages = pagesOf(board.doc);
+    if (pages.length === 0) pages.push([{ id: FIRST_PAGE, name: 'Page 1' }]);
+    pages.push([{ id, name }]);
+  });
+  board.undoManager.stopCapturing();
+  return id;
+}
+
+export function renamePage(board: BoardDoc, id: string, name: string): void {
+  transactLocal(board, () => {
+    const pages = pagesOf(board.doc);
+    if (pages.length === 0) pages.push([{ id: FIRST_PAGE, name: 'Page 1' }]);
+    const index = pages.toArray().findIndex((page) => page.id === id);
+    if (index === -1) return;
+    pages.delete(index, 1);
+    pages.insert(index, [{ id, name }]);
+  });
+  board.undoManager.stopCapturing();
+}
+
+/** Removes a page and everything on it. The last page cannot go. */
+export function deletePage(board: BoardDoc, id: string): void {
+  transactLocal(board, () => {
+    const pages = pagesOf(board.doc);
+    const list = pages.toArray();
+    const index = list.findIndex((page) => page.id === id);
+    if (index === -1 || list.length < 2) return;
+    pages.delete(index, 1);
+    const doomed: string[] = [];
+    board.elements.forEach((map, elementId) => {
+      if ((map.get('page') ?? FIRST_PAGE) === id) doomed.push(elementId);
+    });
+    for (const elementId of doomed) board.elements.delete(elementId);
   });
   board.undoManager.stopCapturing();
 }

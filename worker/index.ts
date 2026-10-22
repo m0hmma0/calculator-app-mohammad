@@ -30,6 +30,8 @@ import {
   sharedWithMe,
   transferBoard,
 } from './routes/sharing';
+import { addLibraryItem, listLibrary, removeLibraryItem } from './routes/library';
+import { unfurl } from './routes/unfurl';
 import { emptyTrash, getTrash, getWorkspace } from './routes/workspace';
 import { upsertUser } from './db';
 import type { Env } from './env';
@@ -145,6 +147,12 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   }
 
   if (pathname === '/api/shared' && method === 'GET') return sharedWithMe(env, account);
+  if (pathname === '/api/unfurl' && method === 'GET') return unfurl(request, env);
+  if (pathname === '/api/library' && method === 'GET') return listLibrary(env, account);
+  if (pathname === '/api/library' && method === 'POST')
+    return addLibraryItem(request, env, account);
+  const libraryItem = /^\/api\/library\/([\w-]+)$/.exec(pathname);
+  if (libraryItem && method === 'DELETE') return removeLibraryItem(env, account, libraryItem[1]!);
   if (pathname === '/api/notifications' && method === 'GET') return listNotifications(env, account);
   if (pathname === '/api/notifications/read' && method === 'POST') {
     return readNotifications(env, account);

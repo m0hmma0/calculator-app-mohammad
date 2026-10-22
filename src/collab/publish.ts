@@ -1,8 +1,9 @@
 import type { PresenceState } from '@shared/collab';
-import { viewportsEqual, type Viewport } from '@/canvas/viewport';
+import { fitToRect, viewportsEqual, type Viewport } from '@/canvas/viewport';
 import { laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { useBoardStore } from '@/state/boardStore';
 import type { RoomConnection } from './connection';
+import { PRESENT_PADDING } from '@/workshop/presentation';
 import { presenter, usePresence } from './presence';
 
 /** Presence is sent at most this often — smooth enough for a cursor, cheap enough. */
@@ -39,6 +40,8 @@ function currentPresence(): PresenceState {
         : null,
     chat: presence.chatOpen || presence.chat ? presence.chat : null,
     spotlight: presence.spotlight,
+    present: presence.present,
+    page: board.page,
   };
 }
 
@@ -73,7 +76,8 @@ export function startPresence(room: RoomConnection): PresenceHandle {
     if (
       state.selection !== previous.selection ||
       state.viewport !== previous.viewport ||
-      state.stageSize !== previous.stageSize
+      state.stageSize !== previous.stageSize ||
+      state.page !== previous.page
     ) {
       schedule();
     }
@@ -83,7 +87,8 @@ export function startPresence(room: RoomConnection): PresenceHandle {
       state.cursor !== previous.cursor ||
       state.chat !== previous.chat ||
       state.chatOpen !== previous.chatOpen ||
-      state.spotlight !== previous.spotlight
+      state.spotlight !== previous.spotlight ||
+      state.present !== previous.present
     ) {
       schedule();
     }
@@ -123,10 +128,26 @@ function startFollowing(): () => void {
       applied = null;
       return;
     }
-    const view = usePresence.getState().peers[session]?.state?.view;
+    const leader = usePresence.getState().peers[session]?.state;
+    const view = leader?.view;
     if (!view || view.zoom <= 0) return;
 
+    // Following someone means being on their page, too.
+    if (leader.page && leader.page !== useBoardStore.getState().page) {
+      applied = null;
+      useBoardStore.getState().setPage(leader.page);
+    }
     const board = useBoardStore.getState();
+    // A presenter's frame fills this screen, whatever shape this screen is.
+    const frame = leader.present
+      ? board.elements.find((element) => element.id === leader.present?.frame)
+      : undefined;
+    if (frame) {
+      const fitted = fitToRect(frame, board.stageSize, PRESENT_PADDING);
+      applied = fitted;
+      board.setViewport(fitted);
+      return;
+    }
     const centreX = view.x + view.width / (2 * view.zoom);
     const centreY = view.y + view.height / (2 * view.zoom);
     const next: Viewport = {

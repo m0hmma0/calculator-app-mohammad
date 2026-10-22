@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import {
+  addPage,
   applyPatches,
   createBoard,
+  deletePage,
+  renamePage,
   deleteElements,
   insertElements,
   replaceAll,
@@ -9,7 +12,7 @@ import {
   type BoardDoc,
 } from '@/doc/board';
 import { bindBoard } from '@/doc/binding';
-import { toYElement } from '@/doc/schema';
+import { pagesOf, readPages, toYElement, type PageInfo } from '@/doc/schema';
 import { unionRects, type Rect } from '@/geometry';
 import {
   clampZoom,
@@ -26,6 +29,8 @@ import { elementAABB, selectionAABB } from '@/model/bounds';
 import {
   createElement,
   createElementId,
+  FIRST_PAGE,
+  pageOf,
   isInteractive,
   type BoardElement,
   type ElementId,
@@ -37,7 +42,7 @@ import { simplify, strokeBounds, toFlat, translatePoints, type InkPoint } from '
 import { scaleBoxInto } from '@/model/transform';
 import { keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/zorder';
 import { generateDemoElements } from '@/scene/demoElements';
-import { loadViewport, saveViewport } from './viewportStorage';
+import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
 export type ContentTool = 'pen' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame';
@@ -107,6 +112,14 @@ interface BoardState {
   canUndo: boolean;
   canRedo: boolean;
   setUndoState: (state: { canUndo: boolean; canRedo: boolean }) => void;
+
+  /** The board's pages, in order, and the one in view. */
+  pages: PageInfo[];
+  page: string;
+  setPage: (id: string) => void;
+  addPage: () => void;
+  renamePage: (id: string, name: string) => void;
+  deletePage: (id: string) => void;
   setOnline: (online: boolean) => void;
 
   devPanelOpen: boolean;
@@ -137,6 +150,8 @@ interface BoardState {
   setSnapEnabled: (enabled: boolean) => void;
 
   addElement: (element: BoardElement) => void;
+  /** Several new elements at once — a paste, a library item — selected afterwards. */
+  addElements: (elements: BoardElement[]) => void;
   patchElements: (patches: ReadonlyMap<ElementId, Partial<BoardElement>>) => void;
   replaceElements: (elements: BoardElement[]) => void;
   deleteSelection: () => void;
@@ -180,6 +195,19 @@ interface BoardState {
   beginEditing: (id: ElementId) => void;
   endEditing: () => void;
   setElementText: (id: ElementId, text: string) => void;
+
+  /** Puts something new in the middle of the view and selects it. */
+  insertAt: (
+    type: ElementType,
+    size: { w: number; h: number },
+    extra?: Omit<Partial<BoardElement>, 'style'> & { style?: Partial<ElementStyle> },
+  ) => BoardElement | null;
+  /** The table cell being typed in, if any. */
+  editingCell: { id: ElementId; row: number; col: number } | null;
+  beginCellEdit: (id: ElementId, row: number, col: number) => void;
+  endCellEdit: () => void;
+  setCell: (id: ElementId, row: number, col: number, text: string) => void;
+  resizeTable: (id: ElementId, change: { rows?: number; cols?: number }) => void;
 }
 
 const ZOOM_STEP = 1.25;
@@ -242,6 +270,37 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
     canUndo: false,
     canRedo: false,
+
+    pages: [{ id: FIRST_PAGE, name: 'Page 1' }],
+    page: FIRST_PAGE,
+
+    // Each page keeps its own camera; switching saves this one and restores that one.
+    setPage: (id) => {
+      if (id === board.currentPage) return;
+      get().endEditing();
+      board.currentPage = id;
+      setViewportScope(openBoardId ? `${openBoardId}:${id}` : `local:${id}`);
+      set({ page: id, selection: [], viewport: loadViewport() });
+      binding?.refresh();
+    },
+
+    addPage: () => {
+      const id = addPage(board, `Page ${get().pages.length + 1}`);
+      if (id) get().setPage(id);
+    },
+
+    renamePage: (id, name) => {
+      const trimmed = name.replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (trimmed) renamePage(board, id, trimmed);
+    },
+
+    deletePage: (id) => {
+      const { pages } = get();
+      if (pages.length < 2) return;
+      const next = pages.find((page) => page.id !== id)!;
+      if (get().page === id) get().setPage(next.id);
+      deletePage(board, id);
+    },
 
     undo: () => {
       get().endEditing();
@@ -340,6 +399,14 @@ export const useBoardStore = create<BoardState>((set, get) => {
     addElement: (element) => {
       insertElements(board, [element]);
       bump({ selection: [element.id] });
+    },
+
+    addElements: (elements) => {
+      if (elements.length === 0) return;
+      insertElements(board, elements);
+      bump({
+        selection: elements.filter((element) => !element.parentId).map((element) => element.id),
+      });
     },
 
     patchElements: (patches) => applyPatches(board, patches),
@@ -660,6 +727,63 @@ export const useBoardStore = create<BoardState>((set, get) => {
       patches.set(id, { text });
       get().applyDiscrete(patches);
     },
+
+    insertAt: (type, size, extra = {}) => {
+      if (board.readOnly) return null;
+      const { viewport, stageSize } = get();
+      const centre = {
+        x: viewport.x + stageSize.width / (2 * viewport.zoom),
+        y: viewport.y + stageSize.height / (2 * viewport.zoom),
+      };
+      const base = createElement({
+        type,
+        box: { x: centre.x - size.w / 2, y: centre.y - size.h / 2, w: size.w, h: size.h },
+        z: keyBetween(topZ(), null),
+      });
+      const element: BoardElement = { ...base, ...extra, style: { ...base.style, ...extra.style } };
+      get().setTool('select');
+      get().addElement(element);
+      return element;
+    },
+
+    editingCell: null,
+
+    beginCellEdit: (id, row, col) => {
+      if (board.readOnly) return;
+      get().endEditing();
+      bump({ editingCell: { id, row, col }, selection: [id] });
+    },
+
+    endCellEdit: () => {
+      if (!get().editingCell) return;
+      board.undoManager.stopCapturing();
+      bump({ editingCell: null });
+    },
+
+    // Only the one cell is written, so a neighbour's typing elsewhere is untouched.
+    setCell: (id, row, col, text) => {
+      const table = get().elements.find((element) => element.id === id)?.table;
+      if (!table) return;
+      applyPatches(
+        board,
+        new Map([[id, { table: { ...table, cells: { [`${row},${col}`]: text } } }]]),
+      );
+    },
+
+    resizeTable: (id, change) => {
+      const element = get().elements.find((candidate) => candidate.id === id);
+      const table = element?.table;
+      if (!element || !table) return;
+      const rows = Math.max(1, Math.min(50, change.rows ?? table.rows));
+      const cols = Math.max(1, Math.min(20, change.cols ?? table.cols));
+      // Rows and columns keep their size; the table grows or shrinks around them.
+      const patch: Partial<BoardElement> = {
+        table: { rows, cols, cells: {} },
+        h: (element.h / table.rows) * rows,
+        w: (element.w / table.cols) * cols,
+      };
+      get().applyDiscrete(new Map([[id, patch]]));
+    },
   };
 });
 
@@ -725,10 +849,25 @@ export function setBoardReadOnly(readOnly: boolean): void {
   useBoardStore.setState((current) => ({ renderVersion: current.renderVersion + 1 }));
 }
 
+const attachListeners = new Set<(doc: BoardDoc) => void>();
+
+/**
+ * Lets shared board state outside the element map — the timer, votes — follow
+ * whichever board is open, without this store having to know about it.
+ */
+export function onDocumentAttached(listener: (doc: BoardDoc) => void): () => void {
+  attachListeners.add(listener);
+  listener(board);
+  return () => attachListeners.delete(listener);
+}
+
 function attachDocument(doc: BoardDoc): void {
   binding?.destroy();
 
-  binding = bindBoard(doc, (elements) => {
+  // The binding sees every page; the store, and so everything drawn and picked, only
+  // the one in view.
+  binding = bindBoard(doc, (all) => {
+    const elements = all.filter((element) => pageOf(element) === doc.currentPage);
     useBoardStore.setState((state) => ({
       elements,
       renderVersion: state.renderVersion + 1,
@@ -736,6 +875,17 @@ function attachDocument(doc: BoardDoc): void {
       selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
     }));
   });
+
+  // The page list is shared; if the page in view is deleted by someone, move off it.
+  const syncPages = () => {
+    const pages = readPages(doc.doc);
+    useBoardStore.setState({ pages });
+    if (!pages.some((page) => page.id === doc.currentPage)) {
+      useBoardStore.getState().setPage(pages[0]!.id);
+    }
+  };
+  pagesOf(doc.doc).observe(syncPages);
+  syncPages();
 
   const syncUndoState = () =>
     useBoardStore
@@ -746,6 +896,8 @@ function attachDocument(doc: BoardDoc): void {
   doc.undoManager.on('stack-item-popped', syncUndoState);
   doc.undoManager.on('stack-cleared', syncUndoState);
   syncUndoState();
+
+  for (const listener of attachListeners) listener(doc);
 
   useBoardStore.setState({ hydrated: false });
   void doc.whenReady.then(() => useBoardStore.setState({ hydrated: true }));
@@ -763,8 +915,16 @@ export function openBoardDocument(boardId: string | null): BoardDoc {
   openBoardId = boardId;
 
   board = createBoard({ persistenceKey: canPersist ? key : undefined });
+  setViewportScope(boardId ? `${boardId}:${FIRST_PAGE}` : null);
   attachDocument(board);
-  useBoardStore.setState({ selection: [], editingId: null, draft: null, marquee: null });
+  useBoardStore.setState({
+    selection: [],
+    editingId: null,
+    draft: null,
+    marquee: null,
+    page: FIRST_PAGE,
+    viewport: loadViewport(),
+  });
 
   previous.destroy();
   return board;

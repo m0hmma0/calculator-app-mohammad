@@ -5,7 +5,33 @@ export type ElementId = string;
 export type ShapeType =
   'rect' | 'ellipse' | 'triangle' | 'diamond' | 'star' | 'polygon' | 'line' | 'arrow';
 
-export type ContentType = 'path' | 'text' | 'sticky' | 'image' | 'frame';
+export type ContentType =
+  'path' | 'text' | 'sticky' | 'image' | 'frame' | 'table' | 'code' | 'embed';
+
+/**
+ * A table's cells, keyed "row,column". Each cell is its own entry in the document, so
+ * two people typing in different cells both keep what they typed.
+ */
+export interface TableData {
+  rows: number;
+  cols: number;
+  cells: Record<string, string>;
+}
+
+export const cellKey = (row: number, col: number) => `${row},${col}`;
+
+/** Something from the web: a video that plays in place, or a link's preview card. */
+export interface EmbedData {
+  kind: 'video' | 'link';
+  url: string;
+  title?: string;
+  description?: string;
+  /** Preview image or video thumbnail, as an absolute URL. */
+  image?: string;
+  site?: string;
+  /** YouTube's id for the video. */
+  videoId?: string;
+}
 
 export type ElementType = ShapeType | ContentType | 'group';
 
@@ -71,6 +97,8 @@ export interface BoardElement {
   /** Fractional index — sorts as a plain string, and two people can reorder at once. */
   z: string;
   parentId: ElementId | null;
+  /** Which page of the board it is on. Absent means the first page. */
+  page?: string;
   style: ElementStyle;
 
   /**
@@ -85,6 +113,11 @@ export interface BoardElement {
 
   /** Image source: a stored file on an account board, a data URL on the local board. */
   image?: ImageRef;
+
+  table?: TableData;
+  embed?: EmbedData;
+  /** A code block's language, for highlighting. */
+  language?: string;
 
   /** Connector endpoints. When bound, the arrow follows the element. */
   from?: Binding;
@@ -103,6 +136,11 @@ export interface ImageRef {
 }
 
 export const MIN_SIZE = 1;
+
+/** Every board has this page; elements from before pages existed live on it. */
+export const FIRST_PAGE = 'p1';
+
+export const pageOf = (element: Pick<BoardElement, 'page'>): string => element.page ?? FIRST_PAGE;
 
 export const DEFAULT_STYLE: ElementStyle = {
   fill: 'var(--shape-1)',
@@ -166,6 +204,31 @@ export const INK_STYLE: Partial<ElementStyle> = {
   stroke: null,
   strokeWidth: 6,
 };
+export const TABLE_STYLE: Partial<ElementStyle> = {
+  fill: 'var(--surface)',
+  stroke: 'var(--border-strong)',
+  strokeWidth: 1,
+  radius: 4,
+  fontSize: 15,
+  textColor: 'var(--text)',
+};
+export const CODE_STYLE: Partial<ElementStyle> = {
+  fill: '#1e2030',
+  stroke: null,
+  radius: 8,
+  fontFamily: 'mono',
+  fontSize: 14,
+  lineHeight: 1.45,
+  textColor: '#e4e6f0',
+};
+export const EMBED_STYLE: Partial<ElementStyle> = {
+  fill: 'var(--surface)',
+  stroke: 'var(--border-strong)',
+  strokeWidth: 1,
+  radius: 10,
+  fontSize: 15,
+  textColor: 'var(--text)',
+};
 export const FRAME_STYLE: Partial<ElementStyle> = {
   fill: 'var(--surface)',
   stroke: 'var(--border-strong)',
@@ -211,7 +274,13 @@ export function createElement({ type, box, z, style, id }: CreateElementOptions)
               ? { ...DEFAULT_STYLE, ...FRAME_STYLE }
               : type === 'image'
                 ? { ...DEFAULT_STYLE, fill: null, stroke: null, radius: 0 }
-                : DEFAULT_STYLE;
+                : type === 'table'
+                  ? { ...DEFAULT_STYLE, ...TABLE_STYLE }
+                  : type === 'code'
+                    ? { ...DEFAULT_STYLE, ...CODE_STYLE }
+                    : type === 'embed'
+                      ? { ...DEFAULT_STYLE, ...EMBED_STYLE }
+                      : DEFAULT_STYLE;
   return {
     id: id ?? createElementId(type),
     type,

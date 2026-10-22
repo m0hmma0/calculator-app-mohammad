@@ -1,0 +1,167 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.timer {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+}
+
+.time {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+  text-align: center;
+}
+
+.timer[data-state='done'] {
+  border-color: var(--danger, #d14343);
+  animation: pulse 1s ease-in-out 3;
+}
+
+.timer[data-state='done'] .time {
+  color: var(--danger, #d14343);
+}
+
+@keyframes pulse {
+  50% {
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+.close {
+  border: 0;
+  background: var(--surface-2);
+  color: var(--text-2);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.voteStatus {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 5px 12px;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+.dots {
+  position: absolute;
+  transform: translate(-75%, -50%);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-1);
+}
+
+.count {
+  min-width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.count[data-mine] {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+
+.dotButton {
+  border: 0;
+  background: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.dotButton:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--accent-ink);
+}
+
+.dotButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.presentBar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  opacity: 0.85;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.presentBar button {
+  border: 0;
+  background: none;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.presentBar button:last-child {
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.presentBar button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.presentBar button:disabled {
+  opacity: 0.35;
+}

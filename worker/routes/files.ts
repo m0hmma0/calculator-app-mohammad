@@ -152,7 +152,8 @@ export async function putFile(
 }
 
 /**
- * Removes images that no board — live or in anyone's trash — refers to. Runs when a
+ * Removes images that no board — live or in anyone's trash — and no library item
+ * refers to. Runs when a
  * trash is emptied, so an image deleted from a board can still come back with undo
  * until then.
  */
@@ -160,6 +161,7 @@ export async function sweepUnusedFiles(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(
     `SELECT hash FROM files
      WHERE NOT EXISTS (SELECT 1 FROM board_files WHERE board_files.hash = files.hash)
+       AND NOT EXISTS (SELECT 1 FROM library_files WHERE library_files.hash = files.hash)
      LIMIT 500`,
   ).all<{ hash: string }>();
   if (results.length === 0) return 0;
@@ -172,7 +174,8 @@ export async function sweepUnusedFiles(env: Env): Promise<number> {
     hashes.map((hash) =>
       env.DB.prepare(
         `DELETE FROM files WHERE hash = ?1
-         AND NOT EXISTS (SELECT 1 FROM board_files WHERE board_files.hash = ?1)`,
+         AND NOT EXISTS (SELECT 1 FROM board_files WHERE board_files.hash = ?1)
+         AND NOT EXISTS (SELECT 1 FROM library_files WHERE library_files.hash = ?1)`,
       ).bind(hash),
     ),
   );

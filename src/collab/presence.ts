@@ -26,12 +26,16 @@ interface PresenceStore {
   dismissedSpotlight: string | null;
   /** This person is presenting. */
   spotlight: boolean;
+  /** The frame this person is presenting, in presentation mode. */
+  present: { frame: string } | null;
 
   /** Cursor chat: open while typing, and the words being typed. */
   chatOpen: boolean;
   chat: string;
   /** Where this person's pointer is, in board coordinates, or null off the canvas. */
   cursor: { x: number; y: number } | null;
+  /** The room's clock minus this one, so shared timers agree across screens. */
+  clockOffset: number;
 }
 
 const initial = {
@@ -43,9 +47,11 @@ const initial = {
   following: null,
   dismissedSpotlight: null,
   spotlight: false,
+  present: null,
   chatOpen: false,
   chat: '',
   cursor: null,
+  clockOffset: 0,
 } satisfies PresenceStore;
 
 export const usePresence = create<PresenceStore>(() => ({ ...initial }));
@@ -61,6 +67,7 @@ export function applyServerMessage(message: ServerMessage): void {
       usePresence.setState({
         session: message.session,
         self: message.you,
+        clockOffset: message.now - Date.now(),
         peers: Object.fromEntries(
           message.peers.map((peer) => [
             peer.session,

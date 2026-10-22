@@ -1,4 +1,6 @@
 import { useEffect, type RefObject } from 'react';
+import { tableGrid } from '@/canvas/renderContent';
+import { useEmbeds } from '@/state/embedStore';
 import { useHistory } from '@/collab/history';
 import { screenToBoard, type Viewport } from '@/canvas/viewport';
 import { HANDLE_SIZE, ROTATE_ZONE } from '@/canvas/renderOverlay';
@@ -810,11 +812,22 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const store = useBoardStore.getState();
       const point = board(event);
       const target = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom);
+      if (!target) return;
       if (
-        target &&
-        (target.type === 'text' || target.type === 'sticky' || target.type === 'frame')
+        target.type === 'text' ||
+        target.type === 'sticky' ||
+        target.type === 'frame' ||
+        target.type === 'code'
       ) {
         store.beginEditing(target.id);
+      } else if (target.type === 'table' && target.table && target.rotation === 0) {
+        const { rowHeight, colWidth, rows, cols } = tableGrid(target);
+        const row = Math.min(rows - 1, Math.max(0, Math.floor((point.y - target.y) / rowHeight)));
+        const col = Math.min(cols - 1, Math.max(0, Math.floor((point.x - target.x) / colWidth)));
+        store.beginCellEdit(target.id, row, col);
+      } else if (target.type === 'embed' && target.embed?.kind === 'video') {
+        // A video plays in place; until then it is just a picture you can move.
+        useEmbeds.setState({ playing: target.id });
       }
     };
 

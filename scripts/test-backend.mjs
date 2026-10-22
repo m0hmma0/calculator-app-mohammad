@@ -71,6 +71,29 @@ const keyServer = createServer(async (request, response) => {
     response.end(JSON.stringify({ keys: [jwk] }));
     return;
   }
+  // A page with the tags a link preview reads, for the embed tests.
+  if (url.pathname === '/article') {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(`<!doctype html><html><head>
+      <title>Fallback title</title>
+      <meta property="og:title" content="Workshops that work">
+      <meta property="og:description" content="Seven habits of facilitators people come back to.">
+      <meta property="og:image" content="/article.png">
+      <meta property="og:site_name" content="Test Journal">
+    </head><body>Article</body></html>`);
+    return;
+  }
+  if (url.pathname === '/article.png') {
+    // One teal pixel.
+    response.writeHead(200, { 'content-type': 'image/png' });
+    response.end(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    );
+    return;
+  }
   if (url.pathname === '/ready') {
     // Readiness means *both* halves answer. Probing the Worker alone would let a
     // stale one from an earlier run satisfy the check while this key server — the
@@ -108,6 +131,9 @@ const worker = spawn(
     `FIREBASE_PROJECT_ID:${PROJECT_ID}`,
     '--var',
     `FIREBASE_JWKS_URL:http://localhost:${KEY_PORT}/jwks`,
+    // The link-preview test page is served by the key server, on localhost.
+    '--var',
+    'UNFURL_ALLOW_LOCAL:1',
     '--assets',
     ASSETS,
   ],

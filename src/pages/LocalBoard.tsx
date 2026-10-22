@@ -1,4 +1,7 @@
 import { CanvasStage } from '@/ui/CanvasStage';
+import { InsertMenu } from '@/ui/InsertMenu';
+import { WorkshopMenu } from '@/ui/WorkshopMenu';
+import { LibraryMenu } from '@/ui/LibraryMenu';
 import { ToolBar } from '@/ui/ToolBar';
 import { TopBar } from '@/ui/TopBar';
 import styles from './LocalBoard.module.css';
@@ -14,6 +17,9 @@ export function LocalBoard() {
     <>
       <TopBar boardName="Local board" badge="Phase 7">
         <ToolBar />
+        <InsertMenu />
+        <WorkshopMenu />
+        <LibraryMenu />
       </TopBar>
       <p className={styles.notice} data-testid="local-only-notice">
         Signed-out mode — this board is saved in this browser only.

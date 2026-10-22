@@ -23,6 +23,7 @@ import type {
   SharedItem,
 } from '@shared/sharing';
 import { currentIdToken } from '@/auth/session';
+import type { BoardElement } from '@/model/element';
 import { guestIdentity, shareLink } from '@/sharing/linkSession';
 
 export class ApiError extends Error {
@@ -151,6 +152,21 @@ export const api = {
     }),
 
   sharedWithMe: () => request<{ items: SharedItem[] }>('/api/shared'),
+
+  /** A web page's title, summary and picture, fetched by the server. */
+  unfurl: (url: string) =>
+    request<{ title?: string; description?: string; image?: string; site?: string }>(
+      `/api/unfurl?url=${encodeURIComponent(url)}`,
+    ),
+  library: () => request<{ items: unknown[] }>('/api/library'),
+  addToLibrary: (name: string, elements: BoardElement[]) =>
+    request<{ item: unknown }>('/api/library', {
+      method: 'POST',
+      body: JSON.stringify({ name, elements }),
+    }),
+  removeFromLibrary: (id: string) =>
+    request<{ ok: true }>(`/api/library/${id}`, { method: 'DELETE' }),
+
   folderContents: (id: string) => request<FolderContents>(`/api/folders/${id}/contents`),
 
   comments: (boardId: string) =>

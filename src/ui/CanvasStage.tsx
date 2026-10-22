@@ -8,6 +8,7 @@ import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
 import { useCanvasInteraction } from '@/input/useCanvasInteraction';
 import { useClipboard } from '@/input/useClipboard';
 import { useImageImport } from '@/input/useImageImport';
+import { useLibraryDrop } from '@/library/library';
 import { useUploads } from '@/media/uploads';
 import { useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
@@ -18,6 +19,9 @@ import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
 import { CommentPins } from './CommentPins';
 import { DevPanel } from './DevPanel';
+import { EmbedLayer } from './EmbedLayer';
+import { PageBar } from './PageBar';
+import { TableCellEditor } from './TableCellEditor';
 import { PeersLayer } from './PeersLayer';
 import { Inspector } from './Inspector';
 import { Minimap } from './Minimap';
@@ -26,6 +30,7 @@ import { ContextMenu } from './ContextMenu';
 import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
+import { WorkshopLayer } from './WorkshopLayer';
 import { ToolOptions } from './ToolOptions';
 import { ZoomControls } from './ZoomControls';
 import styles from './CanvasStage.module.css';
@@ -133,6 +138,7 @@ export function CanvasStage() {
   const { canvasRef, redraw } = useCanvas2D(draw);
   useCanvasInteraction(hostRef);
   useImageImport(hostRef);
+  useLibraryDrop(hostRef);
   useClipboard(hostRef);
   // Shortcuts belong to the canvas, not the app shell: wherever a board is on screen
   // — a signed-in board or the local one — the keys work.
@@ -240,13 +246,17 @@ export function CanvasStage() {
 
       <div className={styles.hud} data-hud>
         <Minimap />
+        <PageBar />
         <ZoomControls />
       </div>
 
+      <EmbedLayer />
       <PeersLayer hostRef={hostRef} />
       <CommentPins />
+      <WorkshopLayer />
       <ToolOptions />
       <TextEditor viewport={viewport} />
+      <TableCellEditor viewport={viewport} />
       <Inspector />
       <ShortcutSheet />
       <CommandPalette />

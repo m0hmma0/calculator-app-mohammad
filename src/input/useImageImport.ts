@@ -3,30 +3,10 @@ import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
 import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
-import { fileUrl } from '@shared/files';
-import { blobToDataUrl, imageBlobsFrom, initialImageBox, prepareImage } from '@/media/images';
-import { sha256Hex, uploadImage } from '@/media/uploads';
-import { boardDoc, currentBoardId, useBoardStore } from '@/state/boardStore';
-import type { ImageRef } from '@/model/element';
-
-/**
- * On an account board the image is named by its hash and stored in R2 — it goes on
- * the board at once, with a blurred placeholder, and the upload carries on behind
- * it. The signed-out local board has no server, so the bytes stay in the document.
- */
-async function storeImage(blob: Blob): Promise<ImageRef> {
-  const prepared = await prepareImage(blob);
-  const { naturalWidth, naturalHeight, placeholder } = prepared;
-  const boardId = currentBoardId();
-
-  if (!boardId) {
-    return { src: await blobToDataUrl(prepared.blob), naturalWidth, naturalHeight };
-  }
-
-  const fileId = await sha256Hex(prepared.blob);
-  void uploadImage(fileId, boardId, prepared.blob);
-  return { src: fileUrl(fileId), fileId, naturalWidth, naturalHeight, placeholder };
-}
+import { imageBlobsFrom, initialImageBox } from '@/media/images';
+import { storeImage } from '@/media/storeImage';
+import { importFile, isPdfFile } from '@/importers/importFile';
+import { boardDoc, useBoardStore } from '@/state/boardStore';
 
 /**
  * Images arrive two ways, and both are browser-only APIs — which is exactly the part
@@ -109,6 +89,13 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
 
     const onDrop = (event: DragEvent) => {
       delete host.dataset.dropping;
+      // A PDF becomes its pages; an SVG dropped stays a picture (import makes it shapes).
+      const pdf = [...(event.dataTransfer?.files ?? [])].find(isPdfFile);
+      if (pdf) {
+        event.preventDefault();
+        void importFile(pdf);
+        return;
+      }
       const blobs = imageBlobsFrom(event.dataTransfer);
       if (blobs.length === 0) return;
 

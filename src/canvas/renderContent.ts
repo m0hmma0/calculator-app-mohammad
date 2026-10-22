@@ -1,10 +1,11 @@
 import getStroke from 'perfect-freehand';
+import { detectLanguage, tokenizeLine, TOKEN_COLORS, type Language } from '@/model/highlight';
 import { fromFlat } from '@/ink/stroke';
 import type { BoardElement } from '@/model/element';
 import { fitFontSize, layoutText } from '@/model/textLayout';
 import { getImage } from '@/media/images';
 import { uploadStateOf, type UploadState } from '@/media/uploads';
-import { fontString } from './fonts';
+import { fontStack, fontString } from './fonts';
 import { resolveColor, type CanvasColors } from './theme';
 
 export const STICKY_PADDING = 14;
@@ -229,5 +230,212 @@ export function drawFrameLabel(
   ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(label, element.x, element.y - size * 0.45);
+  ctx.restore();
+}
+
+/** Draws text cut to a width with an ellipsis, so it never spills out of its box. */
+function fitLine(ctx: CanvasRenderingContext2D, text: string, width: number): string {
+  if (ctx.measureText(text).width <= width) return text;
+  let low = 0;
+  let high = text.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (ctx.measureText(`${text.slice(0, mid)}…`).width <= width) low = mid;
+    else high = mid - 1;
+  }
+  return low > 0 ? `${text.slice(0, low)}…` : '';
+}
+
+function cardBox(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+  zoom: number,
+) {
+  const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+  ctx.beginPath();
+  ctx.roundRect(element.x, element.y, element.w, element.h, radius);
+  const fill = resolveColor(element.style.fill, colors);
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  const stroke = resolveColor(element.style.stroke, colors);
+  if (stroke && element.style.strokeWidth > 0) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = element.style.strokeWidth / zoom;
+    ctx.stroke();
+  }
+}
+
+/** Where a table's lines fall: evenly divided, so resizing the table resizes its cells. */
+export function tableGrid(element: BoardElement) {
+  const rows = Math.max(1, element.table?.rows ?? 1);
+  const cols = Math.max(1, element.table?.cols ?? 1);
+  return { rows, cols, rowHeight: element.h / rows, colWidth: element.w / cols };
+}
+
+export const CELL_PADDING = 8;
+
+export function drawTable(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+  zoom: number,
+): void {
+  const table = element.table;
+  if (!table) return;
+  const { rows, cols, rowHeight, colWidth } = tableGrid(element);
+  ctx.save();
+  cardBox(ctx, element, colors, zoom);
+
+  // The first row is the header.
+  ctx.fillStyle = colors.byToken.get('--surface-2') ?? '#f1f2f6';
+  ctx.save();
+  ctx.beginPath();
+  const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+  ctx.roundRect(element.x, element.y, element.w, element.h, radius);
+  ctx.clip();
+  ctx.fillRect(element.x, element.y, element.w, rowHeight);
+  ctx.restore();
+
+  ctx.strokeStyle = resolveColor(element.style.stroke, colors) ?? '#ccc';
+  ctx.lineWidth = 1 / zoom;
+  ctx.beginPath();
+  for (let row = 1; row < rows; row += 1) {
+    ctx.moveTo(element.x, element.y + row * rowHeight);
+    ctx.lineTo(element.x + element.w, element.y + row * rowHeight);
+  }
+  for (let col = 1; col < cols; col += 1) {
+    ctx.moveTo(element.x + col * colWidth, element.y);
+    ctx.lineTo(element.x + col * colWidth, element.y + element.h);
+  }
+  ctx.stroke();
+
+  const size = Math.min(element.style.fontSize, rowHeight * 0.6);
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = resolveColor(element.style.textColor, colors) ?? '#222';
+  for (let row = 0; row < rows; row += 1) {
+    ctx.font = fontString(
+      { ...element.style, fontWeight: row === 0 ? 650 : element.style.fontWeight },
+      size,
+    );
+    for (let col = 0; col < cols; col += 1) {
+      const value = table.cells[`${row},${col}`];
+      if (!value) continue;
+      const line = value.split('\n')[0] ?? '';
+      ctx.fillText(
+        fitLine(ctx, line, colWidth - CELL_PADDING * 2),
+        element.x + col * colWidth + CELL_PADDING,
+        element.y + row * rowHeight + rowHeight / 2,
+      );
+    }
+  }
+  ctx.restore();
+}
+
+export const CODE_PADDING = 14;
+
+export function drawCode(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+  zoom: number,
+): void {
+  ctx.save();
+  cardBox(ctx, element, colors, zoom);
+  const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+  ctx.beginPath();
+  ctx.roundRect(element.x, element.y, element.w, element.h, radius);
+  ctx.clip();
+
+  const code = element.text ?? '';
+  const language =
+    !element.language || element.language === 'auto'
+      ? detectLanguage(code)
+      : (element.language as Exclude<Language, 'auto'>);
+  const size = element.style.fontSize;
+  const lineHeight = size * element.style.lineHeight;
+  ctx.font = fontString(element.style, size);
+  ctx.textBaseline = 'top';
+
+  const lines = code.split('\n');
+  const visible = Math.floor((element.h - CODE_PADDING * 2) / lineHeight) + 1;
+  lines.slice(0, visible).forEach((line, index) => {
+    let x = element.x + CODE_PADDING;
+    const y = element.y + CODE_PADDING + index * lineHeight;
+    for (const token of tokenizeLine(line.replace(/\t/g, '  '), language)) {
+      ctx.fillStyle = TOKEN_COLORS[token.kind];
+      ctx.fillText(token.text, x, y);
+      x += ctx.measureText(token.text).width;
+      if (x > element.x + element.w) break;
+    }
+  });
+
+  // Which language it is being read as, small in the corner.
+  ctx.font = `500 ${Math.max(9, size * 0.72)}px ${fontStack('mono')}`;
+  ctx.fillStyle = '#7f849c';
+  ctx.textAlign = 'right';
+  ctx.fillText(language, element.x + element.w - 10, element.y + 8);
+  ctx.restore();
+}
+
+/** Room the card leaves for its picture, which the page draws over it. */
+export function embedImageHeight(element: BoardElement): number {
+  return element.embed?.kind === 'video' ? element.h : element.embed?.image ? element.h * 0.55 : 0;
+}
+
+export function drawEmbed(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+  zoom: number,
+): void {
+  const embed = element.embed;
+  if (!embed) return;
+  ctx.save();
+
+  if (embed.kind === 'video') {
+    const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+    ctx.beginPath();
+    ctx.roundRect(element.x, element.y, element.w, element.h, radius);
+    ctx.fillStyle = '#0f0f12';
+    ctx.fill();
+    const r = Math.min(element.w, element.h) * 0.12;
+    const cx = element.x + element.w / 2;
+    const cy = element.y + element.h / 2;
+    ctx.fillStyle = '#ff0033';
+    ctx.beginPath();
+    ctx.roundRect(cx - r * 1.4, cy - r, r * 2.8, r * 2, r * 0.5);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.4, cy - r * 0.55);
+    ctx.lineTo(cx + r * 0.6, cy);
+    ctx.lineTo(cx - r * 0.4, cy + r * 0.55);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  cardBox(ctx, element, colors, zoom);
+  const top = element.y + embedImageHeight(element);
+  const width = element.w - 28;
+  const size = element.style.fontSize;
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = resolveColor(element.style.textColor, colors) ?? '#222';
+  ctx.font = fontString({ ...element.style, fontWeight: 650 }, size);
+  let y = top + 12;
+  ctx.fillText(fitLine(ctx, embed.title || embed.url, width), element.x + 14, y);
+  y += size * 1.45;
+  if (embed.description) {
+    ctx.font = fontString(element.style, size * 0.82);
+    ctx.fillStyle = colors.byToken.get('--text-2') ?? '#555';
+    ctx.fillText(fitLine(ctx, embed.description, width), element.x + 14, y);
+    y += size * 1.3;
+  }
+  ctx.font = fontString(element.style, size * 0.75);
+  ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
+  ctx.fillText(fitLine(ctx, embed.site || new URL(embed.url).hostname, width), element.x + 14, y);
   ctx.restore();
 }

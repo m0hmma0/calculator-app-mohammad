@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { InsertMenu } from '@/ui/InsertMenu';
+import { WorkshopMenu } from '@/ui/WorkshopMenu';
+import { LibraryMenu } from '@/ui/LibraryMenu';
 import { applyHistoryMessage, applyHistoryState, attachHistory } from '@/collab/history';
 import { applyServerMessage, resetPresence, usePresence } from '@/collab/presence';
 import { startPresence, type PresenceHandle } from '@/collab/publish';
@@ -171,6 +174,9 @@ function BoardView({ boardId }: { boardId: string }) {
         }
       >
         <ToolBar />
+        <InsertMenu />
+        <WorkshopMenu />
+        <LibraryMenu />
         <PeerBar />
         {owner ? (
           <button

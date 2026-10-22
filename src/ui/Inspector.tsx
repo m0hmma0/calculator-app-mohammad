@@ -1,4 +1,5 @@
 import { FONT_LABELS, type FontKey } from '@/canvas/fonts';
+import { LANGUAGES } from '@/model/highlight';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { isTextual } from '@/model/element';
 import { selectionAABB } from '@/model/bounds';
@@ -46,6 +47,8 @@ export function Inspector() {
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
   const selectOnly = useBoardStore((state) => state.selectOnly);
+  const resizeTable = useBoardStore((state) => state.resizeTable);
+  const applyDiscrete = useBoardStore((state) => state.applyDiscrete);
   const styleSelection = useBoardStore((state) => state.styleSelection);
   const setSelectionOpacity = useBoardStore((state) => state.setSelectionOpacity);
   const alignSelection = useBoardStore((state) => state.alignSelection);
@@ -95,6 +98,81 @@ export function Inspector() {
               <dd data-testid="geo-angle">{degreesOf(first.rotation)}°</dd>
             </dl>
           </div>
+
+          {first.type === 'table' && first.table && selected.length === 1 ? (
+            <div className={styles.section} data-testid="table-controls">
+              <p className={styles.label} data-testid="table-size">
+                Table · {first.table.rows} × {first.table.cols}
+              </p>
+              <div className={styles.row}>
+                <button
+                  type="button"
+                  data-testid="table-add-row"
+                  onClick={() => resizeTable(first.id, { rows: first.table!.rows + 1 })}
+                >
+                  + row
+                </button>
+                <button
+                  type="button"
+                  data-testid="table-add-col"
+                  onClick={() => resizeTable(first.id, { cols: first.table!.cols + 1 })}
+                >
+                  + column
+                </button>
+                <button
+                  type="button"
+                  disabled={first.table.rows < 2}
+                  onClick={() => resizeTable(first.id, { rows: first.table!.rows - 1 })}
+                >
+                  − row
+                </button>
+                <button
+                  type="button"
+                  disabled={first.table.cols < 2}
+                  onClick={() => resizeTable(first.id, { cols: first.table!.cols - 1 })}
+                >
+                  − column
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {first.type === 'code' && selected.length === 1 ? (
+            <div className={styles.section}>
+              <p className={styles.label}>Code</p>
+              <select
+                value={first.language ?? 'auto'}
+                aria-label="Language"
+                data-testid="code-language"
+                onChange={(event) =>
+                  applyDiscrete(new Map([[first.id, { language: event.target.value }]]))
+                }
+              >
+                {LANGUAGES.map((language) => (
+                  <option key={language} value={language}>
+                    {language === 'auto' ? 'Detect automatically' : language}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          {first.type === 'embed' && first.embed && selected.length === 1 ? (
+            <div className={styles.section}>
+              <p className={styles.label}>{first.embed.kind === 'video' ? 'Video' : 'Link'}</p>
+              <p className={styles.embedTitle} data-testid="embed-title">
+                {first.embed.title ?? first.embed.url}
+              </p>
+              <a
+                className={styles.embedLink}
+                href={first.embed.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open {first.embed.site ?? new URL(first.embed.url).hostname} ↗
+              </a>
+            </div>
+          ) : null}
 
           {isTextual(first) ? (
             <div className={styles.section} data-testid="text-controls">

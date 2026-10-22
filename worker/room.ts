@@ -511,6 +511,7 @@ export class BoardRoom extends DurableObject<Env> {
       session: attachment.session,
       you: user,
       role: access.role,
+      now: Date.now(),
       peers,
     });
     this.sendJson(ws, {

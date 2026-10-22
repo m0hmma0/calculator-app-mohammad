@@ -21,7 +21,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **6** | Image storage (R2)                           | built       |
 | **7** | Real-time collaboration (Durable Objects)    | ✅ done     |
 | **8** | Sharing, permissions, comments               | built       |
-| 9     | Presentation mode, workshop tools, embeds    | not started |
+| **9** | Presentation mode, workshop tools, embeds    | built       |
 | 10    | Accessibility, Arabic and RTL, polish        | not started |
 | 11    | Hardening, load testing, launch              | not started |
 
@@ -150,6 +150,35 @@ seconds.
 Also here: comment threads pinned to the board with @mentions, in-app notifications,
 a switch for whether viewers may export, handing a board to another owner, and a log of
 every sharing change.
+
+## Workshop tools and rich content
+
+- **Pages.** A board has pages along the bottom; each keeps its own content and its
+  own camera. Elements carry a `page` field — absent means the first page, so every
+  board from before pages still opens unchanged.
+- **Presentation.** Workshop → Present frames. Frames play in reading order (rows top
+  to bottom, left to right in a row); arrow keys, Space and Page Up/Down move, Escape
+  leaves. Presenting is spotlighting: everyone else on the board follows, and each
+  follower's screen fits the same frame.
+- **Timer and dot voting.** Both live in the board's document but outside the
+  element map, so they are shared, survive a reload, and are not undoable. The timer
+  counts to an instant on the room's clock (the welcome message carries it), so every
+  screen ends together. Each tab writes its own ballot, so nobody's dots overwrite
+  anybody else's; the budget is per person.
+- **Tables, code blocks, stamps** from the Insert menu. Table cells are separate
+  entries, so two people typing in different cells both keep what they typed. Code is
+  highlighted by a small built-in tokenizer and edited as plain text.
+- **Links.** A pasted YouTube link becomes a video that plays in place
+  (youtube-nocookie); any other link becomes a card, filled in by `/api/unfurl`, which
+  fetches the page from the Worker, refuses private addresses, and reads Open Graph.
+- **Library.** Save the selection (with everything inside it) under a name, then click
+  or drag it onto any board. Kept in D1 per account (`library_items`); images in a
+  library item are protected from the trash sweep by `library_files`. Signed out, the
+  library is this browser's own.
+- **Import.** SVG becomes editable shapes — rectangles, ellipses, lines and text map
+  across, paths become ink along their outline (a path's fill is not kept), gradients
+  and filters are dropped, and nothing in the file runs. PDF becomes one stored picture
+  per page (up to 50), drawn by PDF.js, which loads only when a PDF is imported.
 
 ## Accounts and storage
 

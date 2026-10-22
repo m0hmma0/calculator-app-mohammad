@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { fontString } from '@/canvas/fonts';
 import { boardToScreen, type Viewport } from '@/canvas/viewport';
-import { STICKY_PADDING, TEXT_PADDING } from '@/canvas/renderContent';
+import { CODE_PADDING, STICKY_PADDING, TEXT_PADDING } from '@/canvas/renderContent';
 import { textSplice } from '@/doc/schema';
 import { detectDirection } from '@/model/textLayout';
 import { useBoardStore } from '@/state/boardStore';
@@ -74,16 +74,28 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   if (!element) return null;
 
   const sticky = element.type === 'sticky';
-  const padding = sticky ? STICKY_PADDING : TEXT_PADDING;
+  const code = element.type === 'code';
+  const padding = code ? CODE_PADDING : sticky ? STICKY_PADDING : TEXT_PADDING;
   const topLeft = boardToScreen(viewport, { x: element.x, y: element.y });
 
   return (
     <textarea
       ref={ref}
-      className={styles.editor}
+      className={code ? `${styles.editor} ${styles.code}` : styles.editor}
       data-hud
       data-testid="text-editor"
-      dir={detectDirection(value)}
+      dir={code ? 'ltr' : detectDirection(value)}
+      onKeyDown={(event) => {
+        // In code, Tab indents rather than leaving the box.
+        if (!code || event.key !== 'Tab') return;
+        event.preventDefault();
+        const node = event.currentTarget;
+        const { selectionStart, selectionEnd } = node;
+        const next = `${node.value.slice(0, selectionStart)}  ${node.value.slice(selectionEnd)}`;
+        remember();
+        setElementText(element.id, next);
+        requestAnimationFrame(() => node.setSelectionRange(selectionStart + 2, selectionStart + 2));
+      }}
       value={value}
       spellCheck={false}
       onChange={(event) => {

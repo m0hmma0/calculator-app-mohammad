@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import type { BoardElement, ElementStyle } from '@/model/element';
+import type { BoardElement, ElementStyle, TableData } from '@/model/element';
 import { DEFAULT_STYLE } from '@/model/element';
 
 /**
@@ -21,6 +21,25 @@ import { DEFAULT_STYLE } from '@/model/element';
  */
 export const ELEMENTS_KEY = 'elements';
 export const META_KEY = 'meta';
+export const PAGES_KEY = 'pages';
+
+export interface PageInfo {
+  id: string;
+  name: string;
+}
+
+/**
+ * The board's pages, in order. A board that has never had a second page has an
+ * empty list here and one implicit page, which every older element belongs to.
+ */
+export function pagesOf(doc: Y.Doc): Y.Array<PageInfo> {
+  return doc.getArray<PageInfo>(PAGES_KEY);
+}
+
+export function readPages(doc: Y.Doc): PageInfo[] {
+  const stored = pagesOf(doc).toArray();
+  return stored.length > 0 ? stored : [{ id: 'p1', name: 'Page 1' }];
+}
 
 export type YElement = Y.Map<unknown>;
 export type YElements = Y.Map<YElement>;
@@ -42,7 +61,7 @@ const SCALAR_FIELDS = [
 ] as const;
 
 /** Fields replaced whole rather than merged field by field. */
-const OPAQUE_FIELDS = ['points', 'image', 'from', 'to'] as const;
+const OPAQUE_FIELDS = ['points', 'image', 'from', 'to', 'embed', 'language'] as const;
 
 export function elementsOf(doc: Y.Doc): YElements {
   return doc.getMap(ELEMENTS_KEY) as YElements;
@@ -61,6 +80,8 @@ export function toYElement(element: BoardElement): YElement {
     if (value !== undefined) map.set(field, value);
   }
   if (element.text !== undefined) map.set('text', new Y.Text(element.text));
+  if (element.page !== undefined) map.set('page', element.page);
+  if (element.table) map.set('table', toYTable(element.table));
 
   const style = new Y.Map<unknown>();
   for (const [key, value] of Object.entries(element.style)) style.set(key, value);
@@ -87,6 +108,10 @@ export function fromYElement(map: YElement): BoardElement {
     const value = map.get(field);
     if (value !== undefined) element[field] = value;
   }
+  const page = map.get('page');
+  if (typeof page === 'string') element.page = page;
+  const table = map.get('table');
+  if (table instanceof Y.Map) element.table = readTable(table);
   const text = map.get('text');
   if (text instanceof Y.Text) element.text = text.toString();
   else if (typeof text === 'string') element.text = text;
@@ -117,6 +142,11 @@ export function patchYElement(map: YElement, patch: Partial<BoardElement>): void
 
     if (key === 'text') {
       patchText(map, value as string);
+      continue;
+    }
+
+    if (key === 'table') {
+      patchTable(map, value as TableData);
       continue;
     }
 
@@ -163,4 +193,51 @@ function patchText(map: YElement, next: string): void {
   const splice = textSplice(current.toString(), next);
   if (splice.remove > 0) current.delete(splice.index, splice.remove);
   if (splice.insert) current.insert(splice.index, splice.insert);
+}
+
+/** A table is a map with its size and a nested map of cells, one entry per cell. */
+function toYTable(table: TableData): Y.Map<unknown> {
+  const map = new Y.Map<unknown>();
+  map.set('rows', table.rows);
+  map.set('cols', table.cols);
+  const cells = new Y.Map<string>();
+  for (const [key, value] of Object.entries(table.cells)) if (value) cells.set(key, value);
+  map.set('cells', cells);
+  return map;
+}
+
+function readTable(map: Y.Map<unknown>): TableData {
+  const cells = map.get('cells');
+  return {
+    rows: Number(map.get('rows') ?? 1),
+    cols: Number(map.get('cols') ?? 1),
+    cells:
+      cells instanceof Y.Map ? (Object.fromEntries(cells.entries()) as Record<string, string>) : {},
+  };
+}
+
+/** Writes only the cells that changed, so one person's cell never overwrites another's. */
+function patchTable(map: YElement, next: TableData): void {
+  const current = map.get('table');
+  if (!(current instanceof Y.Map)) {
+    map.set('table', toYTable(next));
+    return;
+  }
+  if (current.get('rows') !== next.rows) current.set('rows', next.rows);
+  if (current.get('cols') !== next.cols) current.set('cols', next.cols);
+  let cells = current.get('cells');
+  if (!(cells instanceof Y.Map)) {
+    cells = new Y.Map<string>();
+    current.set('cells', cells);
+  }
+  const live = cells as Y.Map<string>;
+  for (const [key, value] of Object.entries(next.cells)) {
+    if (!value) {
+      if (live.has(key)) live.delete(key);
+    } else if (live.get(key) !== value) {
+      live.set(key, value);
+    }
+  }
+  // Cells not mentioned are left alone: this copy may simply not have seen a cell
+  // someone else filled a moment ago. Emptying a cell writes it as empty instead.
 }

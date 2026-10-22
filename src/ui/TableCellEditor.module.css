@@ -1,0 +1,12 @@
+.cell {
+  position: absolute;
+  z-index: 5;
+  margin: 0;
+  border: 0;
+  outline: 2px solid var(--accent);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--text);
+  box-sizing: border-box;
+  caret-color: var(--accent);
+}

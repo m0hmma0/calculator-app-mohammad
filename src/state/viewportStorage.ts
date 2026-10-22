@@ -1,6 +1,16 @@
 import { clampZoom, DEFAULT_VIEWPORT, type Viewport } from '@/canvas/viewport';
 
-const KEY = 'sabboura:viewport';
+const BASE_KEY = 'sabboura:viewport';
+let key = BASE_KEY;
+
+/**
+ * Each board, and each page of it, keeps its own camera. The signed-out local board
+ * keeps the original key, so a camera saved before pages existed is still found.
+ */
+export function setViewportScope(scope: string | null): void {
+  flushViewport();
+  key = scope ? `${BASE_KEY}:${scope}` : BASE_KEY;
+}
 const SAVE_DELAY_MS = 250;
 
 /**
@@ -10,7 +20,7 @@ const SAVE_DELAY_MS = 250;
  */
 export function loadViewport(): Viewport {
   try {
-    const stored = localStorage.getItem(KEY);
+    const stored = localStorage.getItem(key);
     if (!stored) return DEFAULT_VIEWPORT;
 
     const parsed = JSON.parse(stored) as Partial<Viewport>;
@@ -35,7 +45,7 @@ let pending: Viewport | null = null;
 
 function write(viewport: Viewport): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(viewport));
+    localStorage.setItem(key, JSON.stringify(viewport));
   } catch {
     // Ignore — losing the camera position is a far smaller problem than throwing.
   }

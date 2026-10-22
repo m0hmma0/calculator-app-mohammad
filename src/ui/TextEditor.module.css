@@ -17,3 +17,12 @@
 .editor::selection {
   background: var(--accent-soft);
 }
+
+/* A code block is edited on its own dark background, highlighting returns on close. */
+.code {
+  background: #1e2030;
+  color: #e4e6f0;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}

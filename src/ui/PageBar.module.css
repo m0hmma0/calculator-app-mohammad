@@ -1,0 +1,63 @@
+.bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 520px;
+  overflow-x: auto;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  scrollbar-width: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.tab[aria-current='page'] {
+  background: var(--accent-soft);
+}
+
+.name,
+.remove,
+.add {
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.name {
+  padding: 4px 9px;
+}
+
+.tab[aria-current='page'] .name {
+  color: var(--accent-ink);
+  font-weight: 550;
+}
+
+.remove {
+  padding: 4px 6px 4px 0;
+  color: var(--text-muted);
+}
+
+.add {
+  padding: 4px 9px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.name:hover,
+.add:hover,
+.remove:hover {
+  color: var(--accent-ink);
+}

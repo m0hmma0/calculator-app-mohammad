@@ -116,6 +116,10 @@ export interface PresenceState {
   chat: string | null;
   /** Asking everyone to follow along. */
   spotlight: boolean;
+  /** Which page of the board they are on. Absent from browsers older than pages. */
+  page?: string;
+  /** Presenting: the frame on screen, which followers fit to their own screens. */
+  present?: { frame: string } | null;
 }
 
 export interface HistoryCheckpoint {
@@ -142,6 +146,8 @@ export type ServerMessage =
       you: PeerIdentity;
       /** What this person may do here. A viewer's edits are refused by the room. */
       role: Role;
+      /** The room's clock, so a shared timer ends at the same moment on every screen. */
+      now: number;
       peers: Array<{ session: string; user: PeerIdentity }>;
     }
   /** Sharing changed while connected: this is what they may do now. */

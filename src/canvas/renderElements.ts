@@ -2,7 +2,15 @@ import { rectsIntersect } from '@/geometry';
 import { elementAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
 import { lineEnds, polygonPoints, POLYGONAL } from '@/model/shapePath';
-import { drawFrameLabel, drawImage, drawInk, drawText } from './renderContent';
+import {
+  drawCode,
+  drawEmbed,
+  drawFrameLabel,
+  drawImage,
+  drawInk,
+  drawTable,
+  drawText,
+} from './renderContent';
 import { resolveColor, type CanvasColors } from './theme';
 import { visibleBounds, type Size, type Viewport } from './viewport';
 
@@ -90,7 +98,16 @@ const onScreen: BoardElement[] = [];
  * a shared path. They interrupt a run rather than being reordered out of it, which is
  * what keeps a sticky note on top of the rectangle it was dropped onto.
  */
-const CONTENT: ReadonlySet<string> = new Set(['path', 'text', 'sticky', 'image', 'frame']);
+const CONTENT: ReadonlySet<string> = new Set([
+  'path',
+  'text',
+  'sticky',
+  'image',
+  'frame',
+  'table',
+  'code',
+  'embed',
+]);
 
 function drawContent(
   ctx: CanvasRenderingContext2D,
@@ -156,6 +173,18 @@ function drawContent(
 
     case 'text':
       drawText(ctx, element, colors);
+      break;
+
+    case 'table':
+      drawTable(ctx, element, colors, zoom);
+      break;
+
+    case 'code':
+      drawCode(ctx, element, colors, zoom);
+      break;
+
+    case 'embed':
+      drawEmbed(ctx, element, colors, zoom);
       break;
 
     default:

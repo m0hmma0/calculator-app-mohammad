@@ -127,3 +127,17 @@
       12 12,
     grab;
 }
+
+/*
+ * Presentation: the stage covers the window and only the content layers stay — the
+ * frame on screen, its embeds, other people's cursors, the timer and the votes.
+ */
+:global(html[data-presenting]) .stage {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+:global(html[data-presenting]) .stage > :not(canvas, [data-present-keep]) {
+  display: none;
+}

@@ -3,8 +3,8 @@ import { create } from 'zustand';
 import type { HistoryCheckpoint, ServerMessage } from '@shared/collab';
 import { deriveView } from '@/doc/binding';
 import { transactLocal, type BoardDoc } from '@/doc/board';
-import { elementsOf, fromYElement, patchYElement, toYElement } from '@/doc/schema';
-import type { BoardElement } from '@/model/element';
+import { elementsOf, fromYElement, pagesOf, patchYElement, toYElement } from '@/doc/schema';
+import { FIRST_PAGE, pageOf, type BoardElement } from '@/model/element';
 import type { RoomConnection } from './connection';
 
 interface HistoryStore {
@@ -108,8 +108,12 @@ export function applyHistoryState(req: number, state: Uint8Array): void {
   const doc = new Y.Doc();
   try {
     Y.applyUpdate(doc, state);
+    // The page in view, as it was then.
+    const page = board?.currentPage ?? FIRST_PAGE;
     useHistory.setState({
-      preview: deriveView([...elementsIn(doc).values()]),
+      preview: deriveView([...elementsIn(doc).values()]).filter(
+        (element) => pageOf(element) === page,
+      ),
       previewState: state,
       seq: meta?.seq ?? useHistory.getState().seq,
       at: meta?.at ?? null,
@@ -137,6 +141,14 @@ export function restorePreview(): void {
     const wanted = elementsIn(target);
 
     transactLocal(live, () => {
+      // The pages as they were, so nothing restored lands on a page that is gone.
+      const then = pagesOf(target).toArray();
+      const now = pagesOf(live.doc);
+      if (JSON.stringify(then) !== JSON.stringify(now.toArray())) {
+        now.delete(0, now.length);
+        now.insert(0, then);
+      }
+
       const gone: string[] = [];
       live.elements.forEach((_map, id) => {
         if (!wanted.has(id)) gone.push(id);

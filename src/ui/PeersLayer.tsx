@@ -3,6 +3,7 @@ import { boardToScreen, screenToBoard } from '@/canvas/viewport';
 import { useHistory } from '@/collab/history';
 import { peerList, presenter, usePresence } from '@/collab/presence';
 import { elementAABB } from '@/model/bounds';
+import { FIRST_PAGE } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './PeersLayer.module.css';
 
@@ -23,6 +24,7 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   const dismissed = usePresence((state) => state.dismissedSpotlight);
   const viewport = useBoardStore((state) => state.viewport);
   const elements = useBoardStore((state) => state.elements);
+  const page = useBoardStore((state) => state.page);
   // Looking at an old version: what people have selected now does not belong on it.
   const previewing = useHistory((state) => state.preview !== null);
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,7 +65,8 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   };
 
   const byId = new Map(elements.map((element) => [element.id, element]));
-  const list = peerList(peers);
+  // Someone on another page is not pointing at anything here.
+  const list = peerList(peers).filter((peer) => (peer.state?.page ?? FIRST_PAGE) === page);
   const leaderSession =
     following && peers[following]
       ? following
@@ -72,7 +75,7 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   const chatAt = cursor ? boardToScreen(viewport, cursor) : null;
 
   return (
-    <div className={styles.layer} data-hud>
+    <div className={styles.layer} data-hud data-present-keep>
       {list.map((peer) =>
         (previewing ? [] : (peer.state?.selection ?? [])).map((id, index) => {
           const element = byId.get(id);

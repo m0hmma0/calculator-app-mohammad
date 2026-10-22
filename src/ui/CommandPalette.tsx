@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { insertCode, insertTable } from '@/input/insertions';
 import { useBoardAccess } from '@/sharing/boardAccess';
 import { exportBlob, downloadBlob, type ExportFormat } from '@/export/exporters';
 import { useBoardStore, type Tool } from '@/state/boardStore';
@@ -82,6 +83,8 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       { id: 'fit', label: 'Zoom to fit', hint: '⇧1', run: () => store().zoomToFit() },
       { id: 'hundred', label: 'Zoom to 100%', hint: '⇧0', run: () => store().zoomTo100() },
       { id: 'select-all', label: 'Select all', hint: '⌘A', run: () => store().selectAll() },
+      { id: 'insert-table', label: 'Insert a table', run: insertTable },
+      { id: 'insert-code', label: 'Insert a code block', run: insertCode },
       { id: 'group', label: 'Group selection', hint: '⌘G', run: () => store().groupSelection() },
       // Only where the owner allows it — the menu is where "no export" shows.
       ...(canExport
