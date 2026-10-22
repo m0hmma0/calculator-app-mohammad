@@ -1,8 +1,12 @@
 import * as Y from 'yjs';
 import { api, ApiError } from '@/api/client';
+import { fileUrl } from '@shared/files';
 import { renderToCanvas } from '@/export/exporters';
-import type { BoardElement } from '@/model/element';
-import { REMOTE_ORIGIN, type BoardDoc } from './board';
+import { dataUrlToBlob, prepareImage } from '@/media/images';
+import { resumeUploads, sha256Hex, uploadImage } from '@/media/uploads';
+import type { BoardElement, ImageRef } from '@/model/element';
+import { REMOTE_ORIGIN, SYSTEM_ORIGIN, type BoardDoc } from './board';
+import { patchYElement } from './schema';
 
 const SAVE_DELAY_MS = 1200;
 const THUMBNAIL_WIDTH = 480;
@@ -48,6 +52,54 @@ function thumbnailOf(elements: readonly BoardElement[]): string | undefined {
     // A thumbnail is a nicety; never let it stop a save.
     return undefined;
   }
+}
+
+/**
+ * Boards from before Phase 6 carry their images inline as data URLs, which makes
+ * every save resend every picture. Each is moved into storage once, the first time
+ * the board is opened, and the element is repointed at the stored copy.
+ */
+async function moveInlineImages(doc: BoardDoc, boardId: string): Promise<void> {
+  const inline: Array<[string, string]> = [];
+  doc.elements.forEach((map, id) => {
+    const image = map.get('image') as ImageRef | undefined;
+    if (image?.src.startsWith('data:') && !image.fileId) inline.push([id, image.src]);
+  });
+
+  for (const [id, src] of inline) {
+    try {
+      const prepared = await prepareImage(await dataUrlToBlob(src));
+      const fileId = await sha256Hex(prepared.blob);
+      void uploadImage(fileId, boardId, prepared.blob);
+
+      doc.doc.transact(() => {
+        const map = doc.elements.get(id);
+        const current = map?.get('image') as ImageRef | undefined;
+        // Someone may have replaced or removed it while this was being prepared.
+        if (!map || current?.src !== src) return;
+        const image: ImageRef = {
+          src: fileUrl(fileId),
+          fileId,
+          naturalWidth: prepared.naturalWidth,
+          naturalHeight: prepared.naturalHeight,
+          placeholder: prepared.placeholder,
+        };
+        patchYElement(map, { image });
+      }, SYSTEM_ORIGIN);
+    } catch {
+      // Left inline: still shows, still saves, and the next visit tries again.
+    }
+  }
+}
+
+/** Images on this board that an earlier visit may not have finished uploading. */
+function fileIdsOn(doc: BoardDoc): string[] {
+  const ids: string[] = [];
+  doc.elements.forEach((map) => {
+    const fileId = (map.get('image') as ImageRef | undefined)?.fileId;
+    if (fileId) ids.push(fileId);
+  });
+  return ids;
 }
 
 /**
@@ -112,6 +164,14 @@ export async function startBoardSync(
   };
 
   doc.doc.on('update', onUpdate);
+
+  // The local copy (IndexedDB) may hold edits the server has not seen, so both of
+  // these wait for it; neither should hold up opening the board.
+  void doc.whenReady.then(async () => {
+    if (stopped) return;
+    await resumeUploads(boardId, fileIdsOn(doc));
+    if (!stopped) await moveInlineImages(doc, boardId);
+  });
 
   const flush = async () => {
     if (timer !== null) {

@@ -213,6 +213,23 @@
   border-color: var(--accent);
 }
 
+.secondary {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 .primary {
   border: 1px solid var(--accent);
   background: var(--accent);
@@ -283,6 +300,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.storage {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .cardTitle:hover {

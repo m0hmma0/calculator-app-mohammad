@@ -1,6 +1,7 @@
 import type { CreateBoardBody, SnapshotMeta, UpdateBoardBody } from '@shared/api';
 import type { Account } from '../auth';
-import { getBoard, getFolder, toBoard } from '../db';
+import { fileIdsInUpdate } from '@shared/files';
+import { BOARD_COLUMNS, getBoard, getFolder, toBoard } from '../db';
 import type { Env } from '../env';
 import { cleanName, fail, json, newId } from '../http';
 
@@ -102,12 +103,12 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
     }
   }
 
-  await env.DB.prepare(
-    `INSERT INTO boards (id, owner_id, folder_id, title, starred, search_text, snapshot_key,
-                         thumbnail_key, created_at, updated_at, opened_at)
-     VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7, ?8, ?8, ?8)`,
-  )
-    .bind(
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO boards (id, owner_id, folder_id, title, starred, search_text, snapshot_key,
+                           thumbnail_key, created_at, updated_at, opened_at)
+       VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7, ?8, ?8, ?8)`,
+    ).bind(
       copyId,
       account.uid,
       source.folder_id,
@@ -116,8 +117,12 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
       copiedSnapshot,
       copiedThumbnail,
       now,
-    )
-    .run();
+    ),
+    // The copy uses the same images, not copies of them.
+    env.DB.prepare(
+      'INSERT INTO board_files (board_id, hash) SELECT ?1, hash FROM board_files WHERE board_id = ?2',
+    ).bind(copyId, id),
+  ]);
 
   return json({ board: toBoard((await getBoard(env, account.uid, copyId))!) }, 201);
 }
@@ -147,6 +152,14 @@ export async function putSnapshot(request: Request, env: Env, account: Account, 
   const body = await request.arrayBuffer();
   if (body.byteLength === 0) return fail('Empty snapshot', 400);
 
+  // Which images the board uses comes from the document itself, not from the browser.
+  let fileIds: string[];
+  try {
+    fileIds = fileIdsInUpdate(new Uint8Array(body));
+  } catch {
+    return fail('That snapshot could not be read', 400);
+  }
+
   const key = snapshotKey(id);
   await env.FILES.put(key, body);
 
@@ -160,19 +173,26 @@ export async function putSnapshot(request: Request, env: Env, account: Account, 
     await env.FILES.put(thumbKey, bytes, { httpMetadata: { contentType: 'image/png' } });
   }
 
-  await env.DB.prepare(
-    `UPDATE boards SET snapshot_key = ?1, thumbnail_key = ?2, search_text = ?3, updated_at = ?4
-     WHERE id = ?5 AND owner_id = ?6`,
-  )
-    .bind(
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE boards SET snapshot_key = ?1, thumbnail_key = ?2, search_text = ?3, updated_at = ?4
+       WHERE id = ?5 AND owner_id = ?6`,
+    ).bind(
       key,
       thumbKey,
       (meta.searchText ?? '').slice(0, 4000).toLowerCase(),
       Date.now(),
       id,
       account.uid,
-    )
-    .run();
+    ),
+    env.DB.prepare('DELETE FROM board_files WHERE board_id = ?1').bind(id),
+    ...fileIds.map((fileId) =>
+      env.DB.prepare('INSERT OR IGNORE INTO board_files (board_id, hash) VALUES (?1, ?2)').bind(
+        id,
+        fileId,
+      ),
+    ),
+  ]);
 
   return json({ ok: true });
 }
@@ -193,7 +213,7 @@ export async function getThumbnail(env: Env, account: Account, id: string) {
 export async function searchBoards(env: Env, account: Account, query: string) {
   const term = `%${query.toLowerCase().slice(0, 100)}%`;
   const { results } = await env.DB.prepare(
-    `SELECT * FROM boards
+    `SELECT ${BOARD_COLUMNS} FROM boards
      WHERE owner_id = ?1 AND deleted_at IS NULL
        AND (lower(title) LIKE ?2 OR search_text LIKE ?2)
      ORDER BY opened_at DESC LIMIT 50`,

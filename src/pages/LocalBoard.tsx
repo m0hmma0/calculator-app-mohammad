@@ -12,7 +12,7 @@ import styles from './LocalBoard.module.css';
 export function LocalBoard() {
   return (
     <>
-      <TopBar boardName="Local board" badge="Phase 5">
+      <TopBar boardName="Local board" badge="Phase 6">
         <ToolBar />
       </TopBar>
       <p className={styles.notice} data-testid="local-only-notice">

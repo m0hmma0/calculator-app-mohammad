@@ -21,6 +21,8 @@ export interface BoardRecord {
   title: string;
   starred: boolean;
   thumbnailUrl: string | null;
+  /** Bytes of images this board uses. */
+  storageBytes: number;
   createdAt: number;
   updatedAt: number;
   openedAt: number;

@@ -80,7 +80,7 @@ function BoardView({ boardId }: { boardId: string }) {
     <>
       <TopBar
         boardName={record?.title ?? 'Board'}
-        badge="Phase 5"
+        badge="Phase 6"
         onRenameBoard={record ? rename : undefined}
         leading={
           <Link

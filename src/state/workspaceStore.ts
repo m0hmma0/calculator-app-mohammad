@@ -17,6 +17,8 @@ interface WorkspaceState {
   /** Refetches without flipping the app into its loading state. */
   refresh: () => Promise<void>;
   loadTrash: () => Promise<void>;
+  /** Permanently deletes the trash, and any stored image nothing uses any more. */
+  emptyTrash: () => Promise<void>;
   reset: () => void;
 
   createFolder: (name: string, parentId: string | null) => Promise<FolderRecord | null>;
@@ -89,6 +91,12 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       guard(async () => {
         const data = await api.trash();
         set({ trashedFolders: data.folders, trashedBoards: data.boards });
+      }),
+
+    emptyTrash: () =>
+      guard(async () => {
+        await api.emptyTrash();
+        set({ trashedFolders: [], trashedBoards: [] });
       }),
 
     reset: () => set({ state: 'signed-out', account: null, folders: [], boards: [], error: null }),

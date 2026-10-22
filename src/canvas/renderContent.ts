@@ -3,6 +3,7 @@ import { fromFlat } from '@/ink/stroke';
 import type { BoardElement } from '@/model/element';
 import { fitFontSize, layoutText } from '@/model/textLayout';
 import { getImage } from '@/media/images';
+import { uploadStateOf, type UploadState } from '@/media/uploads';
 import { fontString } from './fonts';
 import { resolveColor, type CanvasColors } from './theme';
 
@@ -136,25 +137,82 @@ export function drawImage(
   const source = element.image?.src;
   if (!source) return;
 
-  const bitmap = getImage(source, onReady);
-  if (!bitmap) {
-    // Placeholder while decoding, so the shape appears the instant it is dropped.
-    ctx.fillStyle = colors.byToken.get('--surface-2') ?? '#e8e8e8';
-    ctx.fillRect(element.x, element.y, element.w, element.h);
-    return;
-  }
+  const upload = uploadStateOf(element.image?.fileId);
+  // While this tab is still uploading, the stored copy does not exist yet; asking
+  // for it would only fail.
+  const bitmap = upload ? null : getImage(source, onReady);
+  const preview = bitmap ? null : placeholderBitmap(element, onReady);
 
   const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+  ctx.save();
   if (radius > 0.5) {
-    ctx.save();
     ctx.beginPath();
     ctx.roundRect(element.x, element.y, element.w, element.h, radius);
     ctx.clip();
-    ctx.drawImage(bitmap, element.x, element.y, element.w, element.h);
-    ctx.restore();
-  } else {
-    ctx.drawImage(bitmap, element.x, element.y, element.w, element.h);
   }
+
+  if (bitmap) {
+    ctx.drawImage(bitmap, element.x, element.y, element.w, element.h);
+  } else if (preview) {
+    // A 20px preview stretched with smoothing reads as a blur of the real picture.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(preview, element.x, element.y, element.w, element.h);
+  } else {
+    // Nothing to show yet, but the shape appears the instant it is dropped.
+    ctx.fillStyle = colors.byToken.get('--surface-2') ?? '#e8e8e8';
+    ctx.fillRect(element.x, element.y, element.w, element.h);
+  }
+  ctx.restore();
+
+  if (upload) drawUploadProgress(ctx, element, upload);
+}
+
+function placeholderBitmap(element: BoardElement, onReady: () => void) {
+  const placeholder = element.image?.placeholder;
+  return placeholder ? getImage(placeholder, onReady) : null;
+}
+
+/** A ring over the image, sized in screen pixels so it reads at any zoom. */
+function drawUploadProgress(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  upload: UploadState,
+): void {
+  const zoom = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
+  const radius = Math.min(16 / zoom, element.w / 3, element.h / 3);
+  if (radius <= 0) return;
+  const cx = element.x + element.w / 2;
+  const cy = element.y + element.h / 2;
+  const fraction = upload.total > 0 ? Math.min(1, upload.loaded / upload.total) : 0;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 5 / zoom, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(15, 17, 24, 0.55)';
+  ctx.fill();
+
+  ctx.lineWidth = 3 / zoom;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (upload.status === 'uploading') {
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0.04, fraction));
+    ctx.stroke();
+  } else {
+    // Waiting to retry, or refused: a bar across the ring rather than progress.
+    ctx.strokeStyle = upload.status === 'rejected' ? '#ff8a8a' : '#ffd27a';
+    ctx.beginPath();
+    ctx.moveTo(cx - radius / 2, cy);
+    ctx.lineTo(cx + radius / 2, cy);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 export function drawFrameLabel(

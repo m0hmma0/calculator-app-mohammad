@@ -3,8 +3,30 @@ import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
 import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
-import { imageBlobsFrom, importImage, initialImageBox } from '@/media/images';
-import { useBoardStore } from '@/state/boardStore';
+import { fileUrl } from '@shared/files';
+import { blobToDataUrl, imageBlobsFrom, initialImageBox, prepareImage } from '@/media/images';
+import { sha256Hex, uploadImage } from '@/media/uploads';
+import { currentBoardId, useBoardStore } from '@/state/boardStore';
+import type { ImageRef } from '@/model/element';
+
+/**
+ * On an account board the image is named by its hash and stored in R2 — it goes on
+ * the board at once, with a blurred placeholder, and the upload carries on behind
+ * it. The signed-out local board has no server, so the bytes stay in the document.
+ */
+async function storeImage(blob: Blob): Promise<ImageRef> {
+  const prepared = await prepareImage(blob);
+  const { naturalWidth, naturalHeight, placeholder } = prepared;
+  const boardId = currentBoardId();
+
+  if (!boardId) {
+    return { src: await blobToDataUrl(prepared.blob), naturalWidth, naturalHeight };
+  }
+
+  const fileId = await sha256Hex(prepared.blob);
+  void uploadImage(fileId, boardId, prepared.blob);
+  return { src: fileUrl(fileId), fileId, naturalWidth, naturalHeight, placeholder };
+}
 
 /**
  * Images arrive two ways, and both are browser-only APIs — which is exactly the part
@@ -34,7 +56,7 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
 
       for (const blob of blobs) {
         try {
-          const imported = await importImage(blob);
+          const imported = await storeImage(blob);
           const box = initialImageBox(imported);
           const current = useBoardStore.getState();
 

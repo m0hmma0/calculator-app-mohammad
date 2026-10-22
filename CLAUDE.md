@@ -7,9 +7,15 @@ with something the user checks themselves against a written checklist.
 
 ## Where things stand
 
-Phases 0–5 are done, each verified by its checklist and green CI. Phase 5 is deployed
-at <https://sabboura.mh-hamad.workers.dev> (D1 `sabboura`, R2 `sabboura-files`,
-migration 0001 applied remotely). The next phase is **6 (images on R2)**.
+Phases 0–5 are done, each verified by its checklist and green CI. **Phase 6 (images on
+R2)** is built, tested and deployed at <https://sabboura.mh-hamad.workers.dev>
+(migrations 0001 and 0002 applied remotely) but not yet checked by the user. The next
+phase is **7 (real-time)**, then 8 (sharing — the user has asked for it).
+
+Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
+is public because the hash is the capability. Which images a board uses is read from
+its Yjs snapshot by the Worker on every save, and unused images are swept only when a
+trash is emptied, so undo still works until then.
 
 The full plan, including every phase's checklist, lives in an artifact:
 <https://claude.ai/code/artifact/5e80f000-99d0-42bf-9525-7e76a632abdb>
@@ -76,6 +82,14 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **Generated output must be in `.gitignore`, `.prettierignore` _and_ `eslint.config.js`.**
   Missing the last one produced 2,094 lint errors from a build directory.
 - Test builds live in `dist-test/`; the Worker serves them via `wrangler dev --assets`.
+- **The local D1/R2 outlive a test run, and images are deduplicated across accounts.**
+  A test picture identical to one from an earlier run is legitimately "still in use",
+  so storage tests stamp each picture with a per-test nonce.
+- **Waiting for "the next request" catches the previous one's.** Derive ids from what
+  the test itself made (hash the bytes) rather than from whichever request comes next.
+- A new migration must be applied remotely **before** `npm run deploy`
+  (`npx wrangler d1 migrations apply sabboura --remote`), or the new Worker queries
+  tables that do not exist yet.
 
 ## Design decisions worth not relitigating
 

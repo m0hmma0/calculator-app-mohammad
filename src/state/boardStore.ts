@@ -698,6 +698,13 @@ export type { ElementType };
  */
 let binding: ReturnType<typeof bindBoard> | null = null;
 
+/** The server-side board being edited, or null for the signed-out local board. */
+let openBoardId: string | null = null;
+
+export function currentBoardId(): string | null {
+  return openBoardId;
+}
+
 function attachDocument(doc: BoardDoc): void {
   binding?.destroy();
 
@@ -733,6 +740,7 @@ attachDocument(board);
 export function openBoardDocument(boardId: string | null): BoardDoc {
   const key = boardId ? `sabboura-board-${boardId}` : 'sabboura-local';
   const previous = board;
+  openBoardId = boardId;
 
   board = createBoard({ persistenceKey: canPersist ? key : undefined });
   attachDocument(board);

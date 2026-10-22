@@ -1,36 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-
-const KEYS = 'http://localhost:8799';
-
-/** A fresh account per test, so tests never see each other's folders or boards. */
-function newAccount(label: string) {
-  const uid = `${label}-${Math.random().toString(36).slice(2, 10)}`;
-  return { uid, name: `Person ${label}` };
-}
-
-async function tokenFor(account: { uid: string; name: string }) {
-  const response = await fetch(
-    `${KEYS}/token?uid=${account.uid}&name=${encodeURIComponent(account.name)}`,
-  );
-  return response.text();
-}
-
-/** Signs in by handing the app a token the Worker will actually verify. */
-async function signIn(page: Page, account: { uid: string; name: string }) {
-  const token = await tokenFor(account);
-  await page.goto('/');
-  await page.evaluate((value) => localStorage.setItem('sabboura:test-token', value), token);
-  await page.goto('/');
-  await expect(page.getByTestId('dashboard')).toBeVisible();
-}
-
-const boardCards = (page: Page) => page.locator('[data-testid^="board-brd_"]');
-
-async function createBoard(page: Page) {
-  await page.getByTestId('new-board').click();
-  await expect(page.getByTestId('board-canvas')).toBeVisible();
-  return new URL(page.url()).pathname.replace('/b/', '');
-}
+import { boardCards, createBoard, newAccount, signIn, tokenFor } from './accounts';
 
 /** Visible is not enough: a broken image is visible too. This one has to decode. */
 async function expectThumbnailLoaded(page: Page, boardId: string) {

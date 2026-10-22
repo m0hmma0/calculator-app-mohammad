@@ -8,6 +8,7 @@ import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
 import { useCanvasInteraction } from '@/input/useCanvasInteraction';
 import { useClipboard } from '@/input/useClipboard';
 import { useImageImport } from '@/input/useImageImport';
+import { useUploads } from '@/media/uploads';
 import { useShortcuts } from '@/input/useShortcuts';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
@@ -137,6 +138,9 @@ export function CanvasStage() {
       if (frame !== 0) cancelAnimationFrame(frame);
     };
   }, [redraw]);
+
+  // Upload progress lives outside the document, so it needs its own redraws.
+  useEffect(() => useUploads.subscribe(() => redraw()), [redraw]);
 
   useEffect(
     () => () => {

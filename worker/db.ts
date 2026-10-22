@@ -21,6 +21,7 @@ interface BoardRow {
   thumbnail_key: string | null;
   snapshot_key: string | null;
   search_text: string;
+  storage_bytes: number;
   created_at: number;
   updated_at: number;
   opened_at: number;
@@ -41,11 +42,22 @@ const toBoard = (row: BoardRow): BoardRecord => ({
   title: row.title,
   starred: row.starred === 1,
   thumbnailUrl: row.thumbnail_key ? `/api/boards/${row.id}/thumbnail` : null,
+  storageBytes: row.storage_bytes,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   openedAt: row.opened_at,
   ...(row.deleted_at ? { deletedAt: row.deleted_at } : {}),
 });
+
+/**
+ * Every board read carries the size of the images it uses. An image shared by two
+ * boards counts towards both, which is what "how much is on this board" means.
+ */
+export const BOARD_COLUMNS = `boards.*, (
+  SELECT COALESCE(SUM(files.size), 0) FROM board_files
+  JOIN files ON files.hash = board_files.hash
+  WHERE board_files.board_id = boards.id
+) AS storage_bytes`;
 
 export async function upsertUser(env: Env, account: Account, now: number): Promise<void> {
   await env.DB.prepare(
@@ -73,7 +85,8 @@ export async function listFolders(env: Env, uid: string, deleted = false): Promi
 
 export async function listBoards(env: Env, uid: string, deleted = false): Promise<BoardRecord[]> {
   const { results } = await env.DB.prepare(
-    `SELECT * FROM boards WHERE owner_id = ?1 AND deleted_at IS ${deleted ? 'NOT' : ''} NULL
+    `SELECT ${BOARD_COLUMNS} FROM boards
+     WHERE owner_id = ?1 AND deleted_at IS ${deleted ? 'NOT' : ''} NULL
      ORDER BY opened_at DESC`,
   )
     .bind(uid)
@@ -82,7 +95,7 @@ export async function listBoards(env: Env, uid: string, deleted = false): Promis
 }
 
 export async function getBoard(env: Env, uid: string, id: string): Promise<BoardRow | null> {
-  return env.DB.prepare('SELECT * FROM boards WHERE id = ?1 AND owner_id = ?2')
+  return env.DB.prepare(`SELECT ${BOARD_COLUMNS} FROM boards WHERE id = ?1 AND owner_id = ?2`)
     .bind(id, uid)
     .first<BoardRow>();
 }

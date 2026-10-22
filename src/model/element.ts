@@ -83,12 +83,23 @@ export interface BoardElement {
   /** Text and sticky-note content. */
   text?: string;
 
-  /** Image source. Phase 6 swaps the data URL for an R2 key. */
-  image?: { src: string; naturalWidth: number; naturalHeight: number };
+  /** Image source: a stored file on an account board, a data URL on the local board. */
+  image?: ImageRef;
 
   /** Connector endpoints. When bound, the arrow follows the element. */
   from?: Binding;
   to?: Binding;
+}
+
+export interface ImageRef {
+  /** What the renderer loads: `/api/files/<hash>`, or a data URL on the local board. */
+  src: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  /** SHA-256 of the stored bytes. Present only for images that live in R2. */
+  fileId?: string;
+  /** A few hundred bytes of blurred preview, drawn until the real image is ready. */
+  placeholder?: string;
 }
 
 export const MIN_SIZE = 1;

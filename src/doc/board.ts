@@ -14,6 +14,12 @@ export const LOCAL_ORIGIN = { local: true };
 /** Changes replayed from storage or from a peer, which must never be undoable. */
 export const REMOTE_ORIGIN = { remote: true };
 
+/**
+ * Housekeeping the app does on its own — moving an old inline image into storage.
+ * It is saved like any edit, but it is nobody's action, so undo must not see it.
+ */
+export const SYSTEM_ORIGIN = { system: true };
+
 export interface BoardDoc {
   doc: Y.Doc;
   elements: Y.Map<YElement>;

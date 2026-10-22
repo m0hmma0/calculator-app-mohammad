@@ -11,8 +11,9 @@ import {
   trashBoard,
   updateBoard,
 } from './routes/boards';
+import { attachFile, getFile, putFile } from './routes/files';
 import { createFolder, restoreFolder, trashFolder, updateFolder } from './routes/folders';
-import { getTrash, getWorkspace } from './routes/workspace';
+import { emptyTrash, getTrash, getWorkspace } from './routes/workspace';
 import { upsertUser } from './db';
 import type { Env } from './env';
 import { fail, json } from './http';
@@ -31,10 +32,17 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
     const body: HealthResponse = {
       ok: true,
       service: 'sabboura',
-      phase: 5,
+      phase: 6,
       time: new Date().toISOString(),
     };
     return json(body);
+  }
+
+  const file = /^\/api\/files\/([^/]+)(\/attach)?$/.exec(pathname);
+
+  // Reading an image needs no sign-in: its hash is the capability (see shared/files).
+  if (file && !file[2] && (method === 'GET' || method === 'HEAD')) {
+    return getFile(request, env, file[1]!);
   }
 
   let account: Account;
@@ -53,6 +61,12 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
 
   if (pathname === '/api/workspace' && method === 'GET') return getWorkspace(env, account);
   if (pathname === '/api/trash' && method === 'GET') return getTrash(env, account);
+  if (pathname === '/api/trash' && method === 'DELETE') return emptyTrash(env, account);
+
+  if (file) {
+    if (file[2] && method === 'POST') return attachFile(request, env, account, file[1]!);
+    if (!file[2] && method === 'PUT') return putFile(request, env, account, file[1]!);
+  }
 
   if (pathname === '/api/search' && method === 'GET') {
     const query = new URL(request.url).searchParams.get('q') ?? '';

@@ -23,7 +23,7 @@ export default defineConfig({
     {
       // The canvas, which needs no backend at all.
       name: 'canvas',
-      testIgnore: /workspace\.spec\.ts/,
+      testIgnore: /(workspace|storage)\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         ...launchOptions,
@@ -33,7 +33,7 @@ export default defineConfig({
     {
       // Accounts, folders and boards, against the real Worker on local D1 and R2.
       name: 'workspace',
-      testMatch: /workspace\.spec\.ts/,
+      testMatch: /(workspace|storage)\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         ...launchOptions,

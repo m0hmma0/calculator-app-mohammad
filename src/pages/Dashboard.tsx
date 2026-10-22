@@ -74,6 +74,12 @@ function Thumbnail({ url }: { url: string | null }) {
   return src ? <img src={src} alt="" /> : null;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
 /** Every folder, labelled with its full path so two folders named "Q4" stay apart. */
 function folderChoices(folders: FolderRecord[]) {
   return folders
@@ -116,6 +122,15 @@ function BoardCard({
         <Link to={{ name: 'board', boardId: board.id }} className={styles.cardTitle}>
           {board.title}
         </Link>
+        {board.storageBytes > 0 ? (
+          <span
+            className={styles.storage}
+            title="Images stored for this board"
+            data-testid={`storage-${board.id}`}
+          >
+            {formatBytes(board.storageBytes)}
+          </span>
+        ) : null}
         <button
           type="button"
           className={styles.star}
@@ -298,7 +313,21 @@ export function Dashboard({ view }: { view: View }) {
             onChange={(event) => setQuery(event.target.value)}
           />
 
-          {view.kind === 'trash' ? null : (
+          {view.kind === 'trash' ? (
+            <button
+              type="button"
+              className={styles.secondary}
+              data-testid="empty-trash"
+              onClick={() => {
+                const sure = window.confirm(
+                  'Permanently delete everything in the trash, and any image no board uses any more? This cannot be undone.',
+                );
+                if (sure) void workspace.emptyTrash();
+              }}
+            >
+              Empty trash
+            </button>
+          ) : (
             <button
               type="button"
               className={styles.primary}

@@ -131,8 +131,13 @@ function shapeElement(element: BoardElement, resolve: ColorResolver): string {
     }
 
     case 'image': {
-      const source = element.image?.src;
-      if (!source) return '';
+      const stored = element.image?.src;
+      if (!stored) return '';
+      // A stored image is addressed relative to this site; a saved SVG lives elsewhere.
+      const source =
+        stored.startsWith('/') && typeof location !== 'undefined'
+          ? new URL(stored, location.origin).href
+          : stored;
       return `<image href="${escapeXml(source)}" x="${round(element.x)}" y="${round(element.y)}" width="${round(element.w)}" height="${round(element.h)}" preserveAspectRatio="none"${transform}/>`;
     }
 

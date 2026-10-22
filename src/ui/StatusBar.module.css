@@ -32,3 +32,20 @@
 .offline .dot {
   background: var(--shape-3);
 }
+
+.busy .dot {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy .dot {
+    animation: none;
+  }
+}

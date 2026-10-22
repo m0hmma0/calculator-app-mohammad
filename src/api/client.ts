@@ -43,6 +43,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const api = {
   workspace: () => request<WorkspaceResponse>('/api/workspace'),
   trash: () => request<TrashResponse>('/api/trash'),
+  emptyTrash: () =>
+    request<{ removed: { boards: number; folders: number; files: number } }>('/api/trash', {
+      method: 'DELETE',
+    }),
 
   search: (query: string) =>
     request<{ boards: BoardRecord[] }>(`/api/search?q=${encodeURIComponent(query)}`),
