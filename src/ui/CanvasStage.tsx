@@ -9,11 +9,15 @@ import { useCanvasInteraction } from '@/input/useCanvasInteraction';
 import { useClipboard } from '@/input/useClipboard';
 import { useImageImport } from '@/input/useImageImport';
 import { useUploads } from '@/media/uploads';
+import { useHistory } from '@/collab/history';
+import { usePresence } from '@/collab/presence';
+import { isTrailAlive } from '@/laser/laser';
 import { useShortcuts } from '@/input/useShortcuts';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
 import { DevPanel } from './DevPanel';
+import { PeersLayer } from './PeersLayer';
 import { Inspector } from './Inspector';
 import { Minimap } from './Minimap';
 import { CommandPalette } from './CommandPalette';
@@ -49,7 +53,11 @@ export function CanvasStage() {
 
     // The stage measures itself here, so "zoom to fit" and the minimap know the size.
     store.setStageSize({ width: frame.width, height: frame.height });
-    const { viewport, elements, draft, selection } = store;
+    const { viewport, draft } = store;
+    // Scrubbing through history shows the board as it was, and nothing can be edited.
+    const preview = useHistory.getState().preview;
+    const elements = preview ?? store.elements;
+    const selection = preview ? [] : store.selection;
 
     ctx.fillStyle = colors.background;
     ctx.fillRect(0, 0, frame.width, frame.height);
@@ -81,6 +89,19 @@ export function CanvasStage() {
     const trail = laserSnapshot(startedAt);
     if (trail.points.length > 1) {
       renderLaser(ctx, viewport, trail.points, trail.lifetimeMs, startedAt, colors);
+    }
+    for (const peer of Object.values(usePresence.getState().peers)) {
+      if (peer.laser && peer.laser.points.length > 1) {
+        renderLaser(
+          ctx,
+          viewport,
+          peer.laser.points,
+          peer.laser.lifetimeMs,
+          startedAt,
+          colors,
+          peer.user.color,
+        );
+      }
     }
 
     // Frames drawn in the last second — genuine fps while interacting, zero when idle,
@@ -141,6 +162,33 @@ export function CanvasStage() {
 
   // Upload progress lives outside the document, so it needs its own redraws.
   useEffect(() => useUploads.subscribe(() => redraw()), [redraw]);
+  useEffect(() => useHistory.subscribe(() => redraw()), [redraw]);
+
+  // Someone else's laser fades on this screen too, frame by frame, until it is gone.
+  useEffect(() => {
+    let frame = 0;
+    const peersAlive = () =>
+      Object.values(usePresence.getState().peers).some(
+        (peer) =>
+          peer.laser !== null &&
+          isTrailAlive(peer.laser.points, {
+            now: performance.now(),
+            lifetimeMs: peer.laser.lifetimeMs,
+          }),
+      );
+    const pump = () => {
+      frame = 0;
+      redraw();
+      if (peersAlive()) frame = requestAnimationFrame(pump);
+    };
+    const stop = usePresence.subscribe((state, previous) => {
+      if (state.peers !== previous.peers && frame === 0) frame = requestAnimationFrame(pump);
+    });
+    return () => {
+      stop();
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [redraw]);
 
   useEffect(
     () => () => {
@@ -194,6 +242,7 @@ export function CanvasStage() {
         <ZoomControls />
       </div>
 
+      <PeersLayer hostRef={hostRef} />
       <ToolOptions />
       <TextEditor viewport={viewport} />
       <Inspector />

@@ -41,6 +41,15 @@ async function purgeTrash(env: Env, uid: string, cutoff: number) {
     .bind(uid, cutoff)
     .all<{ id: string; snapshot_key: string | null; thumbnail_key: string | null }>();
 
+  // Each board's room holds its own history; it goes with the board.
+  await Promise.all(
+    boards.map((board) =>
+      env.ROOMS.get(env.ROOMS.idFromName(board.id))
+        .fetch('https://room/destroy', { method: 'POST' })
+        .catch(() => undefined),
+    ),
+  );
+
   const keys = boards.flatMap((board) =>
     [board.snapshot_key, board.thumbnail_key].filter((key): key is string => key !== null),
   );

@@ -297,26 +297,25 @@ test.describe('storing images', () => {
     expect(legacy.ok()).toBe(true);
 
     const expected = sha256(Buffer.from(dataUrl.split(',')[1]!, 'base64'));
-    const resaved = page.waitForResponse(
-      (response) =>
-        response.url().endsWith(`/api/boards/${board.id}/snapshot`) &&
-        response.request().method() === 'PUT',
-      { timeout: 20_000 },
-    );
     await page.goto(`/b/${board.id}`);
     await expect(layers(page)).toHaveCount(1);
-    await resaved;
     await waitForUploads(page);
-
     expect(await fileStatus(request, expected)).toBe(200);
-    const snapshot = await request.get(`${API}/api/boards/${board.id}/snapshot`, { headers: auth });
-    const after = new Y.Doc();
-    Y.applyUpdate(after, new Uint8Array(await snapshot.body()));
-    const image = (after.getMap('elements').get('old-image') as Y.Map<unknown>).get('image') as {
-      src: string;
-      fileId?: string;
+
+    // The board's room writes the saved copy a moment after the change reaches it.
+    const storedImage = async () => {
+      const snapshot = await request.get(`${API}/api/boards/${board.id}/snapshot`, {
+        headers: auth,
+      });
+      const after = new Y.Doc();
+      Y.applyUpdate(after, new Uint8Array(await snapshot.body()));
+      return (after.getMap('elements').get('old-image') as Y.Map<unknown>).get('image') as {
+        src: string;
+        fileId?: string;
+      };
     };
-    expect(image.fileId).toBe(expected);
+    await expect.poll(async () => (await storedImage()).fileId, { timeout: 15_000 }).toBe(expected);
+    const image = await storedImage();
     expect(image.src).toBe(`/api/files/${expected}`);
   });
 });

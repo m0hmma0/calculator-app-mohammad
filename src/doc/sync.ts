@@ -1,6 +1,6 @@
-import * as Y from 'yjs';
 import { api, ApiError } from '@/api/client';
 import { fileUrl } from '@shared/files';
+import { RoomConnection, type RoomEvents } from '@/collab/connection';
 import { renderToCanvas } from '@/export/exporters';
 import { dataUrlToBlob, prepareImage } from '@/media/images';
 import { resumeUploads, sha256Hex, uploadImage } from '@/media/uploads';
@@ -8,33 +8,24 @@ import type { BoardElement, ImageRef } from '@/model/element';
 import { REMOTE_ORIGIN, SYSTEM_ORIGIN, type BoardDoc } from './board';
 import { patchYElement } from './schema';
 
-const SAVE_DELAY_MS = 1200;
+const THUMBNAIL_DELAY_MS = 2500;
 const THUMBNAIL_WIDTH = 480;
 
 /**
- * Phase 5 keeps a board on the server as a whole Yjs update, saved a moment after
- * the last change. Phase 7 replaces this with a live room that streams individual
- * updates; what stays is the document itself, which is why the swap is contained.
+ * Since Phase 7 a board lives in its room: every change streams there as it happens,
+ * and the room keeps the log, writes the snapshot, and records what the board uses.
+ * What is left for the browser is what only a browser can do — draw the thumbnail —
+ * and moving images into storage.
  */
 export interface BoardSync {
-  /** Flushes any pending save — called before leaving a board. */
+  room: RoomConnection;
+  /** Sends anything outstanding — called before leaving a board. */
   flush: () => Promise<void>;
   stop: () => void;
 }
 
-/** Text a board can be searched by: its own words, not its shapes. */
-export function searchTextOf(elements: readonly BoardElement[], limit = 4000): string {
-  const words: string[] = [];
-  for (const element of elements) {
-    const text = element.text?.trim();
-    if (text) words.push(text);
-    if (words.join(' ').length > limit) break;
-  }
-  return words.join(' ').slice(0, limit);
-}
-
-function thumbnailOf(elements: readonly BoardElement[]): string | undefined {
-  if (elements.length === 0) return undefined;
+async function thumbnailOf(elements: readonly BoardElement[]): Promise<Blob | null> {
+  if (elements.length === 0) return null;
   try {
     const host = document.querySelector('[data-testid="stage"]') ?? document.documentElement;
     const canvas = renderToCanvas(elements, { host, scale: 1, padding: 40, background: null });
@@ -45,12 +36,12 @@ function thumbnailOf(elements: readonly BoardElement[]): string | undefined {
     target.height = Math.max(1, Math.round(canvas.height * ratio));
 
     const ctx = target.getContext('2d');
-    if (!ctx) return undefined;
+    if (!ctx) return null;
     ctx.drawImage(canvas, 0, 0, target.width, target.height);
-    return target.toDataURL('image/png');
+    return await new Promise<Blob | null>((resolve) => target.toBlob(resolve, 'image/png'));
   } catch {
-    // A thumbnail is a nicety; never let it stop a save.
-    return undefined;
+    // A thumbnail is a nicety; never let it get in the way.
+    return null;
   }
 }
 
@@ -102,92 +93,90 @@ function fileIdsOn(doc: BoardDoc): string[] {
   return ids;
 }
 
+export interface BoardSyncOptions {
+  elementsNow: () => readonly BoardElement[];
+  events: Omit<RoomEvents, 'synced'> & { synced?: () => void };
+  /** A new thumbnail is stored. */
+  onSaved?: () => void;
+}
+
 /**
- * Pulls the stored board in, then keeps the server up to date. The incoming update
- * is applied with a remote origin so it is not undoable — opening a board must not
- * leave "undo" poised to erase everything that was already there.
+ * Opens a board: checks it is this person's (a 404 has to surface, not open as a
+ * blank canvas), then joins its room. Offline, the check fails softly and the local
+ * copy opens; the room is joined as soon as the network returns.
  */
 export async function startBoardSync(
   doc: BoardDoc,
   boardId: string,
-  elementsNow: () => readonly BoardElement[],
-  onSaved?: () => void,
+  options: BoardSyncOptions,
 ): Promise<BoardSync> {
-  // A 404 means this board is not yours — that has to surface, not open as a blank
-  // canvas. Anything else (offline, a flaky network) falls back to the local copy.
-  const stored = await api.loadSnapshot(boardId).catch((error: unknown) => {
+  await api.openBoard(boardId).catch((error: unknown) => {
     if (error instanceof ApiError && (error.status === 404 || error.status === 401)) throw error;
-    return null;
   });
-  if (stored && stored.byteLength > 0) {
-    Y.applyUpdate(doc.doc, stored, REMOTE_ORIGIN);
-    // Nothing from before the board was opened should be undoable.
-    doc.undoManager.clear();
-  }
 
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let saving: Promise<void> = Promise.resolve();
-  let dirty = false;
   let stopped = false;
+  let thumbnailTimer: ReturnType<typeof setTimeout> | null = null;
+  let thumbnailDue = false;
 
-  const write = async () => {
-    if (!dirty || stopped) return;
-    dirty = false;
-    const bytes = Y.encodeStateAsUpdate(doc.doc);
-    const elements = elementsNow();
+  const writeThumbnail = async () => {
+    thumbnailTimer = null;
+    if (!thumbnailDue) return;
+    thumbnailDue = false;
+    const blob = await thumbnailOf(options.elementsNow());
+    if (!blob) return;
     await api
-      .saveSnapshot(boardId, bytes, {
-        searchText: searchTextOf(elements),
-        thumbnail: thumbnailOf(elements),
-      })
-      .then(() => onSaved?.())
+      .saveThumbnail(boardId, blob)
+      .then(() => options.onSaved?.())
       .catch(() => {
-        // Offline or refused: the local copy is still safe, and the next change
-        // will try again rather than losing what is here.
-        dirty = true;
+        thumbnailDue = true;
       });
   };
 
-  const schedule = () => {
-    dirty = true;
-    if (timer !== null) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      saving = saving.then(write);
-    }, SAVE_DELAY_MS);
-  };
-
+  // Whoever changes the board draws its thumbnail; someone only watching does not.
   const onUpdate = (_update: Uint8Array, origin: unknown) => {
-    // Applying what the server just sent is not a reason to send it straight back.
-    if (origin === REMOTE_ORIGIN) return;
-    schedule();
+    if (origin === REMOTE_ORIGIN || stopped) return;
+    thumbnailDue = true;
+    if (thumbnailTimer !== null) clearTimeout(thumbnailTimer);
+    thumbnailTimer = setTimeout(() => void writeThumbnail(), THUMBNAIL_DELAY_MS);
   };
-
   doc.doc.on('update', onUpdate);
 
-  // The local copy (IndexedDB) may hold edits the server has not seen, so both of
-  // these wait for it; neither should hold up opening the board.
-  void doc.whenReady.then(async () => {
-    if (stopped) return;
+  // Housekeeping on the board's images waits until this browser has the whole board:
+  // its local copy (which may hold uploads an earlier visit did not finish) and the
+  // room's (which, on a device that never opened it, is all of it). Neither should
+  // hold up opening the board.
+  let tidied = false;
+  const tidyImages = async () => {
+    if (tidied || stopped) return;
+    tidied = true;
+    await doc.whenReady;
     await resumeUploads(boardId, fileIdsOn(doc));
     if (!stopped) await moveInlineImages(doc, boardId);
-  });
-
-  const flush = async () => {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    saving = saving.then(write);
-    await saving;
   };
 
+  const room = new RoomConnection(doc, boardId, {
+    ...options.events,
+    synced: () => {
+      options.events.synced?.();
+      void tidyImages();
+    },
+  });
+  room.start();
+
   return {
-    flush,
+    room,
+    flush: async () => {
+      if (thumbnailTimer !== null) {
+        clearTimeout(thumbnailTimer);
+        await writeThumbnail();
+      }
+      await room.flush();
+    },
     stop: () => {
       stopped = true;
-      if (timer !== null) clearTimeout(timer);
+      if (thumbnailTimer !== null) clearTimeout(thumbnailTimer);
       doc.doc.off('update', onUpdate);
+      room.stop();
     },
   };
 }

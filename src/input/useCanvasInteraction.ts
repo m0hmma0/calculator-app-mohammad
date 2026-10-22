@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react';
+import { useHistory } from '@/collab/history';
 import { screenToBoard, type Viewport } from '@/canvas/viewport';
 import { HANDLE_SIZE, ROTATE_ZONE } from '@/canvas/renderOverlay';
 import {
@@ -311,6 +312,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     const onPointerDown = (event: PointerEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      // A past version is for looking at; the wheel still pans and zooms around it.
+      if (useHistory.getState().preview) return;
 
       pointers.set(event.pointerId, local(event));
       if (pointers.size === 2) {

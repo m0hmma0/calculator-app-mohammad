@@ -8,14 +8,23 @@ with something the user checks themselves against a written checklist.
 ## Where things stand
 
 Phases 0–5 are done, each verified by its checklist and green CI. **Phase 6 (images on
-R2)** is built, tested and deployed at <https://sabboura.mh-hamad.workers.dev>
-(migrations 0001 and 0002 applied remotely) but not yet checked by the user. The next
-phase is **7 (real-time)**, then 8 (sharing — the user has asked for it).
+R2)** and **Phase 7 (real-time)** are built, tested and deployed at
+<https://sabboura.mh-hamad.workers.dev> but not yet checked by the user. The next phase
+is **8 (sharing)** — the user has asked for it: anyone-with-link view/edit, or named
+Google accounts, on a board or a folder, private by default.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
-is public because the hash is the capability. Which images a board uses is read from
-its Yjs snapshot by the Worker on every save, and unused images are swept only when a
+is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.
+
+Each board has a room — the `BoardRoom` Durable Object (`worker/room.ts`), SQLite-backed.
+It owns the board's content: an append-only update log plus snapshots every 200
+updates, from which version history is read. It writes the R2 snapshot and the D1
+search text and image references itself, two seconds after changes (an alarm). The
+browser only uploads the thumbnail. A room with no storage seeds itself from the R2
+snapshot, which is how pre-Phase-7 boards and duplicates arrive. Sockets hibernate;
+auth is the first message (a browser cannot put a token on a WebSocket). Access is
+owner-only until Phase 8 widens `authenticate()` in the room and the REST checks.
 
 The full plan, including every phase's checklist, lives in an artifact:
 <https://claude.ai/code/artifact/5e80f000-99d0-42bf-9525-7e76a632abdb>
@@ -87,6 +96,10 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   so storage tests stamp each picture with a per-test nonce.
 - **Waiting for "the next request" catches the previous one's.** Derive ids from what
   the test itself made (hash the bytes) rather than from whichever request comes next.
+- **A room's content arrives after the page opens.** Anything that scans the board on
+  open (moving inline images, resuming uploads) must wait for the room's first sync,
+  not just IndexedDB — on a device that never opened the board, IndexedDB is empty.
+- `test-backend.mjs` builds `dist-test/` once at startup; restart it to see UI changes.
 - A new migration must be applied remotely **before** `npm run deploy`
   (`npx wrangler d1 migrations apply sabboura --remote`), or the new Worker queries
   tables that do not exist yet.

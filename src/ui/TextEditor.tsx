@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import { fontString } from '@/canvas/fonts';
 import { boardToScreen, type Viewport } from '@/canvas/viewport';
 import { STICKY_PADDING, TEXT_PADDING } from '@/canvas/renderContent';
+import { textSplice } from '@/doc/schema';
 import { detectDirection } from '@/model/textLayout';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './TextEditor.module.css';
@@ -19,6 +20,8 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   const setElementText = useBoardStore((state) => state.setElementText);
   const endEditing = useBoardStore((state) => state.endEditing);
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  /** The text as this person last saw it, and where their caret was in it. */
+  const seen = useRef<{ value: string; start: number; end: number } | null>(null);
 
   void renderVersion;
   const element = elements.find((candidate) => candidate.id === editingId);
@@ -30,6 +33,31 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
     node.focus({ preventScroll: true });
     node.setSelectionRange(node.value.length, node.value.length);
   }, [element?.id, element]);
+
+  // Someone else typed in this box. Their words arrive; this person's caret stays
+  // put relative to their own text rather than jumping to the end.
+  const value = element?.text ?? '';
+  useLayoutEffect(() => {
+    const node = ref.current;
+    const before = seen.current;
+    if (!node || !before || before.value === value) return;
+    const splice = textSplice(before.value, value);
+    const shift = (position: number) => {
+      if (position <= splice.index) return position;
+      if (position >= splice.index + splice.remove) {
+        return position + splice.insert.length - splice.remove;
+      }
+      return splice.index + splice.insert.length;
+    };
+    node.setSelectionRange(shift(before.start), shift(before.end));
+    seen.current = { value, start: node.selectionStart, end: node.selectionEnd };
+  }, [value]);
+
+  const remember = () => {
+    const node = ref.current;
+    if (node)
+      seen.current = { value: node.value, start: node.selectionStart, end: node.selectionEnd };
+  };
 
   useEffect(() => {
     if (!element) return;
@@ -48,7 +76,6 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   const sticky = element.type === 'sticky';
   const padding = sticky ? STICKY_PADDING : TEXT_PADDING;
   const topLeft = boardToScreen(viewport, { x: element.x, y: element.y });
-  const value = element.text ?? '';
 
   return (
     <textarea
@@ -59,7 +86,13 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
       dir={detectDirection(value)}
       value={value}
       spellCheck={false}
-      onChange={(event) => setElementText(element.id, event.target.value)}
+      onChange={(event) => {
+        remember();
+        setElementText(element.id, event.target.value);
+      }}
+      onSelect={remember}
+      onKeyUp={remember}
+      onFocus={remember}
       onBlur={endEditing}
       style={{
         left: `${topLeft.x}px`,

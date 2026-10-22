@@ -1,0 +1,119 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.halo {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 4px;
+}
+
+.haloName {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  margin-bottom: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  transition: transform 60ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    transition: none;
+  }
+}
+
+.cursor svg {
+  display: block;
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.25));
+}
+
+.name {
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  box-shadow: var(--shadow-1);
+}
+
+.bubble {
+  position: absolute;
+  left: 14px;
+  top: 38px;
+  width: max-content;
+  max-width: 260px;
+  padding: 5px 10px;
+  border: 2px solid;
+  border-radius: 4px 14px 14px 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow-1);
+}
+
+.chatInput {
+  position: absolute;
+  pointer-events: auto;
+  width: 220px;
+  padding: 6px 10px;
+  border: 2px solid var(--accent);
+  border-radius: 4px 14px 14px 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  box-shadow: var(--shadow-2);
+  outline: none;
+}
+
+.following {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px 5px 12px;
+  border: 2px solid;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  box-shadow: var(--shadow-1);
+}
+
+.following button {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}

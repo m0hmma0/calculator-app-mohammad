@@ -3,7 +3,6 @@ import type {
   CreateBoardBody,
   CreateFolderBody,
   FolderRecord,
-  SnapshotMeta,
   TrashResponse,
   UpdateBoardBody,
   UpdateFolderBody,
@@ -92,26 +91,16 @@ export const api = {
     return URL.createObjectURL(await response.blob());
   },
 
-  /** Returns null for a board that has never been saved. */
-  async loadSnapshot(id: string): Promise<Uint8Array | null> {
-    const response = await fetch(`/api/boards/${id}/snapshot`, { headers: await authHeaders() });
-    if (response.status === 204) return null;
-    if (!response.ok)
-      throw new ApiError(`Could not open that board (${response.status})`, response.status);
-    return new Uint8Array(await response.arrayBuffer());
-  },
+  /** Checks a board is there and this person's, and marks it opened. */
+  openBoard: (id: string) => request<{ board: BoardRecord }>(`/api/boards/${id}`),
 
-  async saveSnapshot(id: string, bytes: Uint8Array, meta: SnapshotMeta): Promise<void> {
-    const headers = await authHeaders({
-      'content-type': 'application/octet-stream',
-      'x-board-meta': JSON.stringify(meta),
-    });
-    const response = await fetch(`/api/boards/${id}/snapshot`, {
+  async saveThumbnail(id: string, png: Blob): Promise<void> {
+    const response = await fetch(`/api/boards/${id}/thumbnail`, {
       method: 'PUT',
-      headers,
-      body: bytes as unknown as BodyInit,
+      headers: await authHeaders({ 'content-type': 'image/png' }),
+      body: png,
     });
     if (!response.ok)
-      throw new ApiError(`Could not save that board (${response.status})`, response.status);
+      throw new ApiError(`Could not save the thumbnail (${response.status})`, response.status);
   },
 };

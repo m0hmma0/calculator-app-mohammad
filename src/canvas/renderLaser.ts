@@ -17,6 +17,8 @@ export function renderLaser(
   lifetimeMs: number,
   now: number,
   colors: CanvasColors,
+  /** Someone else's laser is drawn in their colour. */
+  color: string = colors.laser,
 ): void {
   if (points.length < 2) return;
   const options = { now, lifetimeMs };
@@ -43,11 +45,11 @@ export function renderLaser(
       if (pass === 'glow') {
         ctx.globalAlpha = opacity * 0.28;
         ctx.lineWidth = width * 3.2;
-        ctx.strokeStyle = colors.laser;
+        ctx.strokeStyle = color;
       } else {
         ctx.globalAlpha = opacity;
         ctx.lineWidth = width;
-        ctx.strokeStyle = colors.laser;
+        ctx.strokeStyle = color;
       }
       ctx.stroke();
     }

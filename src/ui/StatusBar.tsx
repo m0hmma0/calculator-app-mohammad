@@ -1,3 +1,4 @@
+import { usePresence } from '@/collab/presence';
 import { useUploads, type UploadState } from '@/media/uploads';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './StatusBar.module.css';
@@ -41,6 +42,7 @@ export function StatusBar() {
   const online = useBoardStore((state) => state.online);
   const hydrated = useBoardStore((state) => state.hydrated);
   const uploads = useUploads((state) => state.byId);
+  const connection = usePresence((state) => state.status);
 
   const upload = uploadMessage(Object.values(uploads));
 
@@ -49,6 +51,19 @@ export function StatusBar() {
       <div className={`${styles.bar} ${styles.offline}`} data-testid="status-offline" role="status">
         <span className={styles.dot} />
         Working offline — your changes are saved here
+      </div>
+    );
+  }
+
+  if (connection === 'reconnecting') {
+    return (
+      <div
+        className={`${styles.bar} ${styles.offline}`}
+        data-testid="status-reconnecting"
+        role="status"
+      >
+        <span className={styles.dot} />
+        Reconnecting — your changes are kept here and will sync
       </div>
     );
   }

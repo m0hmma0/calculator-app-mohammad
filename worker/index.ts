@@ -5,7 +5,9 @@ import {
   duplicateBoard,
   getSnapshot,
   getThumbnail,
+  openBoard,
   putSnapshot,
+  putThumbnail,
   restoreBoard,
   searchBoards,
   trashBoard,
@@ -19,6 +21,7 @@ import type { Env } from './env';
 import { fail, json } from './http';
 
 export type { Env };
+export { BoardRoom } from './room';
 
 /**
  * Routes are matched by hand rather than through a framework: there are a dozen of
@@ -43,6 +46,17 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   // Reading an image needs no sign-in: its hash is the capability (see shared/files).
   if (file && !file[2] && (method === 'GET' || method === 'HEAD')) {
     return getFile(request, env, file[1]!);
+  }
+
+  // A browser cannot put a token on a WebSocket request, so the room asks for one as
+  // the first message instead, and refuses to do anything else until it is valid.
+  const room = /^\/api\/boards\/([\w-]+)\/room$/.exec(pathname);
+  if (room && method === 'GET') {
+    const boardId = room[1]!;
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(boardId));
+    const forwarded = new Request(request);
+    forwarded.headers.set('x-board-id', boardId);
+    return stub.fetch(forwarded);
   }
 
   let account: Account;
@@ -103,8 +117,10 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
         break;
       case 'thumbnail':
         if (method === 'GET') return getThumbnail(env, account, id);
+        if (method === 'PUT') return putThumbnail(request, env, account, id);
         break;
       default:
+        if (method === 'GET') return openBoard(env, account, id);
         if (method === 'PATCH') return updateBoard(request, env, account, id);
         if (method === 'DELETE') return trashBoard(env, account, id);
     }

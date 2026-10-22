@@ -127,7 +127,40 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
   return json({ board: toBoard((await getBoard(env, account.uid, copyId))!) }, 201);
 }
 
-/** The Yjs state vector for a board. Phase 7 replaces this with a live room. */
+/**
+ * Opening a board: the record, and a note that it was opened. The content itself
+ * comes from the board's room over its WebSocket.
+ */
+export async function openBoard(env: Env, account: Account, id: string) {
+  const row = await getBoard(env, account.uid, id);
+  if (!row || row.deleted_at !== null) return fail('That board does not exist', 404);
+  await env.DB.prepare('UPDATE boards SET opened_at = ?1 WHERE id = ?2').bind(Date.now(), id).run();
+  return json({ board: toBoard(row) });
+}
+
+const MAX_THUMBNAIL_BYTES = 1024 * 1024;
+
+/** A small PNG of the board, drawn by whichever browser last changed it. */
+export async function putThumbnail(request: Request, env: Env, account: Account, id: string) {
+  const row = await getBoard(env, account.uid, id);
+  if (!row || row.deleted_at !== null) return fail('That board does not exist', 404);
+  if ((request.headers.get('content-type') ?? '') !== 'image/png') {
+    return fail('A thumbnail is a PNG', 415);
+  }
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_THUMBNAIL_BYTES) {
+    return fail('That thumbnail is the wrong size', 413);
+  }
+  const key = thumbnailKey(id);
+  await env.FILES.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
+  await env.DB.prepare('UPDATE boards SET thumbnail_key = ?1 WHERE id = ?2').bind(key, id).run();
+  return json({ ok: true });
+}
+
+/**
+ * The stored snapshot, as the room last wrote it. The app reads boards through their
+ * rooms now; this stays for tools and tests that want the saved bytes.
+ */
 export async function getSnapshot(env: Env, account: Account, id: string) {
   const row = await getBoard(env, account.uid, id);
   if (!row) return fail('That board does not exist', 404);
@@ -144,6 +177,11 @@ export async function getSnapshot(env: Env, account: Account, id: string) {
   });
 }
 
+/**
+ * Writes a snapshot directly. Since Phase 7 the room owns a board's content, so this
+ * only matters for a board whose room has never been opened — it is what the room
+ * starts from. It is how a Phase 5 or 6 board arrived, and how tests make one.
+ */
 export async function putSnapshot(request: Request, env: Env, account: Account, id: string) {
   const row = await getBoard(env, account.uid, id);
   if (!row) return fail('That board does not exist', 404);

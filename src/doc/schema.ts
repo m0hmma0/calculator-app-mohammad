@@ -12,6 +12,10 @@ import { DEFAULT_STYLE } from '@/model/element';
  * Style lives in its own nested Y.Map for the same reason: changing a fill while
  * someone else drags the shape should not make one of those changes disappear.
  *
+ * Text is a Y.Text, edited character by character, so two people typing in the same
+ * note both keep what they typed. Documents from before Phase 7 hold it as a plain
+ * string; both are read, and the first edit upgrades it.
+ *
  * Everything else — the point run of a stroke, an image reference, a connector
  * binding — is written whole, because those are replaced rather than edited.
  */
@@ -38,7 +42,7 @@ const SCALAR_FIELDS = [
 ] as const;
 
 /** Fields replaced whole rather than merged field by field. */
-const OPAQUE_FIELDS = ['points', 'text', 'image', 'from', 'to'] as const;
+const OPAQUE_FIELDS = ['points', 'image', 'from', 'to'] as const;
 
 export function elementsOf(doc: Y.Doc): YElements {
   return doc.getMap(ELEMENTS_KEY) as YElements;
@@ -56,6 +60,7 @@ export function toYElement(element: BoardElement): YElement {
     const value = element[field];
     if (value !== undefined) map.set(field, value);
   }
+  if (element.text !== undefined) map.set('text', new Y.Text(element.text));
 
   const style = new Y.Map<unknown>();
   for (const [key, value] of Object.entries(element.style)) style.set(key, value);
@@ -82,6 +87,9 @@ export function fromYElement(map: YElement): BoardElement {
     const value = map.get(field);
     if (value !== undefined) element[field] = value;
   }
+  const text = map.get('text');
+  if (text instanceof Y.Text) element.text = text.toString();
+  else if (typeof text === 'string') element.text = text;
   element.style = readStyle(map);
   return element as unknown as BoardElement;
 }
@@ -107,6 +115,52 @@ export function patchYElement(map: YElement, patch: Partial<BoardElement>): void
       continue;
     }
 
+    if (key === 'text') {
+      patchText(map, value as string);
+      continue;
+    }
+
     if (map.get(key) !== value) map.set(key, value);
   }
+}
+
+/**
+ * The difference between two versions of a string, as one replaced span: whatever
+ * lies between their common start and common end. A keystroke, a paste or a
+ * deletion is exactly one such span, so this is all a text box ever needs.
+ */
+export function textSplice(before: string, after: string) {
+  let start = 0;
+  const shortest = Math.min(before.length, after.length);
+  while (start < shortest && before[start] === after[start]) start += 1;
+
+  let end = 0;
+  while (
+    end < shortest - start &&
+    before[before.length - 1 - end] === after[after.length - 1 - end]
+  ) {
+    end += 1;
+  }
+
+  // Never split a surrogate pair: half an emoji is not a character anyone typed.
+  const isLow = (code: number) => code >= 0xdc00 && code <= 0xdfff;
+  if (start > 0 && isLow(before.charCodeAt(start))) start -= 1;
+  if (end > 0 && isLow(before.charCodeAt(before.length - end))) end -= 1;
+
+  return {
+    index: start,
+    remove: before.length - start - end,
+    insert: after.slice(start, after.length - end),
+  };
+}
+
+function patchText(map: YElement, next: string): void {
+  const current = map.get('text');
+  if (!(current instanceof Y.Text)) {
+    if (current !== next) map.set('text', new Y.Text(next));
+    return;
+  }
+  const splice = textSplice(current.toString(), next);
+  if (splice.remove > 0) current.delete(splice.index, splice.remove);
+  if (splice.insert) current.insert(splice.index, splice.insert);
 }

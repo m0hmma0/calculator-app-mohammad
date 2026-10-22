@@ -1,0 +1,524 @@
+import { DurableObject } from 'cloudflare:workers';
+import * as Y from 'yjs';
+import {
+  colorFor,
+  FRAME,
+  FrameAssembler,
+  frame,
+  splitFrame,
+  type ClientMessage,
+  type HistoryCheckpoint,
+  type PeerIdentity,
+  type ServerMessage,
+} from '@shared/collab';
+import { fileIdsInDoc, searchTextInDoc } from '@shared/files';
+import { AuthError, verifyIdToken } from './auth';
+import type { Env } from './env';
+
+/** What survives hibernation for each socket. Kept small: the limit is 2 KB. */
+interface Attachment {
+  session: string;
+  user: PeerIdentity | null;
+}
+
+/** Take a full snapshot after this many updates, so loading never replays thousands. */
+const SNAPSHOT_EVERY = 200;
+/** Write the board to R2 and D1 this long after the last change. */
+const PERSIST_DELAY_MS = 2000;
+/** SQLite rows top out at 2 MB; blobs are split well below that. */
+const BLOB_PART_BYTES = 1024 * 1024;
+const MAX_PRESENCE_BYTES = 16 * 1024;
+
+const BLOB_UPDATE = 0;
+const BLOB_SNAPSHOT = 1;
+
+/**
+ * One room per board. It holds the live Yjs document in memory, every socket open on
+ * the board, and — in its own SQLite storage — an append-only log of every change
+ * plus periodic full snapshots. The log is what version history is built from; the
+ * snapshots keep loading fast.
+ *
+ * Sockets are accepted through the hibernation API, so an idle board costs nothing:
+ * the object can be evicted while sockets stay open, and is rebuilt from storage by
+ * the constructor when the next message arrives.
+ */
+export class BoardRoom extends DurableObject<Env> {
+  private readonly sql: SqlStorage;
+  private doc = new Y.Doc();
+  private sinceSnapshot = 0;
+  private readonly assemblers = new Map<string, FrameAssembler>();
+  private chunkId = 0;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS updates (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, uid TEXT
+      );
+      CREATE TABLE IF NOT EXISTS snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        seq INTEGER NOT NULL, at INTEGER NOT NULL, name TEXT
+      );
+      CREATE TABLE IF NOT EXISTS blobs (
+        kind INTEGER NOT NULL, owner INTEGER NOT NULL, part INTEGER NOT NULL,
+        data BLOB NOT NULL, PRIMARY KEY (kind, owner, part)
+      );
+    `);
+    // Liveness pings are answered without waking the object.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+    void ctx.blockConcurrencyWhile(async () => {
+      this.loadFromStorage();
+    });
+  }
+
+  // ---- storage --------------------------------------------------------------
+
+  private meta(key: string): string | null {
+    const row = this.sql
+      .exec<{ value: string }>('SELECT value FROM meta WHERE key = ?', key)
+      .toArray()[0];
+    return row?.value ?? null;
+  }
+
+  private setMeta(key: string, value: string): void {
+    this.sql.exec('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', key, value);
+  }
+
+  private putBlob(kind: number, owner: number, data: Uint8Array): void {
+    for (let part = 0; part * BLOB_PART_BYTES < data.length || part === 0; part += 1) {
+      const slice = data.slice(part * BLOB_PART_BYTES, (part + 1) * BLOB_PART_BYTES);
+      this.sql.exec(
+        'INSERT INTO blobs (kind, owner, part, data) VALUES (?, ?, ?, ?)',
+        kind,
+        owner,
+        part,
+        slice.buffer,
+      );
+    }
+  }
+
+  /** Blobs for one kind, in owner order, with their parts joined back together. */
+  private readBlobs(kind: number, fromExclusive: number, toInclusive: number): Uint8Array[] {
+    const rows = this.sql
+      .exec<{ owner: number; data: ArrayBuffer }>(
+        `SELECT owner, data FROM blobs WHERE kind = ? AND owner > ? AND owner <= ?
+         ORDER BY owner, part`,
+        kind,
+        fromExclusive,
+        toInclusive,
+      )
+      .toArray();
+
+    const joined: Uint8Array[] = [];
+    let current: number | null = null;
+    let parts: Uint8Array[] = [];
+    const flush = () => {
+      if (parts.length === 0) return;
+      const length = parts.reduce((sum, part) => sum + part.length, 0);
+      const whole = new Uint8Array(length);
+      let offset = 0;
+      for (const part of parts) {
+        whole.set(part, offset);
+        offset += part.length;
+      }
+      joined.push(whole);
+      parts = [];
+    };
+    for (const row of rows) {
+      if (row.owner !== current) {
+        flush();
+        current = row.owner;
+      }
+      parts.push(new Uint8Array(row.data));
+    }
+    flush();
+    return joined;
+  }
+
+  private latestSnapshotAtOrBefore(seq: number): { id: number; seq: number } | null {
+    return (
+      this.sql
+        .exec<{ id: number; seq: number }>(
+          'SELECT id, seq FROM snapshots WHERE seq <= ? ORDER BY seq DESC, id DESC LIMIT 1',
+          seq,
+        )
+        .toArray()[0] ?? null
+    );
+  }
+
+  private lastSeq(): number {
+    const row = this.sql
+      .exec<{ seq: number | null }>('SELECT MAX(seq) AS seq FROM updates')
+      .toArray()[0];
+    return row?.seq ?? 0;
+  }
+
+  /** Rebuilds a document as it stood after update `seq`. */
+  private docAt(seq: number): Y.Doc {
+    const doc = new Y.Doc();
+    const snapshot = this.latestSnapshotAtOrBefore(seq);
+    const base = snapshot?.seq ?? 0;
+    if (snapshot) {
+      const [state] = this.readBlobs(BLOB_SNAPSHOT, snapshot.id - 1, snapshot.id);
+      if (state) Y.applyUpdate(doc, state);
+    }
+    for (const update of this.readBlobs(BLOB_UPDATE, base, seq)) Y.applyUpdate(doc, update);
+    return doc;
+  }
+
+  private loadFromStorage(): void {
+    this.doc.destroy();
+    const last = this.lastSeq();
+    this.doc = this.docAt(last);
+    const snapshot = this.latestSnapshotAtOrBefore(last);
+    this.sinceSnapshot = last - (snapshot?.seq ?? 0);
+  }
+
+  private takeSnapshot(name: string | null): void {
+    const seq = this.lastSeq();
+    const cursor = this.sql.exec<{ id: number }>(
+      'INSERT INTO snapshots (seq, at, name) VALUES (?, ?, ?) RETURNING id',
+      seq,
+      Date.now(),
+      name,
+    );
+    const id = cursor.one().id;
+    this.putBlob(BLOB_SNAPSHOT, id, Y.encodeStateAsUpdate(this.doc));
+    this.sinceSnapshot = 0;
+  }
+
+  /** Records one change. Returns what was new, or null if the room already had it all. */
+  private record(update: Uint8Array, uid: string): Uint8Array | null {
+    // Only what was actually new is kept: a reconnecting browser resends plenty that
+    // the room already has, and the log should not fill up with echoes.
+    const changes: Uint8Array[] = [];
+    const capture = (change: Uint8Array) => changes.push(change);
+    this.doc.on('update', capture);
+    try {
+      Y.applyUpdate(this.doc, update, 'peer');
+    } finally {
+      this.doc.off('update', capture);
+    }
+    if (changes.length === 0) return null;
+    const effective = changes.length === 1 ? changes[0]! : Y.mergeUpdates(changes);
+
+    const seq = this.sql
+      .exec<{ seq: number }>(
+        'INSERT INTO updates (at, uid) VALUES (?, ?) RETURNING seq',
+        Date.now(),
+        uid,
+      )
+      .one().seq;
+    this.putBlob(BLOB_UPDATE, seq, effective);
+    this.sinceSnapshot += 1;
+    if (this.sinceSnapshot >= SNAPSHOT_EVERY) this.takeSnapshot(null);
+    void this.schedulePersist();
+    return effective;
+  }
+
+  /**
+   * A board from before Phase 7 — or a fresh duplicate — has its content in R2 but
+   * nothing here yet. The first connection brings it in as the starting snapshot.
+   */
+  private async seedFromR2(boardId: string): Promise<void> {
+    if (this.meta('seeded')) return;
+    const object = await this.env.FILES.get(`boards/${boardId}/snapshot.bin`);
+    // Another request may have seeded while this one waited on R2.
+    if (this.meta('seeded')) return;
+    if (object && this.lastSeq() === 0) {
+      const state = new Uint8Array(await object.arrayBuffer());
+      Y.applyUpdate(this.doc, state);
+      const id = this.sql
+        .exec<{ id: number }>(
+          'INSERT INTO snapshots (seq, at, name) VALUES (0, ?, ?) RETURNING id',
+          Date.now(),
+          'Before live editing',
+        )
+        .one().id;
+      this.putBlob(BLOB_SNAPSHOT, id, Y.encodeStateAsUpdate(this.doc));
+    }
+    this.setMeta('seeded', '1');
+    if (!this.meta('created')) this.setMeta('created', String(Date.now()));
+  }
+
+  private async schedulePersist(): Promise<void> {
+    const pending = await this.ctx.storage.getAlarm();
+    if (pending === null) await this.ctx.storage.setAlarm(Date.now() + PERSIST_DELAY_MS);
+  }
+
+  /**
+   * Writes the board where the rest of the app looks for it: the snapshot in R2 (for
+   * duplicates and the first load of a new room), and in D1 the words to search by
+   * and the images it uses.
+   */
+  async alarm(): Promise<void> {
+    const boardId = this.meta('boardId');
+    if (!boardId) return;
+    const key = `boards/${boardId}/snapshot.bin`;
+    await this.env.FILES.put(key, Y.encodeStateAsUpdate(this.doc));
+
+    const fileIds = fileIdsInDoc(this.doc);
+    await this.env.DB.batch([
+      this.env.DB.prepare(
+        'UPDATE boards SET snapshot_key = ?1, search_text = ?2, updated_at = ?3 WHERE id = ?4',
+      ).bind(key, searchTextInDoc(this.doc), Date.now(), boardId),
+      this.env.DB.prepare('DELETE FROM board_files WHERE board_id = ?1').bind(boardId),
+      ...fileIds.map((fileId) =>
+        this.env.DB.prepare(
+          'INSERT OR IGNORE INTO board_files (board_id, hash) VALUES (?1, ?2)',
+        ).bind(boardId, fileId),
+      ),
+    ]);
+  }
+
+  // ---- sockets --------------------------------------------------------------
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const boardId = request.headers.get('x-board-id');
+
+    // The board was emptied from the trash: nothing of it should outlive that.
+    if (url.pathname === '/destroy') {
+      await this.ctx.storage.deleteAlarm();
+      for (const socket of this.ctx.getWebSockets()) socket.close(4404, 'Board deleted');
+      await this.ctx.storage.deleteAll();
+      return new Response(null, { status: 204 });
+    }
+
+    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket' || !boardId) {
+      return new Response('Expected a WebSocket', { status: 426 });
+    }
+
+    if (!this.meta('boardId')) this.setMeta('boardId', boardId);
+    await this.seedFromR2(boardId);
+
+    const pair = new WebSocketPair();
+    const [client, server] = [pair[0], pair[1]];
+    this.ctx.acceptWebSocket(server);
+    const attachment: Attachment = { session: crypto.randomUUID().slice(0, 12), user: null };
+    server.serializeAttachment(attachment);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private attachment(ws: WebSocket): Attachment {
+    return ws.deserializeAttachment() as Attachment;
+  }
+
+  private sendJson(ws: WebSocket, message: ServerMessage): void {
+    try {
+      ws.send(JSON.stringify(message));
+    } catch {
+      // A socket that closed mid-send is cleaned up by its close handler.
+    }
+  }
+
+  private sendBinary(ws: WebSocket, data: Uint8Array<ArrayBuffer>): void {
+    this.chunkId = (this.chunkId + 1) >>> 0;
+    try {
+      for (const part of splitFrame(data, this.chunkId)) ws.send(part);
+    } catch {
+      // As above.
+    }
+  }
+
+  /** Everyone signed in on this board, except `except`. */
+  private others(except: WebSocket | null): WebSocket[] {
+    return this.ctx
+      .getWebSockets()
+      .filter((ws) => ws !== except && this.attachment(ws).user !== null);
+  }
+
+  private refuse(
+    ws: WebSocket,
+    code: 'unauthorised' | 'not-found' | 'bad-request',
+    message: string,
+  ) {
+    this.sendJson(ws, { t: 'error', code, message });
+    ws.close(code === 'not-found' ? 4404 : code === 'unauthorised' ? 4401 : 4400, message);
+  }
+
+  /**
+   * The handshake. A socket can do nothing until it presents a token the room can
+   * verify and that token's account may open this board. Phase 8 widens "may".
+   */
+  private async authenticate(ws: WebSocket, token: string): Promise<void> {
+    let account;
+    try {
+      account = await verifyIdToken(token, this.env);
+    } catch (error) {
+      if (error instanceof AuthError) return this.refuse(ws, 'unauthorised', error.message);
+      throw error;
+    }
+
+    const boardId = this.meta('boardId');
+    const board = await this.env.DB.prepare('SELECT owner_id, deleted_at FROM boards WHERE id = ?1')
+      .bind(boardId)
+      .first<{ owner_id: string; deleted_at: number | null }>();
+    if (!board || board.deleted_at !== null || board.owner_id !== account.uid) {
+      return this.refuse(ws, 'not-found', 'That board is not available');
+    }
+
+    const user: PeerIdentity = {
+      uid: account.uid,
+      name: account.name ?? account.email,
+      picture: account.picture,
+      color: colorFor(account.uid),
+    };
+    const attachment = { ...this.attachment(ws), user };
+    ws.serializeAttachment(attachment);
+
+    const peers = this.others(ws).map((other) => {
+      const { session, user: peer } = this.attachment(other);
+      return { session, user: peer! };
+    });
+    this.sendJson(ws, { t: 'ready', session: attachment.session, you: user, peers });
+    for (const other of this.others(ws)) {
+      this.sendJson(other, { t: 'join', session: attachment.session, user });
+    }
+    // The room asks for what it is missing, too: that is how offline work comes in.
+    this.sendBinary(ws, frame(FRAME.SYNC_STEP1, Y.encodeStateVector(this.doc)));
+  }
+
+  private history(ws: WebSocket): void {
+    const checkpoints = this.sql
+      .exec<{ seq: number; at: number; name: string | null }>(
+        'SELECT seq, at, name FROM snapshots WHERE name IS NOT NULL ORDER BY seq, id',
+      )
+      .toArray()
+      .map((row): HistoryCheckpoint => ({ seq: row.seq, at: row.at, name: row.name }));
+    const last = this.lastSeq();
+    const lastAt =
+      this.sql.exec<{ at: number }>('SELECT at FROM updates WHERE seq = ?', last).toArray()[0]
+        ?.at ?? Date.now();
+    this.sendJson(ws, {
+      t: 'history',
+      first: 0,
+      last,
+      firstAt: Number(this.meta('created') ?? Date.now()),
+      lastAt,
+      checkpoints,
+    });
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const { session, user } = this.attachment(ws);
+
+    if (typeof message === 'string') {
+      let parsed: ClientMessage;
+      try {
+        parsed = JSON.parse(message) as ClientMessage;
+      } catch {
+        return this.refuse(ws, 'bad-request', 'Unreadable message');
+      }
+
+      if (!user) {
+        if (parsed.t === 'auth' && typeof parsed.token === 'string') {
+          return this.authenticate(ws, parsed.token);
+        }
+        return this.refuse(ws, 'unauthorised', 'Sign in first');
+      }
+
+      switch (parsed.t) {
+        case 'presence': {
+          if (message.length > MAX_PRESENCE_BYTES) return;
+          const relay = JSON.stringify({ t: 'presence', session, user, state: parsed.state });
+          for (const other of this.others(ws)) {
+            try {
+              other.send(relay);
+            } catch {
+              // Closed; its own handler tidies up.
+            }
+          }
+          return;
+        }
+        case 'history':
+          return this.history(ws);
+        case 'history-state': {
+          const seq = Math.max(0, Math.min(Math.floor(Number(parsed.seq)) || 0, this.lastSeq()));
+          const past = this.docAt(seq);
+          const at =
+            this.sql.exec<{ at: number }>('SELECT at FROM updates WHERE seq = ?', seq).toArray()[0]
+              ?.at ?? Number(this.meta('created') ?? Date.now());
+          this.sendJson(ws, { t: 'history-state', req: parsed.req, seq, at });
+          // [HISTORY][request id u32][state], so a slow answer cannot be mistaken for
+          // the one the scrubber is waiting on now.
+          const state = Y.encodeStateAsUpdate(past);
+          past.destroy();
+          const body = new Uint8Array(4 + state.length);
+          new DataView(body.buffer).setUint32(0, parsed.req >>> 0);
+          body.set(state, 4);
+          this.sendBinary(ws, frame(FRAME.HISTORY, body));
+          return;
+        }
+        case 'checkpoint': {
+          const name = String(parsed.name ?? '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 80);
+          if (!name) return;
+          this.takeSnapshot(name);
+          for (const socket of [ws, ...this.others(ws)]) this.history(socket);
+          return;
+        }
+        default:
+          return;
+      }
+    }
+
+    if (!user) return this.refuse(ws, 'unauthorised', 'Sign in first');
+
+    let assembler = this.assemblers.get(session);
+    if (!assembler) {
+      assembler = new FrameAssembler();
+      this.assemblers.set(session, assembler);
+    }
+    const data = assembler.accept(new Uint8Array(message));
+    if (!data) return;
+    const payload = data.subarray(1);
+
+    switch (data[0]) {
+      case FRAME.SYNC_STEP1:
+        this.sendBinary(ws, frame(FRAME.SYNC_STEP2, Y.encodeStateAsUpdate(this.doc, payload)));
+        return;
+      case FRAME.SYNC_STEP2:
+      case FRAME.UPDATE: {
+        let effective: Uint8Array | null;
+        try {
+          effective = this.record(payload, user.uid);
+        } catch {
+          return this.refuse(ws, 'bad-request', 'That change could not be applied');
+        }
+        if (effective) {
+          const out = frame(FRAME.UPDATE, effective);
+          for (const other of this.others(ws)) this.sendBinary(other, out);
+        }
+        this.sendJson(ws, { t: 'ack' });
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    this.leave(ws);
+  }
+
+  async webSocketError(ws: WebSocket): Promise<void> {
+    this.leave(ws);
+  }
+
+  private leave(ws: WebSocket): void {
+    const { session, user } = this.attachment(ws);
+    this.assemblers.delete(session);
+    try {
+      ws.close(1000, 'Bye');
+    } catch {
+      // Already closed.
+    }
+    if (!user) return;
+    for (const other of this.others(ws)) this.sendJson(other, { t: 'leave', session });
+  }
+}

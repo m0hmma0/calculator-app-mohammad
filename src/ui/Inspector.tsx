@@ -3,6 +3,7 @@ import { isTextual } from '@/model/element';
 import { selectionAABB } from '@/model/bounds';
 import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
+import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './Inspector.module.css';
 
@@ -39,6 +40,7 @@ const ALIGNMENTS = [
 export function Inspector() {
   const elements = useBoardStore((state) => state.elements);
   const selection = useBoardStore((state) => state.selection);
+  const historyOpen = useHistory((state) => state.open);
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
   const selectOnly = useBoardStore((state) => state.selectOnly);
@@ -65,6 +67,9 @@ export function Inspector() {
   // them costs more than the canvas does. Show the top of the stack and a count.
   const visibleLayers = [...topLevel].reverse().slice(0, LAYER_LIMIT);
   const hiddenLayerCount = topLevel.length - visibleLayers.length;
+
+  // The history panel takes this place, and the inspector describes the live board.
+  if (historyOpen) return null;
 
   return (
     <aside className={styles.panel} data-hud data-testid="inspector">

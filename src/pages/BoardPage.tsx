@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
+import { applyHistoryMessage, applyHistoryState, attachHistory } from '@/collab/history';
+import { applyServerMessage, resetPresence, usePresence } from '@/collab/presence';
+import { startPresence, type PresenceHandle } from '@/collab/publish';
 import { startBoardSync, type BoardSync } from '@/doc/sync';
 import { Link } from '@/router/router';
 import { openBoardDocument, useBoardStore } from '@/state/boardStore';
 import { useWorkspace } from '@/state/workspaceStore';
 import { CanvasStage } from '@/ui/CanvasStage';
 import { ToolBar } from '@/ui/ToolBar';
+import { HistoryPanel } from '@/ui/HistoryPanel';
+import { PeerBar } from '@/ui/PeerBar';
 import { TopBar } from '@/ui/TopBar';
 import styles from './BoardPage.module.css';
 
@@ -26,23 +31,41 @@ function BoardView({ boardId }: { boardId: string }) {
 
   useEffect(() => {
     let sync: BoardSync | null = null;
+    let presence: PresenceHandle | null = null;
     let cancelled = false;
 
     const doc = openBoardDocument(boardId);
+    resetPresence();
+    usePresence.setState({ status: 'connecting' });
 
     void (async () => {
       try {
-        const started = await startBoardSync(
-          doc,
-          boardId,
-          () => useBoardStore.getState().elements,
-          () => markBoardSaved(boardId),
-        );
+        const started = await startBoardSync(doc, boardId, {
+          elementsNow: () => useBoardStore.getState().elements,
+          onSaved: () => markBoardSaved(boardId),
+          events: {
+            status: (status) => {
+              usePresence.setState({ status });
+              // The room will not have this person: same outcome as a missing board.
+              if (status === 'refused' && !cancelled) setStatus('missing');
+            },
+            message: (message) => {
+              applyServerMessage(message);
+              applyHistoryMessage(message);
+              // Someone new should see everyone at once, not at their next movement.
+              if (message.t === 'join' || message.t === 'ready') presence?.publishNow();
+            },
+            history: applyHistoryState,
+            synced: () => usePresence.setState({ synced: true }),
+          },
+        });
         if (cancelled) {
           started.stop();
           return;
         }
         sync = started;
+        presence = startPresence(started.room);
+        attachHistory(started.room, doc);
         setStatus('ready');
       } catch {
         if (!cancelled) setStatus('missing');
@@ -51,7 +74,10 @@ function BoardView({ boardId }: { boardId: string }) {
 
     return () => {
       cancelled = true;
-      // Leaving the board writes whatever has not been sent yet.
+      presence?.stop();
+      attachHistory(null, null);
+      resetPresence();
+      // Leaving the board sends whatever has not been sent yet.
       void sync?.flush().finally(() => sync?.stop());
     };
     // markBoardSaved is a stable store action; re-running on it would reopen the board.
@@ -80,7 +106,7 @@ function BoardView({ boardId }: { boardId: string }) {
     <>
       <TopBar
         boardName={record?.title ?? 'Board'}
-        badge="Phase 6"
+        badge="Phase 7"
         onRenameBoard={record ? rename : undefined}
         leading={
           <Link
@@ -97,8 +123,10 @@ function BoardView({ boardId }: { boardId: string }) {
         }
       >
         <ToolBar />
+        <PeerBar />
       </TopBar>
       <CanvasStage />
+      <HistoryPanel />
     </>
   );
 }

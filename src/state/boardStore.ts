@@ -600,12 +600,10 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const original = elements.find((element) => element.id === id);
       if (!original) return;
 
-      const rest = elements.filter((element) => element.id !== id);
       if (runs.length === 0) {
-        bump({
-          elements: rest,
-          selection: get().selection.filter((candidate) => candidate !== id),
-        });
+        // Erased completely: gone from the document, so gone for everyone.
+        deleteElements(board, [id]);
+        bump({ selection: get().selection.filter((candidate) => candidate !== id) });
         return;
       }
 
@@ -642,15 +640,9 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const element = elements.find((candidate) => candidate.id === editingId);
       const empty = element?.type === 'text' && (element.text ?? '').trim() === '';
       board.undoManager.stopCapturing();
-      bump({
-        editingId: null,
-        ...(empty
-          ? {
-              elements: elements.filter((candidate) => candidate.id !== editingId),
-              selection: [],
-            }
-          : {}),
-      });
+      // Removed from the document, not just this view, or everyone else keeps it.
+      if (empty) deleteElements(board, [editingId]);
+      bump({ editingId: null, ...(empty ? { selection: [] } : {}) });
     },
 
     setElementText: (id, text) => {

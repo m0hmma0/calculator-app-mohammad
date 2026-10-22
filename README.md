@@ -13,13 +13,13 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | Phase | What it adds                                 | State       |
 | ----- | -------------------------------------------- | ----------- |
 | **0** | Teardown, tooling, test harness, app shell   | ✅ done     |
-| 1     | Infinite canvas — pan, zoom, minimap         | not started |
-| 2     | Shapes, selection, transform handles         | not started |
-| 3     | Freehand, text, images, laser pointer        | not started |
-| 4     | Yjs document, per-user undo, offline, export | not started |
-| 5     | Google sign-in, folders, boards (D1)         | not started |
-| 6     | Image storage (R2)                           | not started |
-| 7     | Real-time collaboration (Durable Objects)    | not started |
+| **1** | Infinite canvas — pan, zoom, minimap         | ✅ done     |
+| **2** | Shapes, selection, transform handles         | ✅ done     |
+| **3** | Freehand, text, images, laser pointer        | ✅ done     |
+| **4** | Yjs document, per-user undo, offline, export | ✅ done     |
+| **5** | Google sign-in, folders, boards (D1)         | ✅ done     |
+| **6** | Image storage (R2)                           | built       |
+| **7** | Real-time collaboration (Durable Objects)    | built       |
 | 8     | Sharing, permissions, comments               | not started |
 | 9     | Presentation mode, workshop tools, embeds    | not started |
 | 10    | Accessibility, Arabic and RTL, polish        | not started |
@@ -60,6 +60,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run test:e2e
 ```
 src/
   canvas/     renderer, viewport maths, grid, theme colour cache
+  collab/     the room connection, presence, follow mode, version history
   geometry/   pure maths — rects, points, intersection, union
   api/        typed client for the Worker
   auth/       Firebase sign-in and the current token
@@ -78,7 +79,7 @@ src/
   ui/         React components: top bar, canvas stage, panels
   styles/     design tokens and global CSS
 shared/       types used by both the app and the Worker
-worker/       Cloudflare Worker: auth, API routes, and later the board rooms
+worker/       Cloudflare Worker: auth, API routes, and BoardRoom (one per board)
 migrations/   D1 schema
 tests/
   unit/       Vitest
@@ -118,6 +119,22 @@ Two things deliberately stay **out** of the shared document:
 Boards persist to IndexedDB, so the app keeps working with the network down. It has no
 service worker yet, so a _reload_ while offline will not load the app itself; that
 arrives with the rest of the offline work in Phase 11.
+
+## Collaboration
+
+Each board has a room: a Cloudflare Durable Object that holds the live document, every
+open socket, and — in its own SQLite storage — an append-only log of every change plus
+periodic snapshots. Browsers talk to it over one WebSocket (`shared/collab.ts` is the
+protocol). On every connect, the browser and the room swap state vectors and send each
+other whatever the other is missing, which is how offline work merges: there is no
+separate queue to replay.
+
+Presence — pointers, selections, the laser, cursor chat, who is presenting — goes
+through the same socket but is never stored. Version history is read straight from the
+room's log; restoring is a new change, so nothing after it is lost. Sockets use the
+hibernation API, so an idle board costs nothing and wakes on the next message.
+
+`/` opens cursor chat; clicking someone's avatar follows their view.
 
 ## Accounts and storage
 

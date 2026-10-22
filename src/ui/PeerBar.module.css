@@ -1,0 +1,138 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status[data-status='connected'] .dot {
+  background: var(--ok);
+}
+
+.status[data-status='reconnecting'] .dot,
+.status[data-status='connecting'] .dot {
+  background: var(--shape-3);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.status[data-status='offline'] .dot,
+.status[data-status='refused'] .dot {
+  background: var(--danger);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status .dot {
+    animation: none !important;
+  }
+}
+
+.stack {
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.stack > * + * {
+  margin-right: -6px;
+}
+
+.peer,
+.self {
+  position: relative;
+  display: inline-flex;
+  border: 0;
+  padding: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.self {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.peer[aria-pressed='true'] .avatar {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+
+.peer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid;
+  box-sizing: border-box;
+  object-fit: cover;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 650;
+  background: var(--surface-2);
+}
+
+.live {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  font-size: 9.5px;
+  white-space: nowrap;
+  color: var(--accent-ink);
+}
+
+.action {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.action[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

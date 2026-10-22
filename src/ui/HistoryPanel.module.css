@@ -1,0 +1,143 @@
+.panel {
+  position: fixed;
+  top: calc(var(--topbar-h) + 12px);
+  right: 12px;
+  z-index: 20;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--topbar-h) - 24px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.head button {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.scrubber {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scrubber input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.range {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.actions,
+.name {
+  display: flex;
+  gap: 6px;
+}
+
+.actions button,
+.name button {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.actions .primary {
+  flex: 1 1 auto;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.actions button:disabled,
+.name button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.name input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.checkpoints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkpoints button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.checkpoints button span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.checkpoints button[aria-current='true'] {
+  border-color: var(--accent);
+}

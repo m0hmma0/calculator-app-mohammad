@@ -29,5 +29,12 @@ migrations_dir = "migrations"
 binding = "FILES"
 bucket_name = "sabboura-files"
 
-# Phase 7 adds:
-#   [[durable_objects.bindings]]  one BoardRoom per board
+# One room per board: the live document, its sockets, and its history.
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "BoardRoom"
+
+# SQLite-backed, which is what the free plan offers and what the history log needs.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BoardRoom"]

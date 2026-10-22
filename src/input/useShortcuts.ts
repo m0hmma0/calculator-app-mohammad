@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { closeHistory, useHistory } from '@/collab/history';
+import { usePresence } from '@/collab/presence';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -48,6 +50,15 @@ export function useShortcuts(): void {
       if (store.editingId && event.code !== 'Escape') return;
       // The palette owns the keyboard while it is up.
       if (store.paletteOpen && event.code !== 'Escape') return;
+
+      // Looking at an old version: nothing edits it, and Escape puts the board back.
+      if (useHistory.getState().open) {
+        if (event.code === 'Escape') {
+          event.preventDefault();
+          closeHistory();
+        }
+        return;
+      }
 
       if (event.code === 'Space') {
         event.preventDefault(); // otherwise the page tries to scroll
@@ -135,9 +146,15 @@ export function useShortcuts(): void {
           store.setTool('select');
           return;
         case 'Slash':
-          if (!event.shiftKey) return;
           event.preventDefault();
-          store.toggleShortcuts();
+          if (event.shiftKey) {
+            store.toggleShortcuts();
+            return;
+          }
+          // Cursor chat, on a board others can see.
+          if (usePresence.getState().status === 'connected') {
+            usePresence.setState({ chatOpen: true, chat: '' });
+          }
           return;
         case 'Delete':
         case 'Backspace':
