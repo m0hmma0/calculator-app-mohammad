@@ -6,7 +6,7 @@
       "localStorage": [
         {
           "name": "sabboura:ui",
-          "value": "{\"minimap\": false, \"layers\": true, \"recentTimers\": []}"
+          "value": "{\"minimap\": false, \"layers\": true, \"pane\": true, \"bottomBar\": true, \"recentTimers\": []}"
         }
       ]
     },
@@ -15,7 +15,7 @@
       "localStorage": [
         {
           "name": "sabboura:ui",
-          "value": "{\"minimap\": false, \"layers\": true, \"recentTimers\": []}"
+          "value": "{\"minimap\": false, \"layers\": true, \"pane\": true, \"bottomBar\": true, \"recentTimers\": []}"
         }
       ]
     }

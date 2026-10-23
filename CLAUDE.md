@@ -122,11 +122,16 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **Tests that open one board in two windows as the same person** share that
   person's identity — vote budgets, `self.uid` — so use two accounts when the point is
   two people (see `twoWindows(..., true)` in `workshop.spec.ts`).
-- **The object list is off by default**, but the specs read the board through it, so
-  `playwright.config.ts` starts every test with `tests/e2e/prefs.json` (list on). A
+- **The object list and the side panel are off by default**, but the specs read the
+  board through them, so `playwright.config.ts` starts every test with
+  `tests/e2e/prefs.json` (both on). A
   test of a first visit uses `test.use({ storageState: { cookies: [], origins: [] } })`.
   The renderer panel is in the command palette (`command-dev-panel`), and the palette
   only answers once the board is on screen.
+- **Pen strokes are not selected when drawn**; a test that needs a stroke's size picks
+  it from the object list first.
+- **Pasted pictures are as tall as the screen at 58% zoom**, so at 100% they run off
+  screen; a test that grabs a picture's handles zooms to the selection first.
 - **Controlled checkboxes that wait for the server** do not change on click, so
   Playwright's `.check()` fails; tests click and wait for the result instead.
 - **An owner must never wait for the server to draw.** Boards open read-only until the

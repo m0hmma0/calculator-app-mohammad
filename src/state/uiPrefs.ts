@@ -8,6 +8,10 @@ interface UiPrefs {
   minimap: boolean;
   /** The list of everything on the board, in the inspector. */
   layers: boolean;
+  /** The side panel: style, size and arrangement of the selection. Opened by hand. */
+  pane: boolean;
+  /** The bottom bar showing all its buttons, rather than folded to one. */
+  bottomBar: boolean;
   /** Timer lengths used most recently, newest first, in seconds. */
   recentTimers: number[];
 }
@@ -16,12 +20,20 @@ const KEY = 'sabboura:ui';
 const MAX_RECENT_TIMERS = 4;
 
 function load(): UiPrefs {
-  const fallback: UiPrefs = { minimap: false, layers: false, recentTimers: [] };
+  const fallback: UiPrefs = {
+    minimap: false,
+    layers: false,
+    pane: false,
+    bottomBar: true,
+    recentTimers: [],
+  };
   try {
     const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<UiPrefs>;
     return {
       minimap: stored.minimap === true,
       layers: stored.layers === true,
+      pane: stored.pane === true,
+      bottomBar: stored.bottomBar !== false,
       recentTimers: Array.isArray(stored.recentTimers)
         ? stored.recentTimers
             .filter((seconds) => Number.isFinite(seconds) && seconds > 0)
@@ -45,6 +57,9 @@ useUiPrefs.subscribe((state) => {
 
 export const toggleMinimap = () => useUiPrefs.setState((state) => ({ minimap: !state.minimap }));
 export const toggleLayers = () => useUiPrefs.setState((state) => ({ layers: !state.layers }));
+export const togglePane = () => useUiPrefs.setState((state) => ({ pane: !state.pane }));
+export const toggleBottomBar = () =>
+  useUiPrefs.setState((state) => ({ bottomBar: !state.bottomBar }));
 
 /** Remembers a timer length, so the next one can be started with one click. */
 export function rememberTimer(seconds: number): void {

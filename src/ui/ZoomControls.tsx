@@ -2,7 +2,8 @@ import { formatZoom } from '@/canvas/viewport';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './ZoomControls.module.css';
 
-export function ZoomControls() {
+/** `embedded`: part of the bottom bar, without a frame of its own. */
+export function ZoomControls({ embedded = false }: { embedded?: boolean }) {
   // Selecting the number, not the viewport object: panning must not re-render this.
   const zoom = useBoardStore((state) => state.viewport.zoom);
   const zoomStep = useBoardStore((state) => state.zoomStep);
@@ -10,7 +11,11 @@ export function ZoomControls() {
   const zoomToFit = useBoardStore((state) => state.zoomToFit);
 
   return (
-    <div className={styles.controls} role="group" aria-label="Zoom">
+    <div
+      className={embedded ? `${styles.controls} ${styles.embedded}` : styles.controls}
+      role="group"
+      aria-label="Zoom"
+    >
       <button
         type="button"
         className={styles.button}

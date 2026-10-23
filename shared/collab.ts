@@ -120,6 +120,8 @@ export interface PresenceState {
   page?: string;
   /** Presenting: the frame on screen, which followers fit to their own screens. */
   present?: { frame: string } | null;
+  /** The session whose view this browser is following — chosen, or a presenter's. */
+  following?: string | null;
 }
 
 export interface HistoryCheckpoint {

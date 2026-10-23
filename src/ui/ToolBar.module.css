@@ -35,3 +35,29 @@
   background: var(--accent);
   color: var(--on-accent);
 }
+
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    order: 99;
+    flex: 1 0 100%;
+    justify-content: center;
+  }
+
+  .tool {
+    width: 42px;
+    height: 36px;
+  }
+}

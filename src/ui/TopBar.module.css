@@ -80,3 +80,29 @@
   background: var(--surface-2);
   color: var(--text);
 }
+
+/*
+ * A phone: the bar wraps, and the tools take a row of their own (see ToolBar), so
+ * nothing is squeezed into a 30-pixel target.
+ */
+@media (max-width: 640px) {
+  .bar {
+    height: auto;
+    min-height: var(--topbar-h);
+    flex-wrap: wrap;
+    row-gap: 6px;
+    column-gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  /* The board's name is in the browser tab; the bar keeps its room for controls. */
+  .divider,
+  .boardName,
+  .boardNameButton {
+    display: none;
+  }
+}

@@ -41,6 +41,7 @@ function currentPresence(): PresenceState {
     chat: presence.chatOpen || presence.chat ? presence.chat : null,
     spotlight: presence.spotlight,
     present: presence.present,
+    following: leaderSession(),
     page: board.page,
   };
 }
@@ -82,7 +83,15 @@ export function startPresence(room: RoomConnection): PresenceHandle {
       schedule();
     }
   });
+  let lastLeader = leaderSession();
   const stopPresence = usePresence.subscribe((state, previous) => {
+    // Whom this browser follows changes as presenters start and stop, too.
+    const leader = leaderSession();
+    if (leader !== lastLeader) {
+      lastLeader = leader;
+      schedule();
+      return;
+    }
     if (
       state.cursor !== previous.cursor ||
       state.chat !== previous.chat ||
@@ -148,13 +157,13 @@ function startFollowing(): () => void {
       board.setViewport(fitted);
       return;
     }
-    const centreX = view.x + view.width / (2 * view.zoom);
-    const centreY = view.y + view.height / (2 * view.zoom);
-    const next: Viewport = {
-      zoom: view.zoom,
-      x: centreX - board.stageSize.width / (2 * view.zoom),
-      y: centreY - board.stageSize.height / (2 * view.zoom),
-    };
+    // Everything the leader can see fits on this screen, whatever its size or shape:
+    // a phone following a desktop zooms out until the desktop's whole view is in it.
+    const next: Viewport = fitToRect(
+      { x: view.x, y: view.y, w: view.width / view.zoom, h: view.height / view.zoom },
+      board.stageSize,
+      0,
+    );
     applied = next;
     board.setViewport(next);
   };

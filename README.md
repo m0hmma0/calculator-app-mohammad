@@ -153,13 +153,22 @@ every sharing change.
 
 ## Workshop tools and rich content
 
-The board's top bar holds only the everyday tools (select, hand, pen, eraser, laser)
-and two menus. **Insert** has shapes, lines and arrows, sticky notes, text, frames,
-tables, stamps (the emoji becomes the pointer; each click puts one down; Escape puts it
-away), Import (pictures, SVG, PDF), and the workshop: present, timer, dot voting, and
-the minimap (also `M`). **Tools** has version history, comments, the library and the
-object list. The minimap and the object list are off until asked for, remembered per
-browser in `sabboura:ui`.
+The board's top bar holds undo and redo, the everyday tools (select, hand, pen,
+eraser, laser) and two menus. **Insert** (orange) has shapes, lines and arrows, sticky
+notes, ABC Text, frames, tables, stamps (the emoji becomes the pointer; each click puts
+one down; Escape puts it away), Import (pictures, SVG, PDF), and the workshop: present,
+timer, dot voting, and the minimap (also `M`). **Tools** has version history,
+comments, the library and the object list. One bar at the bottom holds pages, the side
+panel, the minimap and zoom, and folds down to a single button. The side panel opens
+only from that bar and closes with its ×. All of these choices are remembered per
+browser in `sabboura:ui`. On a phone the tools take their own row and menus open as
+sheets above the bottom bar.
+
+Following someone fits their whole view on your screen, whatever its size, and a thin
+frame in their colour says you are following. Clicking an avatar opens a card: whether
+they are following you (an eye on their avatar says the same), follow or stop, and
+"Show their screen edges", which outlines their screen on your board so you can keep
+within it while presenting.
 
 - **Pages.** A board has pages along the bottom; each keeps its own content and its
   own camera. Elements carry a `page` field — absent means the first page, so every

@@ -3,7 +3,8 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  bottom: 12px;
+  /* As tall as what it holds, never taller than the board. */
+  max-height: calc(100% - 24px);
   width: 226px;
   display: flex;
   flex-direction: column;
@@ -219,4 +220,38 @@
 .embedLink {
   font-size: 12px;
   color: var(--accent-ink);
+}
+
+.close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* On a phone the panel is a sheet above the bottom bar, not a column beside the board. */
+@media (max-width: 640px) {
+  .panel {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 64px;
+    width: auto;
+    max-height: 46dvh;
+    overflow-y: auto;
+  }
 }

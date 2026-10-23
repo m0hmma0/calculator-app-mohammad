@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { copiesOf } from '@/model/copies';
 import { createElement, type BoardElement } from '@/model/element';
-import { initialImageBox } from '@/media/images';
+import { initialImageBox, screenFitImageBox } from '@/media/images';
 import { storeImage } from '@/media/storeImage';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 
@@ -61,7 +61,7 @@ async function importImage(file: File) {
   const image = await storeImage(file);
   const element = createElement({
     type: 'image',
-    box: { x: 0, y: 0, ...initialImageBox(image) },
+    box: { x: 0, y: 0, ...screenFitImageBox(image, useBoardStore.getState().stageSize.height) },
     z: 'a0',
   });
   element.image = image;

@@ -22,6 +22,7 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   const cursor = usePresence((state) => state.cursor);
   const following = usePresence((state) => state.following);
   const dismissed = usePresence((state) => state.dismissedSpotlight);
+  const outlined = usePresence((state) => state.outlined);
   const viewport = useBoardStore((state) => state.viewport);
   const elements = useBoardStore((state) => state.elements);
   const page = useBoardStore((state) => state.page);
@@ -170,29 +171,41 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
         />
       ) : null}
 
+      {/* The edges of other people's screens, so whoever is presenting can keep
+          what they show inside what everyone can see. */}
+      {list
+        .filter((peer) => outlined[peer.session] && peer.state?.view)
+        .map((peer) => {
+          const view = peer.state!.view;
+          const topLeft = boardToScreen(viewport, { x: view.x, y: view.y });
+          const scale = viewport.zoom / view.zoom;
+          return (
+            <div
+              key={`outline:${peer.session}`}
+              className={styles.outline}
+              style={{
+                left: topLeft.x,
+                top: topLeft.y,
+                width: view.width * scale,
+                height: view.height * scale,
+                borderColor: peer.user.color,
+              }}
+              data-testid={`peer-outline-${peer.session}`}
+            >
+              <span style={{ background: peer.user.color }}>{peer.user.name}'s screen</span>
+            </div>
+          );
+        })}
+
+      {/* Following someone: a thin frame in their colour says so, and takes no room. */}
       {leader ? (
         <div
-          className={styles.following}
-          data-testid="following-banner"
+          className={styles.followingFrame}
           style={{ borderColor: leader.user.color }}
-        >
-          <span>
-            Following <strong>{leader.user.name}</strong>
-            {leader.state?.spotlight ? ' (presenting)' : ''}
-          </span>
-          <button
-            type="button"
-            data-testid="stop-following"
-            onClick={() =>
-              usePresence.setState({
-                following: null,
-                dismissedSpotlight: leader.state?.spotlight ? leader.session : dismissed,
-              })
-            }
-          >
-            Stop
-          </button>
-        </div>
+          data-testid="following-frame"
+          data-leader={leader.session}
+          aria-label={`Following ${leader.user.name}`}
+        />
       ) : null}
     </div>
   );

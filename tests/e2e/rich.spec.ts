@@ -263,16 +263,72 @@ test('Import takes a picture from the computer as well', async ({ page }) => {
   await expect(page.getByTestId('import-status')).toContainText('notes.txt is not a picture');
 });
 
+test('undo and redo are buttons as well as keys', async ({ page }) => {
+  await expect(page.getByTestId('undo')).toBeDisabled();
+  await drag(page, 'KeyR', [300, 300], [420, 380]);
+  await expect(layerItems(page)).toHaveCount(1);
+  await page.getByTestId('undo').click();
+  await expect(layerItems(page)).toHaveCount(0);
+  await expect(page.getByTestId('redo')).toBeEnabled();
+  await page.getByTestId('redo').click();
+  await expect(layerItems(page)).toHaveCount(1);
+  await expect(page.getByTestId('redo')).toBeDisabled();
+});
+
+test('the pen is the pointer while writing', async ({ page }) => {
+  await page.keyboard.press('KeyP');
+  await page.mouse.move(400, 350);
+  await expect(page.getByTestId('stage')).toHaveAttribute('data-cursor', 'pen');
+});
+
+test('the bottom bar folds down to one button and back', async ({ page }) => {
+  const bar = page.getByTestId('bottom-bar');
+  await expect(bar.getByTestId('zoom-readout')).toBeVisible();
+  await expect(bar.getByTestId('page-tab-0')).toBeVisible();
+  await page.getByTestId('bottom-bar-toggle').click();
+  await expect(page.getByTestId('zoom-readout')).toHaveCount(0);
+  await expect(page.getByTestId('page-bar')).toHaveCount(0);
+  // Remembered.
+  await page.reload();
+  await expect(page.getByTestId('zoom-readout')).toHaveCount(0);
+  await page.getByTestId('bottom-bar-toggle').click();
+  await expect(page.getByTestId('zoom-readout')).toBeVisible();
+});
+
+test('Insert is orange, and so is its ABC Text', async ({ page }) => {
+  const insert = page.getByTestId('insert-menu');
+  const background = await insert.evaluate((node) => getComputedStyle(node).backgroundColor);
+  const orange = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--insert');
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+  expect(background).toBe(orange);
+  await insert.click();
+  await expect(page.getByTestId('insert-tool-text')).toContainText('ABC Text');
+});
+
 test.describe('a fresh browser', () => {
   // No stored preferences: what a first-time visitor sees.
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('keeps the object list and the minimap hidden until asked for', async ({ page }) => {
+  test('keeps the side panel, the object list and the minimap away until asked for', async ({
+    page,
+  }) => {
     await drag(page, 'KeyR', [300, 300], [420, 380]);
+    // Drawing and selecting do not open the side panel.
+    await expect(page.getByTestId('inspector')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('layers')).toHaveCount(0);
     await expect(page.getByTestId('minimap')).toHaveCount(0);
-    // Nothing selected and no list: no side panel at all.
+
+    // The panel opens from the bottom bar and closes with its own ×.
+    await page.getByTestId('toggle-pane').click();
+    await expect(page.getByTestId('inspector')).toBeVisible();
+    await page.getByTestId('close-pane').click();
     await expect(page.getByTestId('inspector')).toHaveCount(0);
     // Nor the app's name, nor the renderer button, in the board's top bar.
     await expect(page.getByText('Sabboura', { exact: true })).toHaveCount(0);
@@ -283,9 +339,10 @@ test.describe('a fresh browser', () => {
     await expect(page.getByTestId('minimap')).toBeVisible();
     await page.getByTestId('tools-menu').click();
     await page.getByTestId('toggle-layers').click();
+    await page.getByTestId('toggle-pane').click();
     await expect(layerItems(page)).toHaveText(['rect']);
 
-    // Both choices are remembered, and M hides the minimap again.
+    // The choices are remembered, and M hides the minimap again.
     await page.reload();
     await expect(page.getByTestId('minimap')).toBeVisible();
     await expect(layerItems(page)).toHaveText(['rect']);

@@ -6,7 +6,7 @@ import styles from './PageBar.module.css';
  * The board's pages. Everyone sees the same pages; which one is in view is each
  * person's own, and each page remembers its own camera.
  */
-export function PageBar() {
+export function PageBar({ embedded = false }: { embedded?: boolean }) {
   const pages = useBoardStore((state) => state.pages);
   const page = useBoardStore((state) => state.page);
   const setPage = useBoardStore((state) => state.setPage);
@@ -19,7 +19,12 @@ export function PageBar() {
   if (pages.length < 2 && !editable) return null;
 
   return (
-    <nav className={styles.bar} data-hud aria-label="Pages" data-testid="page-bar">
+    <nav
+      className={embedded ? `${styles.bar} ${styles.embedded}` : styles.bar}
+      data-hud
+      aria-label="Pages"
+      data-testid="page-bar"
+    >
       {pages.map((entry, index) => (
         <span
           key={entry.id}

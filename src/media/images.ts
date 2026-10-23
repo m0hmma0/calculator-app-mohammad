@@ -195,6 +195,23 @@ export function imageBlobsFrom(transfer: DataTransfer | null): Blob[] {
   return blobs;
 }
 
+/** The zoom at which a newly placed picture exactly fills the screen's height. */
+export const PICTURE_FIT_ZOOM = 0.58;
+
+/**
+ * The size a pasted, dropped or imported picture starts at: as tall as the screen
+ * would be at 58% zoom, keeping its shape. Zoomed out to 58%, it fills the screen
+ * top to bottom.
+ */
+export function screenFitImageBox(
+  image: { naturalWidth: number; naturalHeight: number },
+  stageHeight: number,
+): { w: number; h: number } {
+  const h = Math.max(1, Math.round(stageHeight / PICTURE_FIT_ZOOM));
+  const ratio = image.naturalWidth / (image.naturalHeight || 1);
+  return { w: Math.max(1, Math.round(h * ratio)), h };
+}
+
 /** A sensible starting size on the board: big enough to see, not overwhelming. */
 export function initialImageBox(
   image: { naturalWidth: number; naturalHeight: number },

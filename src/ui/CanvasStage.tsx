@@ -22,7 +22,7 @@ import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
 import { CommentPins } from './CommentPins';
 import { DevPanel } from './DevPanel';
 import { EmbedLayer } from './EmbedLayer';
-import { PageBar } from './PageBar';
+import { BottomBar } from './BottomBar';
 import { TableCellEditor } from './TableCellEditor';
 import { PeersLayer } from './PeersLayer';
 import { Inspector } from './Inspector';
@@ -34,7 +34,6 @@ import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
 import { WorkshopLayer } from './WorkshopLayer';
 import { ToolOptions } from './ToolOptions';
-import { ZoomControls } from './ZoomControls';
 import styles from './CanvasStage.module.css';
 
 const STATS_INTERVAL_MS = 250;
@@ -255,8 +254,7 @@ export function CanvasStage() {
 
       <div className={styles.hud} data-hud>
         {minimap ? <Minimap /> : null}
-        <PageBar />
-        <ZoomControls />
+        <BottomBar />
       </div>
 
       <EmbedLayer />

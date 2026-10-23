@@ -48,3 +48,17 @@
   cursor: pointer;
   white-space: nowrap;
 }
+
+@media (max-width: 640px) {
+  .share {
+    padding: 7px 12px;
+  }
+
+  .back {
+    padding: 6px 10px;
+  }
+
+  .backLabel {
+    display: none;
+  }
+}

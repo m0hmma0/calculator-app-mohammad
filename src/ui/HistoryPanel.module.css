@@ -141,3 +141,15 @@
 .checkpoints button[aria-current='true'] {
   border-color: var(--accent);
 }
+
+/* On a phone the top bar wraps to two rows; the panel sits over the bottom instead. */
+@media (max-width: 640px) {
+  .panel {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 64px;
+    width: auto;
+    max-height: 62dvh;
+  }
+}

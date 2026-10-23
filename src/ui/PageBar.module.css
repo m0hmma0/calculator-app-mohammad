@@ -61,3 +61,11 @@
 .remove:hover {
   color: var(--accent-ink);
 }
+
+.embedded {
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  max-width: min(420px, 40vw);
+}

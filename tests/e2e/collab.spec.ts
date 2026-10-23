@@ -402,8 +402,18 @@ test.describe('two windows on one board', () => {
   test('following someone keeps your view on theirs, until you move it', async ({ browser }) => {
     const { a, b, close } = await twoWindows(browser, 'follow');
 
+    // B opens A's card and follows; a thin frame in A's colour says so, nothing more.
     await b.getByTestId('peer-avatar').first().click();
-    await expect(b.getByTestId('following-banner')).toBeVisible();
+    await expect(b.getByTestId('peer-follow-status')).toHaveText('Not following anyone');
+    await b.getByTestId('peer-follow').click();
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+    await expect(b.getByText(/^Following /)).toHaveCount(0);
+
+    // A can tell: an eye on B's avatar, and B's card says so.
+    await expect(a.getByTestId('follows-you')).toBeVisible();
+    await a.getByTestId('peer-avatar').first().click();
+    await expect(a.getByTestId('peer-follow-status')).toHaveText('Following you');
+    await a.keyboard.press('Escape');
 
     // A zooms in; B's view follows.
     await a.mouse.move(500, 400);
@@ -412,15 +422,88 @@ test.describe('two windows on one board', () => {
     expect(zoomA).not.toBe('100%');
     await expect(b.getByTestId('zoom-readout')).toHaveText(zoomA);
 
-    // B takes the wheel: following stops.
+    // B takes the wheel: following stops, and A sees that too.
+    await b.keyboard.press('Escape');
     await b.mouse.move(500, 400);
     await b.mouse.wheel(0, 200);
-    await expect(b.getByTestId('following-banner')).toHaveCount(0);
+    await expect(b.getByTestId('following-frame')).toHaveCount(0);
+    await expect(a.getByTestId('follows-you')).toHaveCount(0);
 
-    // Presenting brings everyone along without them having to ask.
+    // Presenting brings everyone along without them having to ask, and counts them.
     await a.getByTestId('spotlight').click();
-    await expect(b.getByTestId('following-banner')).toContainText('presenting');
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+    await expect(a.getByTestId('follower-count')).toHaveText('1/1 following');
     await close();
+  });
+
+  test('stopping following a presenter lasts only until they present again', async ({
+    browser,
+  }) => {
+    const { a, b, close } = await twoWindows(browser, 'represent');
+    await a.getByTestId('spotlight').click();
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+
+    // B stops following from A's card.
+    await b.getByTestId('peer-avatar').first().click();
+    await b.getByTestId('peer-follow').click();
+    await expect(b.getByTestId('following-frame')).toHaveCount(0);
+    await expect(a.getByTestId('follower-count')).toHaveText('0/1 following');
+
+    // A stops, then presents again: B is brought along once more.
+    await a.getByTestId('spotlight').click();
+    await a.getByTestId('spotlight').click();
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+    await expect(a.getByTestId('follower-count')).toHaveText('1/1 following');
+    await close();
+  });
+
+  test('a phone following a desktop sees all of its view, and its edges can be shown', async ({
+    browser,
+  }) => {
+    const account = newAccount('phone');
+    const desk = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const phone = await browser.newContext({ viewport: { width: 390, height: 700 } });
+    const a = await desk.newPage();
+    const b = await phone.newPage();
+    await signIn(a, account);
+    const boardId = await createBoard(a);
+    await signIn(b, account);
+    await b.goto(`/b/${boardId}`);
+    for (const page of [a, b]) {
+      await expect(page.getByTestId('connection-status')).toHaveAttribute(
+        'data-status',
+        'connected',
+      );
+    }
+
+    // Two marks near opposite corners of the desktop's screen, in different colours.
+    await drawRect(a, [40, 110], [110, 160]);
+    await drawRect(a, [900, 580], [970, 630]);
+    await a.getByRole('button', { name: 'Fill var(--shape-4)' }).click();
+    await a.keyboard.press('Escape');
+    await expect(layers(b)).toHaveCount(2);
+
+    await a.getByTestId('spotlight').click();
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+    // Both corners are on the phone's screen: it shows the whole desktop view.
+    await expect.poll(() => colourFraction(b, '#5b6be8')).toBeGreaterThan(0.0004);
+    await expect.poll(() => colourFraction(b, '#c2456b')).toBeGreaterThan(0.0004);
+
+    // The presenter outlines the phone's screen on their board.
+    await a.getByTestId('peer-avatar').first().click();
+    await expect(a.getByTestId('peer-follow-status')).toHaveText('Following you');
+    await a.getByTestId('peer-outline').click();
+    const outline = a.locator('[data-testid^="peer-outline-"]');
+    await expect(outline).toBeVisible();
+    const box = (await outline.boundingBox())!;
+    const phoneStage = (await b.getByTestId('stage').boundingBox())!;
+    // The outline has the phone screen's shape.
+    expect(box.width / box.height).toBeCloseTo(phoneStage.width / phoneStage.height, 1);
+    await a.getByTestId('peer-outline').click();
+    await expect(outline).toHaveCount(0);
+
+    await desk.close();
+    await phone.close();
   });
 
   test('cursor chat: press /, type, and it appears by your pointer for everyone', async ({

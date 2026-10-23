@@ -124,6 +124,16 @@ function BoardView({ boardId }: { boardId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId]);
 
+  // The board's name in the browser tab — and, on a phone, the only place it shows.
+  const title = record?.title ?? sharedTitle;
+  useEffect(() => {
+    if (!title) return;
+    document.title = `${title} · Sabboura`;
+    return () => {
+      document.title = 'Sabboura Whiteboard';
+    };
+  }, [title]);
+
   const rename = () => {
     if (!record) return;
     const title = window.prompt('Rename board', record.title);
@@ -165,8 +175,13 @@ function BoardView({ boardId }: { boardId: string }) {
         onRenameBoard={owner ? rename : undefined}
         leading={
           back ? (
-            <Link to={back} className={styles.back} data-testid="back-to-boards">
-              ← Boards
+            <Link
+              to={back}
+              className={styles.back}
+              aria-label="Back to boards"
+              data-testid="back-to-boards"
+            >
+              ← <span className={styles.backLabel}>Boards</span>
             </Link>
           ) : null
         }

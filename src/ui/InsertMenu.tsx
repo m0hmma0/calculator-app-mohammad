@@ -100,7 +100,7 @@ export function InsertMenu() {
     <div className={styles.wrap} ref={ref}>
       <button
         type="button"
-        className={styles.trigger}
+        className={`${styles.trigger} ${styles.insert}`}
         aria-expanded={open}
         aria-haspopup="menu"
         data-active={active || undefined}
@@ -185,12 +185,12 @@ export function InsertMenu() {
                     type="button"
                     role="menuitemradio"
                     aria-checked={tool === id}
-                    className={styles.item}
+                    className={id === 'text' ? `${styles.item} ${styles.text}` : styles.item}
                     data-testid={`insert-tool-${id}`}
                     onClick={run(() => setTool(id))}
                   >
                     <ToolIcon id={id} />
-                    <span>{spec.label}</span>
+                    <span>{id === 'text' ? 'ABC Text' : spec.label}</span>
                     <kbd>{spec.shortcut}</kbd>
                   </button>
                 );

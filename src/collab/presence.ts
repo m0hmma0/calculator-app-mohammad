@@ -26,6 +26,8 @@ interface PresenceStore {
   dismissedSpotlight: string | null;
   /** This person is presenting. */
   spotlight: boolean;
+  /** Sessions whose screen edges are outlined on this board, for presenting within them. */
+  outlined: Record<string, true>;
   /** The frame this person is presenting, in presentation mode. */
   present: { frame: string } | null;
 
@@ -47,6 +49,7 @@ const initial = {
   following: null,
   dismissedSpotlight: null,
   spotlight: false,
+  outlined: {},
   present: null,
   chatOpen: false,
   chat: '',
@@ -121,6 +124,12 @@ export function applyServerMessage(message: ServerMessage): void {
             laser,
           },
         },
+        // Saying "stop following" holds for that presentation only: once they stop
+        // presenting, their next presentation brings this person along again.
+        dismissedSpotlight:
+          current.dismissedSpotlight === message.session && !message.state.spotlight
+            ? null
+            : current.dismissedSpotlight,
       }));
       return;
     }
@@ -141,4 +150,19 @@ export function presenter(store: Pick<PresenceStore, 'peers' | 'dismissedSpotlig
       (peer) => peer.state?.spotlight && peer.session !== store.dismissedSpotlight,
     ) ?? null
   );
+}
+
+/** Shows or hides the outline of someone's screen on this board. */
+export function toggleOutline(session: string): void {
+  usePresence.setState((current) => {
+    const outlined = { ...current.outlined };
+    if (outlined[session]) delete outlined[session];
+    else outlined[session] = true;
+    return { outlined };
+  });
+}
+
+/** True when this peer's view is following this browser. */
+export function followsMe(peer: Peer, mySession: string | null): boolean {
+  return mySession !== null && peer.state?.following === mySession;
 }

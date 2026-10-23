@@ -54,6 +54,11 @@ const arc = (fromX: number, y: number, count = 24, amplitude = 70): Array<[numbe
   ]);
 
 const layerNames = (page: Page) => page.getByTestId('layers').locator('li').allInnerTexts();
+/** Pen strokes are not selected when drawn; the object list picks the newest one. */
+async function selectNewest(page: Page) {
+  await page.getByTestId('layers').locator('button').first().click();
+}
+
 const geo = async (page: Page) => ({
   x: Number(await page.getByTestId('geo-x').innerText()),
   y: Number(await page.getByTestId('geo-y').innerText()),
@@ -97,6 +102,9 @@ test.describe('freehand ink', () => {
     await drawStroke(page, arc(300, 400));
 
     expect(await layerNames(page)).toEqual(['path']);
+    // Lifting the pen leaves nothing selected: the next stroke just carries on.
+    await expect(page.getByTestId('geo-x')).toHaveCount(0);
+    await selectNewest(page);
     const box = await geo(page);
     expect(box.w).toBeGreaterThan(200);
     expect(box.h).toBeGreaterThan(50);
@@ -106,6 +114,7 @@ test.describe('freehand ink', () => {
   // Checklist item 2 — the gate.
   test('holding shift mid-stroke straightens it', async ({ page }) => {
     await drawStroke(page, arc(300, 400));
+    await selectNewest(page);
     const freehand = await geo(page);
 
     await page.keyboard.press('ControlOrMeta+KeyA');
@@ -113,6 +122,7 @@ test.describe('freehand ink', () => {
 
     // Identical motion, but with Shift held from the first move onwards.
     await drawStroke(page, arc(300, 400), ['Shift']);
+    await selectNewest(page);
     const straightened = await geo(page);
 
     expect(straightened.w).toBeGreaterThan(180);
@@ -132,6 +142,7 @@ test.describe('freehand ink', () => {
     await page.mouse.up();
 
     // The trailing arc is back to freehand, so the stroke is tall again.
+    await selectNewest(page);
     expect((await geo(page)).h).toBeGreaterThan(30);
   });
 });
@@ -312,6 +323,22 @@ test.describe('images', () => {
     expect(await layerNames(page)).toEqual(['image']);
     const box = await geo(page);
     expect(box.w / box.h).toBeCloseTo(4 / 3, 1);
+    // As tall as the screen would be at 58% zoom: zoomed out there, it fills it.
+    const stage = (await page.getByTestId('stage').boundingBox())!;
+    expect(box.h).toBeCloseTo(stage.height / 0.58, -1);
+  });
+
+  test('the eraser passes over a picture and leaves it alone', async ({ page }) => {
+    await pasteImage(page, 400, 300);
+    const stage = (await page.getByTestId('stage').boundingBox())!;
+    await page.keyboard.press('KeyE');
+    await page.mouse.move(stage.x + stage.width / 2 - 80, stage.y + stage.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(stage.x + stage.width / 2 + 80, stage.y + stage.height / 2, {
+      steps: 10,
+    });
+    await page.mouse.up();
+    expect(await layerNames(page)).toEqual(['image']);
   });
 
   // Checklist item 10 — the gate.
@@ -321,13 +348,19 @@ test.describe('images', () => {
 
     const start = await geo(page);
     const ratio = start.w / start.h;
+    // A pasted picture is taller than the screen at 100%; bring all of it into view.
+    await page.keyboard.press('Shift+Digit2');
     const origin = (await page.getByTestId('stage').boundingBox())!;
-    const corner = { x: origin.x + start.x + start.w, y: origin.y + start.y + start.h };
+    // Zoom to selection fits it with a 64px margin, centred.
+    const zoom = Math.min((origin.width - 128) / start.w, (origin.height - 128) / start.h);
+    const centre = { x: origin.x + origin.width / 2, y: origin.y + origin.height / 2 };
+    const topLeft = { x: centre.x - (start.w * zoom) / 2, y: centre.y - (start.h * zoom) / 2 };
+    const corner = { x: topLeft.x + start.w * zoom, y: topLeft.y + start.h * zoom };
 
     // No modifier: the ratio holds even though the drag is mostly horizontal.
     await page.mouse.move(corner.x, corner.y);
     await page.mouse.down();
-    await page.mouse.move(corner.x + 160, corner.y + 10, { steps: 8 });
+    await page.mouse.move(corner.x + 60, corner.y + 4, { steps: 8 });
     await page.mouse.up();
 
     const locked = await geo(page);
@@ -335,11 +368,11 @@ test.describe('images', () => {
     expect(locked.w / locked.h).toBeCloseTo(ratio, 1);
 
     // With Shift the ratio is released — the reverse of how shapes behave.
-    const nextCorner = { x: origin.x + locked.x + locked.w, y: origin.y + locked.y + locked.h };
+    const nextCorner = { x: topLeft.x + locked.w * zoom, y: topLeft.y + locked.h * zoom };
     await page.keyboard.down('Shift');
     await page.mouse.move(nextCorner.x, nextCorner.y);
     await page.mouse.down();
-    await page.mouse.move(nextCorner.x + 200, nextCorner.y + 4, { steps: 8 });
+    await page.mouse.move(nextCorner.x + 240, nextCorner.y + 2, { steps: 8 });
     await page.mouse.up();
     await page.keyboard.up('Shift');
 

@@ -246,3 +246,73 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Insert is the one orange button: where everything new comes from. */
+.insert {
+  border-color: var(--insert);
+  background: var(--insert);
+  color: #fff;
+  font-weight: 600;
+}
+
+.insert:hover,
+.insert[aria-expanded='true'] {
+  border-color: var(--insert-hover);
+  background: var(--insert-hover);
+  color: #fff;
+}
+
+.insert[data-active] {
+  border-color: var(--insert-hover);
+  background: var(--insert);
+  color: #fff;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--insert);
+}
+
+.item.text,
+.item.text:hover {
+  color: var(--insert-ink);
+  font-weight: 600;
+}
+
+/* On a phone a menu is a sheet over the bottom of the screen, within thumb's reach. */
+@media (max-width: 640px) {
+  .menu {
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 64px;
+    width: auto;
+    max-height: 68dvh;
+    padding: 8px;
+  }
+
+  .grid button {
+    height: 42px;
+  }
+
+  .item {
+    padding: 10px 8px;
+    font-size: 14px;
+  }
+
+  .timer input {
+    width: 54px;
+    font-size: 15px;
+  }
+
+  .trigger {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+
+  .status {
+    position: fixed;
+    top: auto;
+    right: 8px;
+    bottom: 64px;
+  }
+}

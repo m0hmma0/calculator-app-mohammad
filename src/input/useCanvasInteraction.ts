@@ -180,6 +180,16 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     const board = (event: { clientX: number; clientY: number }, vp?: Viewport): Point =>
       screenToBoard(vp ?? useBoardStore.getState().viewport, local(event));
 
+    /**
+     * Every position the pointer passed through since the last event, not just the
+     * last — the browser batches them at frame rate, and the laser is only as smooth
+     * as the samples it is drawn through.
+     */
+    const samplesOf = (event: PointerEvent): Point[] => {
+      const batch = event.getCoalescedEvents?.() ?? [];
+      return (batch.length > 0 ? batch : [event]).map((each) => board(each));
+    };
+
     const setCursor = (value: string) => {
       if (host.dataset.cursor !== value) host.dataset.cursor = value;
     };
@@ -289,14 +299,17 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const store = useBoardStore.getState();
       const radius = ERASER_RADIUS / store.viewport.zoom;
 
+      // Pictures are never erased: rubbing out a mark on a photo must not delete the photo.
+      const erasable = store.elements.filter((element) => element.type !== 'image');
+
       if (store.eraserMode === 'object') {
-        const target = elementAt(store.elements, point, radius);
+        const target = elementAt(erasable, point, radius);
         if (target) store.removeElements([target.parentId ?? target.id]);
         return;
       }
 
       // Stroke mode cuts ink where the eraser passes and keeps what survives.
-      for (const element of store.elements) {
+      for (const element of erasable) {
         if (element.locked || element.hidden) continue;
 
         if (element.type !== 'path') {
@@ -486,6 +499,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (tool === 'hand') return setCursor('grab');
       if (isShapeTool(tool)) return setCursor('crosshair');
       if (tool === 'stamp') return setCursor('stamp');
+      if (tool === 'pen') return setCursor('pen');
       if (!lastClient) return setCursor('default');
 
       const point = board(lastClient);
@@ -523,7 +537,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       if (drag.kind === 'none') {
         const tool = effectiveTool(useBoardStore.getState());
-        if (tool === 'laser') addLaserPoint(board(event), false);
+        if (tool === 'laser') for (const sample of samplesOf(event)) addLaserPoint(sample, false);
         updateHoverCursor();
         return;
       }
@@ -555,7 +569,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         }
 
         case 'laser': {
-          addLaserPoint(point, true);
+          for (const sample of samplesOf(event)) addLaserPoint(sample, true);
           break;
         }
 
@@ -736,6 +750,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         if (simplified.length >= 2 || drag.points.length >= 2) {
           const element = inkDraft(simplified.length >= 2 ? simplified : drag.points);
           store.addElement(element);
+          // Writing is writing: the stroke is not selected, so the next one starts clean.
+          store.clearSelection();
         }
       }
 

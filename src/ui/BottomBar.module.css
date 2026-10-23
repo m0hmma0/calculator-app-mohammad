@@ -1,0 +1,44 @@
+.bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+}
+
+.button {
+  appearance: none;
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  height: 28px;
+  min-width: 28px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.separator {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 3px;
+}

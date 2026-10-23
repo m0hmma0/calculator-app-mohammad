@@ -7,7 +7,7 @@ import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
-import { useUiPrefs } from '@/state/uiPrefs';
+import { togglePane, useUiPrefs } from '@/state/uiPrefs';
 import styles from './Inspector.module.css';
 
 const FILLS = [
@@ -46,6 +46,7 @@ export function Inspector() {
   const historyOpen = useHistory((state) => state.open);
   const editable = useBoardAccess(selectCanEdit);
   const showLayers = useUiPrefs((state) => state.layers);
+  const open = useUiPrefs((state) => state.pane);
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
   const selectOnly = useBoardStore((state) => state.selectOnly);
@@ -77,12 +78,21 @@ export function Inspector() {
 
   // The history panel takes this place, and the inspector describes the live board.
   // Nothing to adjust for someone who can only look.
-  if (historyOpen || !editable) return null;
-  // With the object list switched off, an empty selection leaves nothing to show.
-  if (!first && !showLayers) return null;
+  // It opens only when asked for, from the bottom bar, and closes with its ×.
+  if (historyOpen || !editable || !open) return null;
 
   return (
     <aside className={styles.panel} data-hud data-testid="inspector">
+      <button
+        type="button"
+        className={styles.close}
+        aria-label="Close the panel"
+        title="Close the panel"
+        data-testid="close-pane"
+        onClick={togglePane}
+      >
+        ×
+      </button>
       {first ? (
         <>
           <div className={styles.section}>

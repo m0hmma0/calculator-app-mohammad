@@ -49,3 +49,10 @@
   background: var(--border);
   margin: 0 2px;
 }
+
+.embedded {
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
