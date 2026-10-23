@@ -19,6 +19,8 @@ const geo = async (page: Page) => ({
   h: Number(await page.getByTestId('geo-h').innerText()),
 });
 const editor = (page: Page) => page.getByTestId('text-editor');
+/** What the text box holds, line breaks and all. */
+const typed = (page: Page) => editor(page).evaluate((node) => node.textContent ?? '');
 
 async function drag(page: Page, from: [number, number], to: [number, number]) {
   await page.mouse.move(from[0], from[1]);
@@ -74,7 +76,7 @@ test.describe('text boxes', () => {
     await page.keyboard.type('world');
     await page.keyboard.press('Home');
     await page.keyboard.type('hello ');
-    await expect(editor(page)).toHaveValue('hello world');
+    await expect.poll(() => typed(page)).toBe('hello world');
   });
 
   test('a click places a large box with large type; a drag sets the size', async ({ page }) => {
@@ -128,7 +130,7 @@ test.describe('text boxes', () => {
     expect(after.x - before.x).toBeCloseTo(100, -1);
 
     await page.mouse.dblclick(360, 300);
-    await expect(editor(page)).toHaveValue('Select me');
+    await expect.poll(() => typed(page)).toBe('Select me');
   });
 
   test('while typing, the canvas does not draw a second copy of the words', async ({ page }) => {
@@ -152,7 +154,109 @@ test.describe('text boxes', () => {
     const box = await geo(page);
     const stage = (await page.getByTestId('stage').boundingBox())!;
     await page.mouse.dblclick(stage.x + box.x + 30, stage.y + box.y + 20);
-    await expect(editor(page)).toHaveValue('Pasted from elsewhere\nsecond line');
+    await expect.poll(() => typed(page)).toBe('Pasted from elsewhere\nsecond line');
+  });
+});
+
+/** The box's runs of formatting, as the editor shows them. */
+const runs = (page: Page) =>
+  editor(page).evaluate((node) =>
+    [...node.childNodes]
+      .filter((child) => child.textContent)
+      .map((child) => {
+        const style = child instanceof HTMLElement ? child.style : null;
+        return {
+          text: child.textContent,
+          bold: style?.fontWeight === '700',
+          italic: style?.fontStyle === 'italic',
+          underline: Boolean(style?.textDecoration.includes('underline')),
+        };
+      }),
+  );
+
+/** Selects characters [from, to) of the box's first line with the keyboard. */
+async function selectChars(page: Page, from: number, to: number) {
+  await page.keyboard.press('Home');
+  for (let step = 0; step < from; step += 1) await page.keyboard.press('ArrowRight');
+  for (let step = from; step < to; step += 1) await page.keyboard.press('Shift+ArrowRight');
+}
+
+test.describe('formatting part of a text', () => {
+  async function box(page: Page, words: string) {
+    await page.keyboard.press('KeyT');
+    await drag(page, [150, 150], [900, 300]);
+    await page.keyboard.type(words);
+  }
+
+  test('Ctrl+B, Ctrl+I and Ctrl+U format just the selected words', async ({ page }) => {
+    await box(page, 'make this bold');
+    await selectChars(page, 5, 9);
+    await page.keyboard.press('ControlOrMeta+KeyB');
+    await expect
+      .poll(() => runs(page))
+      .toEqual([
+        { text: 'make ', bold: false, italic: false, underline: false },
+        { text: 'this', bold: true, italic: false, underline: false },
+        { text: ' bold', bold: false, italic: false, underline: false },
+      ]);
+    // The selection is kept, so more formatting can follow.
+    await page.keyboard.press('ControlOrMeta+KeyU');
+    await expect
+      .poll(async () => (await runs(page))[1])
+      .toMatchObject({ bold: true, underline: true });
+
+    // And it is in the board, not just the box: closed and opened again, still there.
+    await page.keyboard.press('Escape');
+    await expect(editor(page)).toHaveCount(0);
+    await page.mouse.dblclick(200, 180);
+    await expect
+      .poll(async () => (await runs(page))[1])
+      .toMatchObject({
+        text: 'this',
+        bold: true,
+        underline: true,
+      });
+  });
+
+  test('with nothing selected, Ctrl+I formats what is typed next', async ({ page }) => {
+    await box(page, 'plain ');
+    await page.keyboard.press('ControlOrMeta+KeyI');
+    await page.keyboard.type('slanted');
+    await page.keyboard.press('ControlOrMeta+KeyI');
+    await page.keyboard.type(' plain');
+    await expect
+      .poll(() => runs(page))
+      .toEqual([
+        { text: 'plain ', bold: false, italic: false, underline: false },
+        { text: 'slanted', bold: false, italic: true, underline: false },
+        { text: ' plain', bold: false, italic: false, underline: false },
+      ]);
+  });
+
+  test('the side panel and the floating buttons format the selection too', async ({ page }) => {
+    await box(page, 'one two three');
+    await selectChars(page, 4, 7);
+    // The side panel's B: the typing goes on, the word is bold.
+    await page.getByTestId('text-bold').click();
+    await expect(editor(page)).toBeFocused();
+    await expect.poll(async () => (await runs(page))[1]).toMatchObject({ text: 'two', bold: true });
+    await expect(page.getByTestId('text-bold')).toHaveAttribute('aria-pressed', 'true');
+
+    // The floating U, just above the box.
+    await selectChars(page, 8, 13);
+    await page.getByTestId('format-underline').click();
+    await expect(editor(page)).toBeFocused();
+    await expect
+      .poll(async () => (await runs(page)).at(-1))
+      .toMatchObject({
+        text: 'three',
+        underline: true,
+      });
+
+    // Not typing, the panel's B is the whole box's.
+    await page.keyboard.press('Escape');
+    await page.getByTestId('text-bold').click();
+    await expect(page.getByTestId('text-bold')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
@@ -167,7 +271,7 @@ test.describe('lists', () => {
     await page.keyboard.type('free range');
     await page.keyboard.press('Enter');
     await page.keyboard.type('bread');
-    await expect(editor(page)).toHaveValue('1. milk\n2. eggs\n   free range\n3. bread');
+    await expect.poll(() => typed(page)).toBe('1. milk\n2. eggs\n   free range\n3. bread');
 
     // Backspace straight after "2. " takes the number away; "bread" becomes 2.
     await page.keyboard.press('ArrowUp');
@@ -175,13 +279,13 @@ test.describe('lists', () => {
     await page.keyboard.press('Home');
     for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowRight');
     await page.keyboard.press('Backspace');
-    await expect(editor(page)).toHaveValue('1. milk\neggs\n   free range\n2. bread');
+    await expect.poll(() => typed(page)).toBe('1. milk\neggs\n   free range\n2. bread');
 
     // Enter on an empty item ends the list.
     await page.keyboard.press('ControlOrMeta+End');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Enter');
-    await expect(editor(page)).toHaveValue('1. milk\neggs\n   free range\n2. bread\n');
+    await expect.poll(() => typed(page)).toBe('1. milk\neggs\n   free range\n2. bread\n');
   });
 
   test('"- " starts bullets, and the panel button numbers a whole box', async ({ page }) => {
@@ -190,12 +294,12 @@ test.describe('lists', () => {
     await page.keyboard.type('- tea');
     await page.keyboard.press('Enter');
     await page.keyboard.type('coffee');
-    await expect(editor(page)).toHaveValue('• tea\n• coffee');
+    await expect.poll(() => typed(page)).toBe('• tea\n• coffee');
     await page.keyboard.press('Escape');
 
     await page.getByTestId('text-number').click();
     await page.mouse.dblclick(300, 180);
-    await expect(editor(page)).toHaveValue('1. tea\n2. coffee');
+    await expect.poll(() => typed(page)).toBe('1. tea\n2. coffee');
   });
 });
 
@@ -283,7 +387,7 @@ test.describe('smart shapes', () => {
       .poll(() => colourFraction(page, '--text', { x: 340, y: 300, w: 120, h: 50 }))
       .toBeGreaterThan(0.01);
     await page.mouse.dblclick(400, 325);
-    await expect(editor(page)).toHaveValue('Idea');
+    await expect.poll(() => typed(page)).toBe('Idea');
   });
 });
 

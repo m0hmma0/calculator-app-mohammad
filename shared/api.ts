@@ -13,6 +13,8 @@ export interface FolderRecord {
   name: string;
   createdAt: number;
   updatedAt: number;
+  /** Set only for folders in the trash. */
+  deletedAt?: number;
 }
 
 export interface BoardRecord {

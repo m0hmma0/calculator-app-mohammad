@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
-import type { BoardElement, ElementStyle, TableData } from '@/model/element';
+import { marksEqual, marksFromDelta, type MarkName, type MarkSet } from '@/text/marks';
+import type { BoardElement, ElementStyle, TableData, TextMark } from '@/model/element';
 import { DEFAULT_STYLE } from '@/model/element';
 
 /**
@@ -79,7 +80,12 @@ export function toYElement(element: BoardElement): YElement {
     const value = element[field];
     if (value !== undefined) map.set(field, value);
   }
-  if (element.text !== undefined) map.set('text', new Y.Text(element.text));
+  if (element.text !== undefined) {
+    const text = new Y.Text(element.text);
+    for (const mark of element.marks ?? [])
+      text.format(mark.from, mark.to - mark.from, attributesOf(mark));
+    map.set('text', text);
+  }
   if (element.page !== undefined) map.set('page', element.page);
   if (element.table) map.set('table', toYTable(element.table));
 
@@ -113,8 +119,11 @@ export function fromYElement(map: YElement): BoardElement {
   const table = map.get('table');
   if (table instanceof Y.Map) element.table = readTable(table);
   const text = map.get('text');
-  if (text instanceof Y.Text) element.text = text.toString();
-  else if (typeof text === 'string') element.text = text;
+  if (text instanceof Y.Text) {
+    element.text = text.toString();
+    const marks = marksFromDelta(text.toDelta() as Array<{ insert?: unknown }>);
+    if (marks.length > 0) element.marks = marks;
+  } else if (typeof text === 'string') element.text = text;
   element.style = readStyle(map);
   return element as unknown as BoardElement;
 }
@@ -122,7 +131,7 @@ export function fromYElement(map: YElement): BoardElement {
 /** Applies a partial update, touching only the fields that actually changed. */
 export function patchYElement(map: YElement, patch: Partial<BoardElement>): void {
   for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) continue;
+    if (value === undefined || key === 'marks') continue;
 
     if (key === 'style') {
       const style = map.get('style');
@@ -152,6 +161,41 @@ export function patchYElement(map: YElement, patch: Partial<BoardElement>): void
 
     if (map.get(key) !== value) map.set(key, value);
   }
+  // After the words, so the ranges land on the text as it now stands.
+  if ('marks' in patch) patchMarks(map, patch.marks ?? []);
+}
+
+const attributesOf = (mark: MarkSet) => ({
+  bold: mark.bold ? true : null,
+  italic: mark.italic ? true : null,
+  underline: mark.underline ? true : null,
+});
+
+/** Makes the text's formatting exactly these ranges — touching it only if it differs. */
+function patchMarks(map: YElement, marks: readonly TextMark[]): void {
+  const text = map.get('text');
+  if (!(text instanceof Y.Text)) return;
+  const current = marksFromDelta(text.toDelta() as Array<{ insert?: unknown }>);
+  if (marksEqual(current, marks)) return;
+  text.format(0, text.length, { bold: null, italic: null, underline: null });
+  for (const mark of marks) {
+    const to = Math.min(mark.to, text.length);
+    if (to > mark.from) text.format(mark.from, to - mark.from, attributesOf(mark));
+  }
+}
+
+/** Sets or clears one kind of formatting on [from, to) of an element's text. */
+export function formatYText(
+  map: YElement,
+  from: number,
+  to: number,
+  formats: Partial<Record<MarkName, boolean>>,
+): void {
+  const text = map.get('text');
+  if (!(text instanceof Y.Text) || to <= from) return;
+  const attributes: Record<string, true | null> = {};
+  for (const [name, on] of Object.entries(formats)) attributes[name] = on ? true : null;
+  text.format(from, Math.min(to, text.length) - from, attributes);
 }
 
 /**

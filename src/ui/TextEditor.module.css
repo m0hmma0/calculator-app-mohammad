@@ -26,3 +26,58 @@
   overflow: auto;
   tab-size: 2;
 }
+
+/* The rich box: line breaks kept as typed, long words wrapped like the canvas does. */
+.rich {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  cursor: text;
+}
+
+.formatBar {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+}
+
+.formatBar button {
+  min-width: 30px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font:
+    15px/1 Georgia,
+    'Times New Roman',
+    serif;
+  cursor: pointer;
+}
+
+.formatBar button:hover {
+  background: var(--surface-2);
+}
+
+.formatBar button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.formatBar .bold {
+  font-weight: 700;
+}
+
+.formatBar .italic {
+  font-style: italic;
+}
+
+.formatBar .underline {
+  text-decoration: underline;
+}

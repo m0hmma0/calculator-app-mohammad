@@ -3,7 +3,14 @@ import { importFile, IMPORT_ACCEPT, startImportBatch, useImport } from '@/import
 import { insertTable, STAMPS } from '@/input/insertions';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore, type Tool } from '@/state/boardStore';
-import { formatDuration, rememberTimer, toggleMinimap, useUiPrefs } from '@/state/uiPrefs';
+import {
+  formatDuration,
+  rememberTimer,
+  toggleMinimap,
+  toggleSound,
+  useUiPrefs,
+} from '@/state/uiPrefs';
+import { celebrate, EFFECTS } from '@/fun/effects';
 import { startPresentation } from '@/workshop/presentation';
 import {
   clearVote,
@@ -47,6 +54,7 @@ export function InsertMenu() {
   const setTool = useBoardStore((state) => state.setTool);
   const setStamp = useBoardStore((state) => state.setStamp);
   const minimap = useUiPrefs((state) => state.minimap);
+  const sound = useUiPrefs((state) => state.sound);
   const recentTimers = useUiPrefs((state) => state.recentTimers);
   const timer = useWorkshop((state) => state.timer);
   const vote = useWorkshop((state) => state.vote);
@@ -358,6 +366,39 @@ export function InsertMenu() {
                   <span>Clear the dots</span>
                 </button>
               ) : null}
+            </>
+          ) : null}
+
+          {editable ? (
+            <>
+              <p className={styles.label}>Celebrate</p>
+              <div className={styles.grid}>
+                {EFFECTS.map((effect) => (
+                  <button
+                    key={effect.kind}
+                    type="button"
+                    role="menuitem"
+                    className={styles.stamp}
+                    aria-label={`${effect.label} for everyone`}
+                    title={`${effect.label} — ${effect.key} while presenting`}
+                    data-testid={`celebrate-${effect.kind}`}
+                    onClick={run(() => celebrate(effect.kind))}
+                  >
+                    {effect.emoji}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={sound}
+                  aria-label={sound ? 'Celebrations make sound' : 'Celebrations are silent'}
+                  title={sound ? 'Sound on — click to mute' : 'Sound off — click to turn on'}
+                  data-testid="toggle-sound"
+                  onClick={toggleSound}
+                >
+                  {sound ? '🔊' : '🔇'}
+                </button>
+              </div>
             </>
           ) : null}
 

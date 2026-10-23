@@ -38,6 +38,69 @@ test.describe('signing in', () => {
   });
 });
 
+test.describe('managing folders', () => {
+  const folderCard = (page: Page, name: string) =>
+    page.locator('[data-testid^="folder-card-"]').filter({ hasText: name });
+  const idOf = async (page: Page, name: string) =>
+    (await folderCard(page, name).getAttribute('data-testid'))!.replace('folder-card-', '');
+
+  test('rename, move, delete and restore a folder with what is in it', async ({ page }) => {
+    await signIn(page, newAccount('folders'));
+    const answer = (text: string) => {
+      page.removeAllListeners('dialog');
+      page.on('dialog', (dialog) => void dialog.accept(text));
+    };
+
+    answer('Units');
+    await page.getByTestId('new-folder').click();
+    await expect(folderCard(page, 'Units')).toBeVisible();
+    const units = await idOf(page, 'Units');
+
+    // Renamed from its card.
+    answer('Unit 1');
+    await page.getByTestId(`folder-rename-${units}`).click();
+    await expect(folderCard(page, 'Unit 1')).toBeVisible();
+
+    answer('Archive');
+    await page.getByTestId('new-folder').click();
+    await expect(folderCard(page, 'Archive')).toBeVisible();
+    const archive = await idOf(page, 'Archive');
+
+    // Moved into Archive: gone from the top level, there inside Archive.
+    await page.getByTestId(`folder-move-${units}`).click();
+    await page.getByTestId(`folder-move-to-${units}`).selectOption({ label: 'Archive' });
+    await expect(page.getByTestId(`folder-card-${units}`)).toHaveCount(0);
+    await page.getByTestId(`folder-card-${archive}`).getByRole('link').first().click();
+    await expect(page.getByTestId(`folder-card-${units}`)).toBeVisible();
+
+    // A board inside it.
+    await page.getByTestId(`folder-card-${units}`).getByRole('link').first().click();
+    await createBoard(page);
+    await page.getByTestId('back-to-boards').click();
+    await expect(boardCards(page)).toHaveCount(1);
+
+    // Deleted from the folder's own menu: back up to Archive, and it is gone.
+    page.removeAllListeners('dialog');
+    page.on('dialog', (dialog) => void dialog.accept());
+    await page.getByTestId('folder-menu').click();
+    await page.getByTestId('folder-menu-delete').click();
+    await expect(page.getByTestId('breadcrumb')).not.toContainText('Unit 1');
+    await expect(page.getByTestId('breadcrumb')).toContainText('Archive');
+    await expect(page.getByTestId(`folder-card-${units}`)).toHaveCount(0);
+
+    // In the trash as one folder, its board with it rather than loose.
+    await page.getByTestId('nav-trash').click();
+    await expect(page.getByTestId(`folder-card-${units}`)).toBeVisible();
+    await expect(boardCards(page)).toHaveCount(0);
+
+    // Restored: the folder, back in Archive, with its board.
+    await page.getByTestId(`restore-folder-${units}`).click();
+    await expect(page.getByTestId(`folder-card-${units}`)).toHaveCount(0);
+    await page.getByTestId(`folder-${archive}`).click();
+    await expect(folderCard(page, 'Unit 1')).toContainText('1 board');
+  });
+});
+
 test.describe('folders and boards', () => {
   // Checklist item 2.
   test('nests folders and shows the path', async ({ page }) => {
@@ -45,7 +108,7 @@ test.describe('folders and boards', () => {
 
     page.on('dialog', (dialog) => void dialog.accept('Projects'));
     await page.getByTestId('new-folder').click();
-    await expect(page.getByText('Projects')).toBeVisible();
+    await expect(page.getByRole('complementary').getByText('Projects')).toBeVisible();
 
     await page.getByText('Projects').first().click();
     await expect(page.getByTestId('breadcrumb')).toContainText('Projects');
@@ -53,7 +116,7 @@ test.describe('folders and boards', () => {
     page.removeAllListeners('dialog');
     page.on('dialog', (dialog) => void dialog.accept('Q4'));
     await page.getByTestId('new-folder').click();
-    await expect(page.getByText('Q4')).toBeVisible();
+    await expect(page.getByRole('complementary').getByText('Q4')).toBeVisible();
 
     await page.getByText('Q4').first().click();
     const breadcrumb = page.getByTestId('breadcrumb');
@@ -88,7 +151,7 @@ test.describe('folders and boards', () => {
     page.removeAllListeners('dialog');
     page.on('dialog', (dialog) => void dialog.accept('Archive'));
     await page.getByTestId('new-folder').click();
-    await expect(page.getByText('Archive')).toBeVisible();
+    await expect(page.getByRole('complementary').getByText('Archive')).toBeVisible();
 
     await page.getByTestId(`move-${id}`).click();
     await page.getByTestId(`move-to-${id}`).selectOption({ label: 'Archive' });

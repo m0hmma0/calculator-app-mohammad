@@ -10,7 +10,12 @@ import {
   usePresentation,
 } from '@/workshop/presentation';
 import { castVote, serverNow, stopTimer, useWorkshop } from '@/workshop/workshop';
+import { celebrate, EFFECTS, type EffectKind } from '@/fun/effects';
 import styles from './WorkshopLayer.module.css';
+
+/** While presenting, a letter starts a celebration: C for confetti, D for a drum roll. */
+const celebrationKey = (key: string): EffectKind | undefined =>
+  EFFECTS.find((effect) => effect.key === key.toUpperCase())?.kind;
 
 const formatRemaining = (ms: number) => {
   const seconds = Math.ceil(Math.max(0, ms) / 1000);
@@ -153,7 +158,10 @@ function PresentationBar() {
       else if (event.key === 'Home') stepPresentation(-Infinity);
       else if (event.key === 'End') stepPresentation(Infinity);
       else if (event.key === 'Escape') stopPresentation();
-      else return;
+      else if (!event.ctrlKey && !event.metaKey && !event.altKey && celebrationKey(event.key)) {
+        // Canva's keys: C for confetti, D for a drum roll, and the rest.
+        celebrate(celebrationKey(event.key)!);
+      } else return;
       // Nothing else on the board hears these keys while presenting.
       event.preventDefault();
       event.stopImmediatePropagation();

@@ -1,0 +1,251 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.big {
+  font-size: clamp(80px, 16vmin, 180px);
+  line-height: 1;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.25));
+}
+
+.caption {
+  font-size: clamp(22px, 4vmin, 40px);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  animation: fadeInOut 2.4s ease both;
+}
+
+.spotlight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 0 18%, rgba(8, 8, 16, 0.78) 42%);
+  animation: fade 3.8s ease both;
+}
+
+.dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 8, 16, 0.55);
+  animation: fade 2.6s ease both;
+}
+
+/* The drum rattles faster and faster, then the reveal. */
+.drum {
+  animation: rattle 0.09s linear 26;
+}
+
+.reveal {
+  position: absolute;
+  top: calc(50% + 12vmin);
+  opacity: 0;
+  animation: reveal 1.4s ease 2.4s both;
+}
+
+.fall {
+  animation: fall 0.65s cubic-bezier(0.5, 0, 1, 0.6) both;
+}
+
+.shake {
+  animation: shake 0.4s ease 0.65s both;
+}
+
+.late {
+  animation: fadeInOut 2s ease 0.7s both;
+}
+
+.pop {
+  animation: pop 2.6s ease both;
+}
+
+.curtain {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 51%;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0 6%, rgba(255, 255, 255, 0.06) 6% 12%),
+    linear-gradient(180deg, #b0102d, #7d0a1f);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.curtainLeft {
+  left: 0;
+  animation: curtainLeft 4.2s ease-in-out both;
+}
+
+.curtainRight {
+  right: 0;
+  animation: curtainRight 4.2s ease-in-out both;
+}
+
+.bravo {
+  animation: fadeInOut 3s ease 0.6s both;
+}
+
+.floater {
+  position: absolute;
+  bottom: -60px;
+  animation: floatUp 2.8s ease-out both;
+}
+
+@keyframes fade {
+  0% {
+    opacity: 0;
+  }
+  12%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  15%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes rattle {
+  0%,
+  100% {
+    transform: rotate(-6deg) translateY(0);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-4px);
+  }
+}
+
+@keyframes reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  20%,
+  80% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fall {
+  from {
+    transform: translateY(-60vh) rotate(-30deg);
+  }
+  to {
+    transform: translateY(0) rotate(12deg);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translate(-12px, 6px);
+  }
+  40% {
+    transform: translate(10px, -6px);
+  }
+  60% {
+    transform: translate(-8px, 4px);
+  }
+  80% {
+    transform: translate(5px, -2px);
+  }
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  28%,
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes curtainLeft {
+  0% {
+    transform: translateX(-100%);
+  }
+  15%,
+  70% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes curtainRight {
+  0% {
+    transform: translateX(100%);
+  }
+  15%,
+  70% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-85vh) scale(1.1) rotate(12deg);
+  }
+}

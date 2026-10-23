@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { fontString } from '@/canvas/fonts';
 import { boardToScreen, type Viewport } from '@/canvas/viewport';
 import { CODE_PADDING, STICKY_PADDING, TEXT_PADDING } from '@/canvas/renderContent';
@@ -7,11 +7,13 @@ import { detectDirection } from '@/model/textLayout';
 import { canHoldLabel, labelBox } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
 import { autoFormat, onBackspace, onEnter, type TextEdit } from '@/text/lists';
+import { FormatBar } from './FormatBar';
+import { RichTextEditor } from './RichTextEditor';
 import styles from './TextEditor.module.css';
 
 /**
- * Editing happens in a real textarea sitting exactly over the element, not in the
- * canvas. The browser then supplies the caret, selection, IME, autocorrect and — the
+ * Editing happens in a real editable box sitting exactly over the element, not in the
+ * canvas — a rich one for text (see RichTextEditor), a textarea for code. The browser then supplies the caret, selection, IME, autocorrect and — the
  * reason this matters most here — correct Arabic shaping and bidirectional cursor
  * movement, none of which a hand-rolled canvas caret would get right.
  */
@@ -107,6 +109,31 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   const code = element.type === 'code';
   const padding = code ? CODE_PADDING : sticky ? STICKY_PADDING : TEXT_PADDING;
   const topLeft = boardToScreen(viewport, { x: area.x, y: area.y });
+  const boxStyle: CSSProperties = {
+    left: `${topLeft.x}px`,
+    top: `${topLeft.y}px`,
+    width: `${area.w * viewport.zoom}px`,
+    height: `${area.h * viewport.zoom}px`,
+    padding: `${padding * viewport.zoom}px`,
+    font: fontString(element.style, element.style.fontSize * viewport.zoom),
+    lineHeight: element.style.lineHeight,
+    letterSpacing: `${element.style.letterSpacing * viewport.zoom}px`,
+    textAlign: label ? 'center' : element.style.align,
+    textDecoration: element.style.underline ? 'underline' : undefined,
+    transform: element.rotation ? `rotate(${element.rotation}rad)` : undefined,
+    transformOrigin: 'center',
+  };
+
+  // Everything but code is typed with formatting: bold, italic and underline on any
+  // part of it, shown as it will be drawn.
+  if (!code) {
+    return (
+      <>
+        <FormatBar left={topLeft.x} top={topLeft.y} />
+        <RichTextEditor key={element.id} element={element} style={boxStyle} center={label} />
+      </>
+    );
+  }
 
   return (
     <textarea
@@ -155,19 +182,7 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
       onKeyUp={remember}
       onFocus={remember}
       onBlur={endEditing}
-      style={{
-        left: `${topLeft.x}px`,
-        top: `${topLeft.y}px`,
-        width: `${area.w * viewport.zoom}px`,
-        height: `${area.h * viewport.zoom}px`,
-        padding: `${padding * viewport.zoom}px`,
-        font: fontString(element.style, element.style.fontSize * viewport.zoom),
-        lineHeight: element.style.lineHeight,
-        letterSpacing: `${element.style.letterSpacing * viewport.zoom}px`,
-        textAlign: label ? 'center' : element.style.align,
-        transform: element.rotation ? `rotate(${element.rotation}rad)` : undefined,
-        transformOrigin: 'center',
-      }}
+      style={boxStyle}
     />
   );
 }

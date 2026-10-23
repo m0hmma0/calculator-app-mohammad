@@ -39,9 +39,16 @@ export interface WrappedLine {
    * words rather than under its number.
    */
   indent?: number;
+  /** Where `text` begins in the whole text — so formatting can be found for it. */
+  start: number;
 }
 
-export type MeasureText = (text: string) => number;
+/**
+ * Width of a piece of the text. `start` is where the piece begins in the whole
+ * text, for measures that know about formatting (a bold word is wider); plain
+ * measures ignore it.
+ */
+export type MeasureText = (text: string, start?: number) => number;
 
 /**
  * Greedy word wrap. Falls back to breaking inside a word only when a single word
@@ -57,6 +64,7 @@ export function wrapText(
   const paragraphs = text.split('\n');
   const list = style?.list ?? 'none';
   let itemNumber = 0;
+  let paragraphStart = 0;
 
   for (const paragraph of paragraphs) {
     itemNumber += 1;
@@ -64,21 +72,24 @@ export function wrapText(
     const markerWidth = marker ? measure(marker) : 0;
     // An item whose marker is written in the text hangs its wrapped lines under its words.
     const prefix = marker ? null : listPrefix(paragraph);
-    const hang = prefix ? measure(prefix) : 0;
+    const hang = prefix ? measure(prefix, paragraphStart) : 0;
     let available = Math.max(1, maxWidth - markerWidth);
 
     if (paragraph.length === 0) {
-      lines.push({ text: '', marker });
+      lines.push({ text: '', marker, start: paragraphStart });
+      paragraphStart += 1;
       continue;
     }
 
     let current = '';
+    let currentStart = paragraphStart;
     let first = true;
 
     const push = () => {
       lines.push({
         text: current,
         marker: first ? marker : ' '.repeat(marker.length),
+        start: currentStart,
         ...(hang && !first ? { indent: hang } : {}),
       });
       if (first && hang) available = Math.max(1, maxWidth - hang);
@@ -86,31 +97,45 @@ export function wrapText(
       current = '';
     };
 
+    let wordStart = paragraphStart;
     for (const word of paragraph.split(' ')) {
       const candidate = current === '' ? word : `${current} ${word}`;
-      if (measure(candidate) <= available || current === '') {
-        if (measure(candidate) > available && current === '') {
+      const candidateStart = current === '' ? wordStart : currentStart;
+      const width = measure(candidate, candidateStart);
+      if (width <= available || current === '') {
+        if (width > available && current === '') {
           // A single word wider than the box: break it character by character.
           let chunk = '';
+          let chunkStart = wordStart;
+          let offset = wordStart;
           for (const character of word) {
-            if (measure(chunk + character) > available && chunk !== '') {
+            if (measure(chunk + character, chunkStart) > available && chunk !== '') {
               current = chunk;
+              currentStart = chunkStart;
               push();
               chunk = character;
+              chunkStart = offset;
             } else {
               chunk += character;
             }
+            offset += character.length;
           }
           current = chunk;
+          currentStart = chunkStart;
+          wordStart += word.length + 1;
           continue;
         }
         current = candidate;
+        currentStart = candidateStart;
       } else {
         push();
         current = word;
+        currentStart = wordStart;
       }
+      wordStart += word.length + 1;
     }
     push();
+    paragraphStart += paragraph.length + 1;
   }
 
   return lines;

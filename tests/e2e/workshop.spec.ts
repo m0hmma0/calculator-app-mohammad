@@ -485,3 +485,29 @@ test('a PDF comes in as one stored picture per page', async ({ page }) => {
   await page.getByTestId('zoom-fit').click();
   await expect.poll(() => colourFraction(page, '#1a33cc', all)).toBeGreaterThan(0.002);
 });
+
+test('a celebration plays for everyone on the board, and ends by itself', async ({ browser }) => {
+  const { a, b, close } = await twoWindows(browser, 'party');
+  try {
+    await a.getByTestId('insert-menu').click();
+    await a.getByTestId('celebrate-confetti').click();
+    for (const page of [a, b]) {
+      await expect(page.getByTestId('celebration')).toHaveAttribute('data-effect', 'confetti');
+    }
+    await expect(b.getByTestId('celebration')).toHaveCount(0, { timeout: 8000 });
+
+    // While presenting, D is a drum roll — for the audience too.
+    await drag(a, 'KeyF', [200, 200], [500, 400]);
+    await a.getByTestId('insert-menu').click();
+    await a.getByTestId('present-start').click();
+    await a.keyboard.press('KeyD');
+    await expect(b.getByTestId('celebration')).toHaveAttribute('data-effect', 'drumroll');
+
+    // Someone arriving afterwards does not get an old celebration replayed.
+    await b.reload();
+    await expect(b.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    await expect(b.getByTestId('celebration')).toHaveCount(0);
+  } finally {
+    await close();
+  }
+});

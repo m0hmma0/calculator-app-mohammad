@@ -14,6 +14,8 @@ interface UiPrefs {
   geometry: boolean;
   /** The bottom bar showing all its buttons, rather than folded to one. */
   bottomBar: boolean;
+  /** Celebrations make sound. */
+  sound: boolean;
   /** Timer lengths used most recently, newest first, in seconds. */
   recentTimers: number[];
 }
@@ -28,6 +30,7 @@ function load(): UiPrefs {
     pane: false,
     geometry: false,
     bottomBar: true,
+    sound: true,
     recentTimers: [],
   };
   try {
@@ -37,6 +40,7 @@ function load(): UiPrefs {
       layers: stored.layers === true,
       pane: stored.pane === true,
       geometry: stored.geometry === true,
+      sound: stored.sound !== false,
       bottomBar: stored.bottomBar !== false,
       recentTimers: Array.isArray(stored.recentTimers)
         ? stored.recentTimers
@@ -62,6 +66,7 @@ useUiPrefs.subscribe((state) => {
 export const toggleMinimap = () => useUiPrefs.setState((state) => ({ minimap: !state.minimap }));
 export const toggleLayers = () => useUiPrefs.setState((state) => ({ layers: !state.layers }));
 export const togglePane = () => useUiPrefs.setState((state) => ({ pane: !state.pane }));
+export const toggleSound = () => useUiPrefs.setState((state) => ({ sound: !state.sound }));
 export const toggleGeometry = () => useUiPrefs.setState((state) => ({ geometry: !state.geometry }));
 export const toggleBottomBar = () =>
   useUiPrefs.setState((state) => ({ bottomBar: !state.bottomBar }));

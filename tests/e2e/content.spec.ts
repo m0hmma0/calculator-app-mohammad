@@ -255,7 +255,7 @@ test.describe('text', () => {
 
     const editor = page.getByTestId('text-editor');
     await expect(editor).toHaveAttribute('dir', 'rtl');
-    await expect(editor).toHaveValue('مرحبا بالسبورة');
+    await expect.poll(() => editor.evaluate((node) => node.textContent)).toBe('مرحبا بالسبورة');
 
     await page.keyboard.press('Escape');
     // And it actually renders on the canvas rather than silently dropping out.
@@ -284,7 +284,9 @@ test.describe('text', () => {
 
     await page.keyboard.press('KeyV');
     await page.mouse.dblclick(340, 372);
-    await expect(page.getByTestId('text-editor')).toHaveValue('edit me');
+    await expect
+      .poll(() => page.getByTestId('text-editor').evaluate((node) => node.textContent))
+      .toBe('edit me');
   });
 });
 

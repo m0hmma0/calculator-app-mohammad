@@ -169,6 +169,16 @@ Writing and drawing:
 - **Text boxes** are dragged out to a size, or clicked for a 55-character by 8-line box
   of 40px type; they grow as they fill. One click selects, a double click edits.
   Pasted text from anywhere becomes a text box.
+- **Formatting part of a text**: select words and press Ctrl/⌘ B, I or U, or use the
+  B / I / U above the box or in the side panel; with nothing selected, it applies to
+  what is typed next. It is stored as formatting on the shared `Y.Text`
+  (`element.marks` in the app), so it moves with the words as anyone types. Text is
+  edited in a `contenteditable` box (`src/ui/RichTextEditor.tsx`, `src/text/domText.ts`);
+  code blocks keep a plain textarea.
+- **Celebrations** (Insert → Celebrate, or C, D, O, M, Q, U, A while presenting):
+  confetti, drum roll, bubbles, mic drop, quiet, curtain call and applause, for
+  everyone on the board at once (`src/fun/`). Sounds are synthesised with Web Audio,
+  and can be muted.
 - **Lists** are written into the text ("• " or "1. "), word-processor style: Enter
   continues the list, Enter on an empty item ends it, Shift+Enter breaks a line
   inside an item, Backspace after a marker removes it, "- " starts bullets, and a

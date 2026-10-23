@@ -285,3 +285,24 @@ describe('transactLocal', () => {
     instance.destroy();
   });
 });
+
+describe('formatting on part of a text', () => {
+  it('round-trips, and typing after a bold word carries the bold on', () => {
+    const marks = [{ from: 0, to: 4, bold: true as const }];
+    const element = { ...shape('label', { type: 'text' }), text: 'Bold then plain', marks };
+    expect(roundTrip(element).marks).toEqual(marks);
+
+    const board = createBoard();
+    insertElements(board, [element]);
+    applyPatches(board, new Map([['label', { text: 'Bolder then plain' }]]));
+    expect(byId(readElements(board), 'label').marks).toEqual([{ from: 0, to: 6, bold: true }]);
+
+    // A patch with other marks replaces them; one with the same marks writes nothing.
+    applyPatches(
+      board,
+      new Map([['label', { marks: [{ from: 7, to: 11, italic: true as const }] }]]),
+    );
+    expect(byId(readElements(board), 'label').marks).toEqual([{ from: 7, to: 11, italic: true }]);
+    board.destroy();
+  });
+});

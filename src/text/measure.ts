@@ -2,6 +2,7 @@ import { fontString } from '@/canvas/fonts';
 import { TEXT_PADDING } from '@/canvas/renderContent';
 import type { BoardElement, ElementStyle } from '@/model/element';
 import { layoutText } from '@/model/textLayout';
+import { runsOf } from './marks';
 
 /** A new text box, clicked rather than dragged out: this many characters wide… */
 export const TEXT_BOX_CHARS = 55;
@@ -43,9 +44,26 @@ export function textHeight(element: BoardElement, text: string): number | null {
   const ctx = measuring();
   if (!ctx) return null;
   const style = element.style;
-  const measure = (value: string) => {
-    ctx.font = fontString(style, style.fontSize);
-    return ctx.measureText(value).width;
+  const marks = element.marks?.length ? element.marks : undefined;
+  const measure = (value: string, start?: number) => {
+    if (!marks || start === undefined) {
+      ctx.font = fontString(style, style.fontSize);
+      return ctx.measureText(value).width;
+    }
+    // Bold is wider: measured run by run, as it is drawn.
+    let width = 0;
+    for (const run of runsOf(marks, start, start + value.length)) {
+      ctx.font = fontString(
+        {
+          ...style,
+          fontWeight: run.marks.bold ? Math.max(700, style.fontWeight) : style.fontWeight,
+          italic: style.italic || Boolean(run.marks.italic),
+        },
+        style.fontSize,
+      );
+      width += ctx.measureText(value.slice(run.from - start, run.to - start)).width;
+    }
+    return width;
   };
   const layout = layoutText(text, Math.max(1, element.w - TEXT_PADDING * 2), style, measure);
   return Math.ceil(Math.max(1, layout.lines.length) * layout.lineHeight + TEXT_PADDING * 2);

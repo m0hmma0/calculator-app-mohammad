@@ -3,6 +3,7 @@ import { LANGUAGES } from '@/model/highlight';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { canHoldLabel, isTextual, type BoardElement, type ElementId } from '@/model/element';
 import { listKindOf, toggleList, type ListKind } from '@/text/lists';
+import { useTextSelection } from '@/text/selection';
 import { selectionAABB } from '@/model/bounds';
 import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
@@ -47,6 +48,7 @@ export function Inspector() {
   const historyOpen = useHistory((state) => state.open);
   const editable = useBoardAccess(selectCanEdit);
   const showLayers = useUiPrefs((state) => state.layers);
+  const typing = useTextSelection();
   const open = useUiPrefs((state) => state.pane);
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
@@ -99,6 +101,8 @@ export function Inspector() {
     }
     applyDiscrete(patches);
   };
+
+  const typingHere = Boolean(first && typing.id === first.id && typing.toggle);
 
   // It opens only when asked for, from the bottom bar, and closes with its ×.
   if (historyOpen || !editable || !open) return null;
@@ -230,13 +234,20 @@ export function Inspector() {
                 ))}
               </div>
               <div className={styles.buttons}>
+                {/* While typing, these format the selected words (or what is typed
+                    next); otherwise, the whole box. Pressing one keeps the typing going. */}
                 <button
                   type="button"
                   className={styles.button}
-                  aria-pressed={first.style.fontWeight >= 600}
+                  aria-pressed={
+                    typingHere ? Boolean(typing.active.bold) : first.style.fontWeight >= 600
+                  }
                   data-testid="text-bold"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() =>
-                    styleSelection({ fontWeight: first.style.fontWeight >= 600 ? 400 : 700 })
+                    typingHere
+                      ? typing.toggle?.('bold')
+                      : styleSelection({ fontWeight: first.style.fontWeight >= 600 ? 400 : 700 })
                   }
                 >
                   <b>B</b>
@@ -244,18 +255,30 @@ export function Inspector() {
                 <button
                   type="button"
                   className={styles.button}
-                  aria-pressed={first.style.italic}
+                  aria-pressed={typingHere ? Boolean(typing.active.italic) : first.style.italic}
                   data-testid="text-italic"
-                  onClick={() => styleSelection({ italic: !first.style.italic })}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    typingHere
+                      ? typing.toggle?.('italic')
+                      : styleSelection({ italic: !first.style.italic })
+                  }
                 >
                   <i>I</i>
                 </button>
                 <button
                   type="button"
                   className={styles.button}
-                  aria-pressed={first.style.underline}
+                  aria-pressed={
+                    typingHere ? Boolean(typing.active.underline) : first.style.underline
+                  }
                   data-testid="text-underline"
-                  onClick={() => styleSelection({ underline: !first.style.underline })}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    typingHere
+                      ? typing.toggle?.('underline')
+                      : styleSelection({ underline: !first.style.underline })
+                  }
                 >
                   <u>U</u>
                 </button>

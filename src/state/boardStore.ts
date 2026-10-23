@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { MarkName } from '@/text/marks';
 import { textHeight } from '@/text/measure';
 import {
   addPage,
@@ -13,7 +14,7 @@ import {
   type BoardDoc,
 } from '@/doc/board';
 import { bindBoard } from '@/doc/binding';
-import { pagesOf, readPages, toYElement, type PageInfo } from '@/doc/schema';
+import { formatYText, pagesOf, readPages, toYElement, type PageInfo } from '@/doc/schema';
 import { unionRects, type Rect } from '@/geometry';
 import {
   clampZoom,
@@ -208,6 +209,13 @@ interface BoardState {
   beginEditing: (id: ElementId) => void;
   endEditing: () => void;
   setElementText: (id: ElementId, text: string) => void;
+  /** Sets or clears bold, italic or underline on characters [from, to) of a text. */
+  formatText: (
+    id: ElementId,
+    from: number,
+    to: number,
+    formats: Partial<Record<MarkName, boolean>>,
+  ) => void;
 
   /** Puts something new in the middle of the view and selects it. */
   insertAt: (
@@ -780,6 +788,12 @@ export const useBoardStore = create<BoardState>((set, get) => {
         needed !== null && element && needed > element.h ? { text, h: needed } : { text },
       );
       get().applyDiscrete(patches);
+    },
+
+    formatText: (id, from, to, formats) => {
+      const map = board.elements.get(id);
+      if (!map) return;
+      transactLocal(board, () => formatYText(map, from, to, formats));
     },
 
     insertAt: (type, size, extra = {}) => {

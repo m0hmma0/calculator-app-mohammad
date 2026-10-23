@@ -113,11 +113,33 @@ export async function restoreFolder(env: Env, account: Account, id: string) {
   const parent = row.parent_id ? await getFolder(env, account.uid, row.parent_id) : null;
   const parentId = parent && parent.deleted_at === null ? parent.id : null;
 
-  await env.DB.prepare(
-    'UPDATE folders SET deleted_at = NULL, parent_id = ?1, updated_at = ?2 WHERE id = ?3 AND owner_id = ?4',
-  )
-    .bind(parentId, Date.now(), id, account.uid)
-    .run();
+  // Everything that went to the trash with it — the folders inside and their boards,
+  // deleted in the same moment — comes back with it. Anything deleted on its own
+  // before then stays in the trash.
+  const when = row.deleted_at;
+  const branch = [id];
+  if (when !== null) {
+    for (let index = 0; index < branch.length && index < 500; index += 1) {
+      const { results } = await env.DB.prepare(
+        'SELECT id FROM folders WHERE owner_id = ?1 AND parent_id = ?2 AND deleted_at = ?3',
+      )
+        .bind(account.uid, branch[index], when)
+        .all<{ id: string }>();
+      for (const child of results) branch.push(child.id);
+    }
+  }
+  const placeholders = branch.map((_, index) => `?${index + 3}`).join(',');
+  await env.DB.batch([
+    env.DB.prepare(
+      'UPDATE folders SET deleted_at = NULL, parent_id = ?1, updated_at = ?2 WHERE id = ?3 AND owner_id = ?4',
+    ).bind(parentId, Date.now(), id, account.uid),
+    env.DB.prepare(
+      `UPDATE folders SET deleted_at = NULL WHERE deleted_at = ?1 AND owner_id = ?2 AND id IN (${placeholders})`,
+    ).bind(when, account.uid, ...branch),
+    env.DB.prepare(
+      `UPDATE boards SET deleted_at = NULL WHERE deleted_at = ?1 AND owner_id = ?2 AND folder_id IN (${placeholders})`,
+    ).bind(when, account.uid, ...branch),
+  ]);
 
   return json({ folder: toFolder((await getFolder(env, account.uid, id))!) });
 }

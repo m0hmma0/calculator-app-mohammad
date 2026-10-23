@@ -34,6 +34,7 @@ const toFolder = (row: FolderRow): FolderRecord => ({
   name: row.name,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  ...(row.deleted_at ? { deletedAt: row.deleted_at } : {}),
 });
 
 const toBoard = (row: BoardRow): BoardRecord => ({

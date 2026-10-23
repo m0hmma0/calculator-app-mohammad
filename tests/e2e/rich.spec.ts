@@ -431,3 +431,21 @@ test('an SVG comes in as shapes that can each be edited', async ({ page }) => {
   // Nothing in the file ran.
   expect(await page.evaluate(() => (window as { ranScript?: boolean }).ranScript)).toBeFalsy();
 });
+
+test('celebrations can be silenced, and the choice is remembered', async ({ page }) => {
+  await page.getByTestId('insert-menu').click();
+  await expect(page.getByTestId('toggle-sound')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('toggle-sound').click();
+  await expect(page.getByTestId('toggle-sound')).toHaveAttribute('aria-checked', 'false');
+  await page.reload();
+  await page.getByTestId('insert-menu').click();
+  await expect(page.getByTestId('toggle-sound')).toHaveAttribute('aria-checked', 'false');
+
+  // Silent or not, each one plays and goes.
+  for (const kind of ['bubbles', 'quiet', 'applause']) {
+    await page.getByTestId(`celebrate-${kind}`).click();
+    await expect(page.getByTestId('celebration')).toHaveAttribute('data-effect', kind);
+    await expect(page.getByTestId('celebration')).toHaveCount(0, { timeout: 8000 });
+    await page.getByTestId('insert-menu').click();
+  }
+});

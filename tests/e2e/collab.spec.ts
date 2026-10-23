@@ -230,7 +230,9 @@ test.describe('two windows on one board', () => {
       await expect(page.getByTestId('text-editor')).toBeVisible();
       await page.keyboard.press('End');
     }
-    await expect(b.getByTestId('text-editor')).toHaveValue('Start ');
+    await expect
+      .poll(() => b.getByTestId('text-editor').evaluate((node) => node.textContent))
+      .toBe('Start ');
 
     // …and type at the same time.
     await Promise.all([
@@ -238,7 +240,8 @@ test.describe('two windows on one board', () => {
       b.keyboard.type('bbbbbb', { delay: 35 }),
     ]);
 
-    const settled = async (page: Page) => page.getByTestId('text-editor').inputValue();
+    const settled = async (page: Page) =>
+      page.getByTestId('text-editor').evaluate((node) => node.textContent ?? '');
     await expect.poll(async () => (await settled(a)).length, { timeout: 5000 }).toBe(18);
     await expect.poll(async () => settled(b)).toBe(await settled(a));
     const text = await settled(a);

@@ -29,6 +29,15 @@ export interface TableData {
 
 export const cellKey = (row: number, col: number) => `${row},${col}`;
 
+/** Formatting on characters [from, to) of an element's text. */
+export interface TextMark {
+  from: number;
+  to: number;
+  bold?: true;
+  italic?: true;
+  underline?: true;
+}
+
 /** Something from the web: a video that plays in place, or a link's preview card. */
 export interface EmbedData {
   kind: 'video' | 'link';
@@ -119,6 +128,8 @@ export interface BoardElement {
 
   /** Text and sticky-note content. */
   text?: string;
+  /** Bold, italic and underline on parts of the text; absent when there are none. */
+  marks?: TextMark[];
 
   /** Image source: a stored file on an account board, a data URL on the local board. */
   image?: ImageRef;

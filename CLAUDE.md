@@ -137,6 +137,11 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   (`setElementText` measures it), so heights in tests are lower bounds.
 - **The canvas presses `preventDefault` on pointer-down**, so focus never moves on its
   own: anything that must end on a click elsewhere (typing) is ended there explicitly.
+- **The text editor is `contenteditable`, not a textarea** (except for code), so tests
+  read it with `textContent`, not `toHaveValue`. Formatting lives on the Y.Text
+  (`formatYText`); typing after formatted text inherits it, which is Yjs's default.
+- **A folder's name shows twice on the dashboard** (sidebar and card); tests scope
+  to `getByRole('complementary')` or the card's test id.
 - **Controlled checkboxes that wait for the server** do not change on click, so
   Playwright's `.check()` fails; tests click and wait for the result instead.
 - **An owner must never wait for the server to draw.** Boards open read-only until the

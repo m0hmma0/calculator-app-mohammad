@@ -33,6 +33,7 @@ import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
 import { WorkshopLayer } from './WorkshopLayer';
+import { EffectsLayer } from './EffectsLayer';
 import { ToolOptions } from './ToolOptions';
 import styles from './CanvasStage.module.css';
 
@@ -270,6 +271,7 @@ export function CanvasStage() {
       <PeersLayer hostRef={hostRef} />
       <CommentPins />
       <WorkshopLayer />
+      <EffectsLayer />
       <ToolOptions />
       <TextEditor viewport={viewport} />
       <TableCellEditor viewport={viewport} />

@@ -1,8 +1,9 @@
 import getStroke from 'perfect-freehand';
 import { detectLanguage, tokenizeLine, TOKEN_COLORS, type Language } from '@/model/highlight';
 import { fromFlat } from '@/ink/stroke';
-import type { BoardElement } from '@/model/element';
-import { fitFontSize, layoutText } from '@/model/textLayout';
+import type { BoardElement, ElementStyle, TextMark } from '@/model/element';
+import { fitFontSize, layoutText, type WrappedLine } from '@/model/textLayout';
+import { runsOf, type MarkSet } from '@/text/marks';
 import { getImage } from '@/media/images';
 import { uploadStateOf, type UploadState } from '@/media/uploads';
 import { fontStack, fontString } from './fonts';
@@ -137,9 +138,19 @@ export function drawText(
   const padding = sticky ? STICKY_PADDING : TEXT_PADDING;
   const style = element.style;
 
-  const measureAt = (size: number) => (text: string) => {
-    ctx.font = fontString(style, size);
-    return ctx.measureText(text).width;
+  const marks = element.marks?.length ? element.marks : undefined;
+  // With formatting, a piece of text is measured run by run, each in its own font.
+  const measureAt = (size: number) => (text: string, start?: number) => {
+    if (!marks || start === undefined) {
+      ctx.font = fontString(style, size);
+      return ctx.measureText(text).width;
+    }
+    let width = 0;
+    for (const run of runsOf(marks, start, start + text.length)) {
+      ctx.font = fontString(markedStyle(style, run.marks), size);
+      width += ctx.measureText(text.slice(run.from - start, run.to - start)).width;
+    }
+    return width;
   };
 
   // A sticky note is a fixed box, so the text shrinks to fit rather than spilling.
@@ -191,6 +202,10 @@ export function drawText(
           ? line.indent
           : -line.indent
         : 0;
+    if (marks) {
+      drawMarkedLine(ctx, line, marks, style, fontSize, anchorX + hang, y, layout.direction);
+      return;
+    }
     ctx.fillText(text, anchorX + hang, y);
 
     if (style.underline && text.trim() !== '') {
@@ -207,6 +222,63 @@ export function drawText(
 
   ctx.restore();
   return { fontSize, lineCount: layout.lines.length };
+}
+
+/** The element's style with a run's own bold, italic and underline on top. */
+function markedStyle(style: ElementStyle, marks: MarkSet): ElementStyle {
+  return {
+    ...style,
+    fontWeight: marks.bold ? Math.max(700, style.fontWeight) : style.fontWeight,
+    italic: style.italic || Boolean(marks.italic),
+    underline: style.underline || Boolean(marks.underline),
+  };
+}
+
+/**
+ * One line with formatting inside it: each run drawn in its own font, laid end to
+ * end, the whole line placed by its alignment. A right-to-left line is laid from the
+ * right, so its runs stay in reading order.
+ */
+function drawMarkedLine(
+  ctx: CanvasRenderingContext2D,
+  line: WrappedLine,
+  marks: readonly TextMark[],
+  style: ElementStyle,
+  fontSize: number,
+  anchorX: number,
+  y: number,
+  direction: 'ltr' | 'rtl',
+): void {
+  const pieces = runsOf(marks, line.start, line.start + line.text.length).map((run) => {
+    const own = markedStyle(style, run.marks);
+    ctx.font = fontString(own, fontSize);
+    const text = line.text.slice(run.from - line.start, run.to - line.start);
+    return { text, style: own, width: ctx.measureText(text).width };
+  });
+  ctx.font = fontString(style, fontSize);
+  const marker = line.marker
+    ? { text: line.marker, style, width: ctx.measureText(line.marker).width }
+    : null;
+  const all = marker ? [marker, ...pieces] : pieces;
+  const total = all.reduce((sum, piece) => sum + piece.width, 0);
+  const ltr = direction === 'ltr';
+  const leftAnchored = (style.align === 'start') === ltr;
+  const left =
+    style.align === 'center' ? anchorX - total / 2 : leftAnchored ? anchorX : anchorX - total;
+
+  ctx.textAlign = 'left';
+  let cursor = ltr ? left : left + total;
+  for (const piece of all) {
+    const x = ltr ? cursor : cursor - piece.width;
+    ctx.font = fontString(piece.style, fontSize);
+    ctx.fillText(piece.text, x, y);
+    if (piece.style.underline && piece.text.trim() !== '') {
+      ctx.fillRect(x, y + fontSize * 0.42, piece.width, Math.max(1, fontSize / 16));
+    }
+    cursor = ltr ? cursor + piece.width : cursor - piece.width;
+  }
+  ctx.textAlign = style.align;
+  ctx.font = fontString(style, fontSize);
 }
 
 export function drawImage(

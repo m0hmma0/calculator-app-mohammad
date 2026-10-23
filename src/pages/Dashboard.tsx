@@ -166,6 +166,129 @@ function folderChoices(folders: FolderRecord[]) {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
+/** A folder and every folder inside it — none of which it can be moved into. */
+function branchOf(folders: readonly FolderRecord[], id: string): Set<string> {
+  const branch = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const folder of folders) {
+      if (folder.parentId && branch.has(folder.parentId) && !branch.has(folder.id)) {
+        branch.add(folder.id);
+        grew = true;
+      }
+    }
+  }
+  return branch;
+}
+
+/** Where a folder can go: the top level, or any folder not inside itself. */
+function FolderMoveSelect({
+  folder,
+  folders,
+  onMove,
+}: {
+  folder: FolderRecord;
+  folders: FolderRecord[];
+  onMove: (parentId: string | null) => void;
+}) {
+  const choices = useMemo(() => {
+    const own = branchOf(folders, folder.id);
+    return folderChoices(folders).filter((choice) => !own.has(choice.id));
+  }, [folders, folder.id]);
+  return (
+    <label className={styles.moveTo}>
+      <span>Move to</span>
+      <select
+        value={folder.parentId ?? ''}
+        data-testid={`folder-move-to-${folder.id}`}
+        onChange={(event) => onMove(event.target.value === '' ? null : event.target.value)}
+      >
+        <option value="">All boards (top level)</option>
+        {choices.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function FolderCard({
+  folder,
+  folders,
+  boards,
+  onRename,
+  onMove,
+  onShare,
+  onTrash,
+}: {
+  folder: FolderRecord;
+  folders: FolderRecord[];
+  boards: BoardRecord[];
+  onRename: () => void;
+  onMove: (parentId: string | null) => void;
+  onShare: () => void;
+  onTrash: () => void;
+}) {
+  const [moving, setMoving] = useState(false);
+  const inside = boards.filter((board) => board.folderId === folder.id).length;
+  const subfolders = folders.filter((each) => each.parentId === folder.id).length;
+  const to = { name: 'folder', folderId: folder.id } as const;
+
+  return (
+    <article className={styles.card} data-testid={`folder-card-${folder.id}`}>
+      <Link to={to} className={`${styles.thumb} ${styles.folderThumb}`} aria-label={folder.name}>
+        <svg width="54" height="44" viewBox="0 0 54 44" aria-hidden="true">
+          <path
+            d="M3 8a4 4 0 0 1 4-4h13l5 6h22a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"
+            fill="currentColor"
+          />
+        </svg>
+        <span className={styles.folderCount}>
+          {inside} {inside === 1 ? 'board' : 'boards'}
+          {subfolders > 0 ? ` · ${subfolders} ${subfolders === 1 ? 'folder' : 'folders'}` : ''}
+        </span>
+      </Link>
+      <div className={styles.cardFoot}>
+        <Link to={to} className={styles.cardTitle}>
+          {folder.name}
+        </Link>
+      </div>
+      <div className={styles.cardActions}>
+        <button type="button" onClick={onRename} data-testid={`folder-rename-${folder.id}`}>
+          Rename
+        </button>
+        <button
+          type="button"
+          aria-expanded={moving}
+          onClick={() => setMoving((current) => !current)}
+          data-testid={`folder-move-${folder.id}`}
+        >
+          Move
+        </button>
+        <button type="button" onClick={onShare} data-testid={`folder-share-${folder.id}`}>
+          Share
+        </button>
+        <button type="button" onClick={onTrash} data-testid={`folder-trash-${folder.id}`}>
+          Delete
+        </button>
+      </div>
+      {moving ? (
+        <FolderMoveSelect
+          folder={folder}
+          folders={folders}
+          onMove={(parentId) => {
+            setMoving(false);
+            onMove(parentId);
+          }}
+        />
+      ) : null}
+    </article>
+  );
+}
+
 function BoardCard({
   board,
   folders,
@@ -303,6 +426,53 @@ export function Dashboard({ view }: { view: View }) {
     });
   }, [view.kind, workspace.boards, workspace.trashedBoards, query, starredOnly, activeFolderId]);
 
+  // The folders in view: inside the open folder, or deleted ones in the trash. A
+  // folder deleted together with the one it was in shows only as that one.
+  const folderCards = useMemo(() => {
+    if (view.kind === 'shared' || query.trim() || starredOnly) return [];
+    if (view.kind === 'trash') {
+      return workspace.trashedFolders.filter(
+        (folder) =>
+          !workspace.trashedFolders.some(
+            (parent) => parent.id === folder.parentId && parent.deletedAt === folder.deletedAt,
+          ),
+      );
+    }
+    return workspace.folders.filter((folder) => folder.parentId === activeFolderId);
+  }, [view.kind, query, starredOnly, workspace.folders, workspace.trashedFolders, activeFolderId]);
+  // In the trash, boards that went with a deleted folder come back with it.
+  const boardCards =
+    view.kind === 'trash'
+      ? visible.filter(
+          (board) =>
+            !workspace.trashedFolders.some(
+              (folder) => folder.id === board.folderId && folder.deletedAt === board.deletedAt,
+            ),
+        )
+      : visible;
+
+  const renameFolder = (folder: FolderRecord) => {
+    const name = window.prompt('Rename folder', folder.name);
+    if (name !== null) void workspace.renameFolder(folder.id, name);
+  };
+  const deleteFolder = async (folder: FolderRecord) => {
+    const sure = window.confirm(
+      `Move “${folder.name}” and everything in it to the trash? You can restore it from the trash.`,
+    );
+    if (!sure) return;
+    // Deleting the folder on screen, or one it is inside, leaves for the one above.
+    const leaving =
+      activeFolderId !== null && branchOf(workspace.folders, folder.id).has(activeFolderId);
+    await workspace.trashFolder(folder.id);
+    if (leaving) {
+      navigate(
+        folder.parentId ? { name: 'folder', folderId: folder.parentId } : { name: 'dashboard' },
+      );
+    }
+  };
+  const activeFolder = workspace.folders.find((folder) => folder.id === activeFolderId) ?? null;
+  const [folderMenu, setFolderMenu] = useState(false);
+
   const newFolder = async () => {
     const name = window.prompt('Name for the new folder', 'New folder');
     if (name === null) return;
@@ -429,6 +599,56 @@ export function Dashboard({ view }: { view: View }) {
             </button>
           ) : null}
 
+          {activeFolder ? (
+            <div className={styles.folderMenu}>
+              <button
+                type="button"
+                className={styles.secondary}
+                aria-expanded={folderMenu}
+                aria-haspopup="menu"
+                data-testid="folder-menu"
+                onClick={() => setFolderMenu((current) => !current)}
+              >
+                Folder ▾
+              </button>
+              {folderMenu ? (
+                <div className={styles.folderMenuPanel} role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="folder-menu-rename"
+                    onClick={() => {
+                      setFolderMenu(false);
+                      renameFolder(activeFolder);
+                    }}
+                  >
+                    Rename folder
+                  </button>
+                  <FolderMoveSelect
+                    folder={activeFolder}
+                    folders={workspace.folders}
+                    onMove={(parentId) => {
+                      setFolderMenu(false);
+                      void workspace.moveFolder(activeFolder.id, parentId);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.danger}
+                    data-testid="folder-menu-delete"
+                    onClick={() => {
+                      setFolderMenu(false);
+                      void deleteFolder(activeFolder);
+                    }}
+                  >
+                    Delete folder…
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {view.kind === 'shared' ? null : view.kind === 'trash' ? (
             <button
               type="button"
@@ -463,7 +683,7 @@ export function Dashboard({ view }: { view: View }) {
 
         {view.kind === 'shared' ? (
           <SharedList />
-        ) : visible.length === 0 ? (
+        ) : boardCards.length === 0 && folderCards.length === 0 ? (
           <p className={styles.blank} data-testid="empty-state">
             {view.kind === 'trash'
               ? 'The trash is empty.'
@@ -473,7 +693,40 @@ export function Dashboard({ view }: { view: View }) {
           </p>
         ) : (
           <div className={styles.grid}>
-            {visible.map((board) =>
+            {folderCards.map((folder) =>
+              view.kind === 'trash' ? (
+                <article
+                  key={folder.id}
+                  className={styles.card}
+                  data-testid={`folder-card-${folder.id}`}
+                >
+                  <span className={`${styles.thumb} ${styles.folderThumb}`}>
+                    <span className={styles.empty}>Folder · {folder.name}</span>
+                  </span>
+                  <div className={styles.cardActions}>
+                    <button
+                      type="button"
+                      data-testid={`restore-folder-${folder.id}`}
+                      onClick={() => void workspace.restoreFolder(folder.id)}
+                    >
+                      Restore with everything in it
+                    </button>
+                  </div>
+                </article>
+              ) : (
+                <FolderCard
+                  key={folder.id}
+                  folder={folder}
+                  folders={workspace.folders}
+                  boards={workspace.boards}
+                  onRename={() => renameFolder(folder)}
+                  onMove={(parentId) => void workspace.moveFolder(folder.id, parentId)}
+                  onShare={() => setSharing({ type: 'folder', id: folder.id, title: folder.name })}
+                  onTrash={() => void deleteFolder(folder)}
+                />
+              ),
+            )}
+            {boardCards.map((board) =>
               view.kind === 'trash' ? (
                 <article key={board.id} className={styles.card} data-testid={`board-${board.id}`}>
                   <span className={styles.thumb}>
