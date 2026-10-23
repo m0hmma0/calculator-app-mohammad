@@ -5,7 +5,11 @@ import type { Point } from '@/geometry';
 import { asUrl, placeLink } from '@/media/embeds';
 import { copiesOf } from '@/model/copies';
 import type { BoardElement } from '@/model/element';
+import { imageBlobsFrom } from '@/media/images';
+import { createElement } from '@/model/element';
+import { keyBetween } from '@/model/zorder';
 import { useBoardStore } from '@/state/boardStore';
+import { defaultTextBox, textHeight, textWidth } from '@/text/measure';
 
 const MIME = 'application/x-sabboura+json';
 const FALLBACK_KEY = 'sabboura:clipboard';
@@ -30,6 +34,29 @@ function decode(text: string): BoardElement[] | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Pasted text, as a text box with its top-left corner at `at`: as wide as its longest
+ * line, up to a full default box, and as tall as it needs.
+ */
+function placeText(text: string, at: Point) {
+  const store = useBoardStore.getState();
+  if (store.stageSize.width <= 1 && store.stageSize.height <= 1) return;
+  const element = createElement({
+    type: 'text',
+    box: { x: at.x, y: at.y, w: 1, h: 1 },
+    z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+  });
+  const full = defaultTextBox(element.style);
+  const widest = Math.max(
+    0,
+    ...text.split('\n').map((line) => textWidth(element.style, line) ?? full.w),
+  );
+  element.w = Math.max(120, Math.min(full.w, widest + 4));
+  element.text = text;
+  element.h = textHeight(element, text) ?? full.h;
+  store.addElement(element);
 }
 
 /**
@@ -111,7 +138,25 @@ export function useClipboard(hostRef: RefObject<HTMLElement | null>): void {
         return;
       }
 
-      if (!elements) {
+      // Text from anywhere else becomes a text box — unless a picture came with it,
+      // which the image import places instead.
+      const plain = event.clipboardData?.getData('text/plain') ?? '';
+      if (!elements && plain.trim() !== '') {
+        if (imageBlobsFrom(event.clipboardData).length > 0) return;
+        event.preventDefault();
+        const store = useBoardStore.getState();
+        const at = lastPointer
+          ? screenToBoard(store.viewport, lastPointer)
+          : {
+              x: store.viewport.x + store.stageSize.width / (2 * store.viewport.zoom),
+              y: store.viewport.y + store.stageSize.height / (2 * store.viewport.zoom),
+            };
+        placeText(plain.replace(/\r\n?/g, '\n'), at);
+        return;
+      }
+
+      // The browser refused to hand over clipboard data at all: use this tab's copy.
+      if (!elements && !event.clipboardData?.types.length) {
         try {
           elements = decode(localStorage.getItem(FALLBACK_KEY) ?? '');
         } catch {

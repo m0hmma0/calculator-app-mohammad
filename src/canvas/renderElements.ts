@@ -1,6 +1,6 @@
 import { rectsIntersect } from '@/geometry';
 import { elementAABB } from '@/model/bounds';
-import type { BoardElement } from '@/model/element';
+import { canHoldLabel, labelBox, type BoardElement } from '@/model/element';
 import { lineEnds, polygonPoints, POLYGONAL } from '@/model/shapePath';
 import {
   drawCode,
@@ -195,6 +195,34 @@ function drawContent(
   if (rotated) ctx.restore();
 }
 
+/** A shape's label: centred in the shape, shrinking to fit as a sticky note's does. */
+function drawLabel(ctx: CanvasRenderingContext2D, element: BoardElement, colors: CanvasColors) {
+  const inner = labelBox(element);
+  ctx.save();
+  if (element.rotation !== 0) {
+    const cx = element.x + element.w / 2;
+    const cy = element.y + element.h / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate(element.rotation);
+    ctx.translate(-cx, -cy);
+  }
+  ctx.globalAlpha = element.opacity;
+  // Words on a filled shape are white; on an outline, they take the outline's colour.
+  const textColor =
+    element.style.textColor ?? (element.style.fill ? '#ffffff' : element.style.stroke);
+  drawText(
+    ctx,
+    {
+      ...element,
+      ...inner,
+      type: 'sticky',
+      style: { ...element.style, align: 'center', textColor },
+    },
+    colors,
+  );
+  ctx.restore();
+}
+
 function paintRun(
   ctx: CanvasRenderingContext2D,
   run: readonly BoardElement[],
@@ -297,6 +325,14 @@ export function renderElements(
     if (CONTENT.has(element.type)) {
       flush(index);
       drawContent(ctx, element, colors, vp.zoom, onImageReady);
+      continue;
+    }
+
+    // A shape with words in it is drawn on its own, its label straight after it.
+    if (element.text && canHoldLabel(element)) {
+      flush(index);
+      paintRun(ctx, onScreen, index, index + 1, colors, vp.zoom);
+      drawLabel(ctx, element, colors);
       continue;
     }
 

@@ -132,6 +132,11 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   it from the object list first.
 - **Pasted pictures are as tall as the screen at 58% zoom**, so at 100% they run off
   screen; a test that grabs a picture's handles zooms to the selection first.
+- **Text tool defaults are big** (40px type, 55 characters by 8 lines when clicked);
+  a test that needs a small box drags one out. Typed text grows a box's height
+  (`setElementText` measures it), so heights in tests are lower bounds.
+- **The canvas presses `preventDefault` on pointer-down**, so focus never moves on its
+  own: anything that must end on a click elsewhere (typing) is ended there explicitly.
 - **Controlled checkboxes that wait for the server** do not change on click, so
   Playwright's `.check()` fails; tests click and wait for the result instead.
 - **An owner must never wait for the server to draw.** Boards open read-only until the

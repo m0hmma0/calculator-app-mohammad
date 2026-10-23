@@ -1,3 +1,4 @@
+import { listPrefix } from '@/text/lists';
 import type { ElementStyle } from './element';
 
 /**
@@ -33,6 +34,11 @@ export interface WrappedLine {
   text: string;
   /** Prefix for a list item, already numbered where relevant. */
   marker: string;
+  /**
+   * How far a wrapped line of a list item is set in, so it hangs under the item's
+   * words rather than under its number.
+   */
+  indent?: number;
 }
 
 export type MeasureText = (text: string) => number;
@@ -56,7 +62,10 @@ export function wrapText(
     itemNumber += 1;
     const marker = list === 'bullet' ? '• ' : list === 'number' ? `${itemNumber}. ` : '';
     const markerWidth = marker ? measure(marker) : 0;
-    const available = Math.max(1, maxWidth - markerWidth);
+    // An item whose marker is written in the text hangs its wrapped lines under its words.
+    const prefix = marker ? null : listPrefix(paragraph);
+    const hang = prefix ? measure(prefix) : 0;
+    let available = Math.max(1, maxWidth - markerWidth);
 
     if (paragraph.length === 0) {
       lines.push({ text: '', marker });
@@ -67,7 +76,12 @@ export function wrapText(
     let first = true;
 
     const push = () => {
-      lines.push({ text: current, marker: first ? marker : ' '.repeat(marker.length) });
+      lines.push({
+        text: current,
+        marker: first ? marker : ' '.repeat(marker.length),
+        ...(hang && !first ? { indent: hang } : {}),
+      });
+      if (first && hang) available = Math.max(1, maxWidth - hang);
       first = false;
       current = '';
     };

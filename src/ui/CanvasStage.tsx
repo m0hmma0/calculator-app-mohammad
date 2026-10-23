@@ -65,7 +65,16 @@ export function CanvasStage() {
     const { viewport, draft } = store;
     // Scrubbing through history shows the board as it was, and nothing can be edited.
     const preview = useHistory.getState().preview;
-    const elements = preview ?? store.elements;
+    // The text being typed is shown by the editor over it; drawn here as well, the
+    // two copies never quite line up and read as a shadow.
+    const editing = preview ? null : store.editingId;
+    const elements =
+      preview ??
+      (editing
+        ? store.elements.map((element) =>
+            element.id === editing ? { ...element, text: '' } : element,
+          )
+        : store.elements);
     const selection = preview ? [] : store.selection;
 
     ctx.fillStyle = colors.background;

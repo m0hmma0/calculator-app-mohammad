@@ -148,3 +148,7 @@
       3 21,
     crosshair;
 }
+
+.stage[data-cursor='text'] {
+  cursor: text;
+}

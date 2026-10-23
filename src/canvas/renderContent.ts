@@ -12,42 +12,109 @@ export const STICKY_PADDING = 14;
 export const TEXT_PADDING = 2;
 
 /**
- * perfect-freehand turns samples into an outline polygon whose width follows
- * pressure, which is the difference between ink and a flat polyline.
+ * perfect-freehand turns samples into an outline whose width follows pressure,
+ * which is the difference between ink and a flat polyline. A stylus reports real
+ * pressure; a mouse or finger does not (every sample is 0.5), so there the width
+ * follows speed instead — quick strokes thin out the way a pen's do.
  */
 export function inkOutline(element: BoardElement): number[][] {
   const points = fromFlat(element.points ?? []);
   if (points.length === 0) return [];
+  const pressured = points.some((point) => Math.abs(point.pressure - 0.5) > 0.001);
 
   return getStroke(
     points.map((point) => [point.x, point.y, point.pressure]),
     {
       size: element.style.strokeWidth,
-      thinning: 0.55,
-      smoothing: 0.55,
-      streamline: 0.4,
-      simulatePressure: false,
+      thinning: pressured ? 0.62 : 0.5,
+      smoothing: 0.62,
+      streamline: 0.5,
+      simulatePressure: !pressured,
+      start: { cap: true, taper: 0 },
+      end: { cap: true, taper: 0 },
       last: true,
     },
   ) as number[][];
 }
+
+/**
+ * A closed path through the outline's midpoints with each point as a control
+ * point: curves rather than straight segments, so ink stays smooth however far in
+ * the board is zoomed.
+ */
+function smoothClosed(points: readonly number[][], dx: number, dy: number): Path2D {
+  const path = new Path2D();
+  const count = points.length;
+  const mid = (a: number[], b: number[]) => [(a[0]! + b[0]!) / 2 + dx, (a[1]! + b[1]!) / 2 + dy];
+  const start = mid(points[count - 1]!, points[0]!);
+  path.moveTo(start[0]!, start[1]!);
+  for (let index = 0; index < count; index += 1) {
+    const point = points[index]!;
+    const next = mid(point, points[(index + 1) % count]!);
+    path.quadraticCurveTo(point[0]! + dx, point[1]! + dy, next[0]!, next[1]!);
+  }
+  path.closePath();
+  return path;
+}
+
+/** The stroke's own line, smoothed the same way, for dashed and dotted ink. */
+function smoothOpen(element: BoardElement): Path2D {
+  const points = fromFlat(element.points ?? []);
+  const path = new Path2D();
+  if (points.length === 0) return path;
+  const { x, y } = element;
+  path.moveTo(points[0]!.x + x, points[0]!.y + y);
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const point = points[index]!;
+    const next = points[index + 1]!;
+    path.quadraticCurveTo(
+      point.x + x,
+      point.y + y,
+      (point.x + next.x) / 2 + x,
+      (point.y + next.y) / 2 + y,
+    );
+  }
+  const last = points.at(-1)!;
+  path.lineTo(last.x + x, last.y + y);
+  return path;
+}
+
+const INK_DASHES: Record<string, number[]> = { dashed: [2.2, 1.6], dotted: [0.01, 1.8] };
 
 export function drawInk(
   ctx: CanvasRenderingContext2D,
   element: BoardElement,
   colors: CanvasColors,
 ): void {
-  const outline = inkOutline(element);
-  if (outline.length < 3) return;
-
-  ctx.beginPath();
-  ctx.moveTo(element.x + outline[0]![0]!, element.y + outline[0]![1]!);
-  for (let index = 1; index < outline.length; index += 1) {
-    ctx.lineTo(element.x + outline[index]![0]!, element.y + outline[index]![1]!);
+  const colour = resolveColor(element.style.fill ?? element.style.stroke, colors) ?? '#000';
+  ctx.save();
+  if (element.style.shadow) {
+    const zoom = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 6 / zoom;
+    ctx.shadowOffsetY = 2 / zoom;
   }
-  ctx.closePath();
-  ctx.fillStyle = resolveColor(element.style.fill ?? element.style.stroke, colors) ?? '#000';
-  ctx.fill();
+
+  const dashes = INK_DASHES[element.style.dash];
+  if (dashes) {
+    // A dashed line has no pressure to show; it is drawn along the stroke itself.
+    const width = element.style.strokeWidth;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.setLineDash(dashes.map((part) => part * width));
+    ctx.strokeStyle = colour;
+    ctx.stroke(smoothOpen(element));
+    ctx.restore();
+    return;
+  }
+
+  const outline = inkOutline(element);
+  if (outline.length >= 3) {
+    ctx.fillStyle = colour;
+    ctx.fill(smoothClosed(outline, element.x, element.y));
+  }
+  ctx.restore();
 }
 
 export interface TextRender {
@@ -92,6 +159,13 @@ export function drawText(
   ctx.fillStyle =
     resolveColor(style.textColor ?? style.fill, colors) ?? colors.byToken.get('--text') ?? '#000';
   if (style.letterSpacing) ctx.letterSpacing = `${style.letterSpacing}px`;
+  // A text box has no background to cast a shadow, so the letters do.
+  if (style.shadow && element.type === 'text') {
+    const zoom = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 4 / zoom;
+    ctx.shadowOffsetY = 2 / zoom;
+  }
 
   // 'start' and 'end' follow the text direction; 'center' is the same either way.
   ctx.textAlign = style.align;
@@ -111,7 +185,13 @@ export function drawText(
   layout.lines.forEach((line, index) => {
     const y = top + index * layout.lineHeight + layout.lineHeight / 2;
     const text = line.marker + line.text;
-    ctx.fillText(text, anchorX, y);
+    const hang =
+      line.indent && style.align !== 'center'
+        ? (style.align === 'start') === (layout.direction === 'ltr')
+          ? line.indent
+          : -line.indent
+        : 0;
+    ctx.fillText(text, anchorX + hang, y);
 
     if (style.underline && text.trim() !== '') {
       const width = ctx.measureText(text).width;

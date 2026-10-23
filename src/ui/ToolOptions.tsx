@@ -10,7 +10,7 @@ const INK_COLORS = [
   'var(--shape-6)',
 ];
 
-const INK_WIDTHS = [3, 6, 12, 24];
+const INK_WIDTHS = [1.5, 3, 6, 12];
 
 /** Settings for the tool in hand — only shown when there is something to set. */
 export function ToolOptions() {
@@ -38,7 +38,12 @@ export function ToolOptions() {
                 data-testid={`ink-width-${width}`}
                 onClick={() => setInk({ width })}
               >
-                <span style={{ width: Math.min(18, width), height: Math.min(18, width) }} />
+                <span
+                  style={{
+                    width: Math.min(18, Math.max(2.5, width)),
+                    height: Math.min(18, Math.max(2.5, width)),
+                  }}
+                />
               </button>
             ))}
           </div>

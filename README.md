@@ -164,6 +164,24 @@ only from that bar and closes with its ×. All of these choices are remembered p
 browser in `sabboura:ui`. On a phone the tools take their own row and menus open as
 sheets above the bottom bar.
 
+Writing and drawing:
+
+- **Text boxes** are dragged out to a size, or clicked for a 55-character by 8-line box
+  of 40px type; they grow as they fill. One click selects, a double click edits.
+  Pasted text from anywhere becomes a text box.
+- **Lists** are written into the text ("• " or "1. "), word-processor style: Enter
+  continues the list, Enter on an empty item ends it, Shift+Enter breaks a line
+  inside an item, Backspace after a marker removes it, "- " starts bullets, and a
+  changed number carries through the items after it (`src/text/lists.ts`).
+- **Ink** follows a stylus's pressure, or a mouse's speed, and is drawn as curves
+  rather than segments, from every pointer sample. Pens come in 1.5, 3, 6 and 12.
+- **Smart shapes**: hold Ctrl (⌘) while drawing a closed outline and it becomes a
+  rectangle, square, triangle, circle, oval, cloud or spike on lifting the pen
+  (`src/ink/recognize.ts`); anything else stays ink. Clouds and spikes are in Insert
+  too. Any shape can hold words: double-click it.
+- **The side panel** arranges a selection in a row or a column, scrolls when long, and
+  keeps position and size folded away at its foot.
+
 Following someone fits their whole view on your screen, whatever its size, and a thin
 frame in their colour says you are following. Clicking an avatar opens a card: whether
 they are following you (an eye on their avatar says the same), follow or stop, and

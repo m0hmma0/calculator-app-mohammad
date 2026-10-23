@@ -1,4 +1,6 @@
 import { useEffect, type RefObject } from 'react';
+import { recognizeShape } from '@/ink/recognize';
+import { defaultTextBox } from '@/text/measure';
 import { placeStamp } from './insertions';
 import { tableGrid } from '@/canvas/renderContent';
 import { useEmbeds } from '@/state/embedStore';
@@ -16,6 +18,7 @@ import {
 } from '@/geometry';
 import { elementAABB, rotateAround } from '@/model/bounds';
 import {
+  canHoldLabel,
   createElement,
   isInteractive,
   MIN_SIZE,
@@ -83,8 +86,11 @@ type Drag =
       points: InkPoint[];
       /** Index the straight segment pivots on while Shift is held. */
       shiftAnchor: number | null;
+      /** Ctrl (⌘) was held: on lifting, a recognisable outline becomes that shape. */
+      smart: boolean;
     }
   | { kind: 'erase'; pointerId: number }
+  | { kind: 'textbox'; pointerId: number; origin: Point; end: Point }
   | { kind: 'laser'; pointerId: number }
   | {
       kind: 'rotate';
@@ -276,6 +282,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         pointerId: event.pointerId,
         points: [{ ...start, pressure: pressureOf(event) }],
         shiftAnchor: null,
+        smart: event.ctrlKey || event.metaKey,
       };
       useBoardStore.getState().setDraft(inkDraft(drag.points));
     };
@@ -328,6 +335,15 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     const onPointerDown = (event: PointerEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      // Clicking the board ends any typing. The default is prevented below, so the
+      // text box would never lose focus on its own — and would stay open, and keep
+      // taking clicks meant for selecting.
+      const typing = useBoardStore.getState();
+      if (typing.editingId || typing.editingCell) {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        typing.endEditing();
+        typing.endCellEdit();
+      }
       // A past version is for looking at; the wheel still pans and zooms around it.
       if (useHistory.getState().preview) return;
 
@@ -382,19 +398,24 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return;
       }
 
-      if (tool === 'text' || tool === 'sticky') {
+      if (tool === 'text') {
+        // A text box is dragged out to the size wanted, or clicked for the default.
+        host.setPointerCapture(event.pointerId);
         const origin = board(event);
-        const sticky = tool === 'sticky';
+        drag = { kind: 'textbox', pointerId: event.pointerId, origin, end: origin };
+        return;
+      }
+
+      if (tool === 'sticky') {
+        const origin = board(event);
         const element = createElement({
-          type: sticky ? 'sticky' : 'text',
-          box: sticky
-            ? {
-                x: origin.x - STICKY_SIZE / 2,
-                y: origin.y - STICKY_SIZE / 2,
-                w: STICKY_SIZE,
-                h: STICKY_SIZE,
-              }
-            : { x: origin.x, y: origin.y, w: 240, h: 40 },
+          type: 'sticky',
+          box: {
+            x: origin.x - STICKY_SIZE / 2,
+            y: origin.y - STICKY_SIZE / 2,
+            w: STICKY_SIZE,
+            h: STICKY_SIZE,
+          },
           z: keyBetween(store.elements.at(-1)?.z ?? null, null),
         });
         element.text = '';
@@ -500,6 +521,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (isShapeTool(tool)) return setCursor('crosshair');
       if (tool === 'stamp') return setCursor('stamp');
       if (tool === 'pen') return setCursor('pen');
+      if (tool === 'text') return setCursor('text');
       if (!lastClient) return setCursor('default');
 
       const point = board(lastClient);
@@ -547,6 +569,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       switch (drag.kind) {
         case 'ink': {
+          if (event.ctrlKey || event.metaKey) drag.smart = true;
           const sample: InkPoint = { ...point, pressure: pressureOf(event) };
 
           if (event.shiftKey) {
@@ -556,7 +579,16 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
             drag.points = straightenFrom(drag.points, drag.shiftAnchor, sample);
           } else {
             drag.shiftAnchor = null;
-            drag.points.push(sample);
+            // Every sample the pointer gave since the last frame, not just the last —
+            // fast handwriting otherwise turns into straight segments.
+            const batch = event.getCoalescedEvents?.() ?? [];
+            if (batch.length > 1) {
+              for (const each of batch) {
+                drag.points.push({ ...board(each), pressure: pressureOf(each) });
+              }
+            } else {
+              drag.points.push(sample);
+            }
           }
 
           store.setDraft(inkDraft(drag.points));
@@ -581,6 +613,12 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         }
 
         case 'marquee': {
+          store.setMarquee(rectFromPoints(drag.origin, point));
+          break;
+        }
+
+        case 'textbox': {
+          drag.end = point;
           store.setMarquee(rectFromPoints(drag.origin, point));
           break;
         }
@@ -705,6 +743,29 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     const finishDrag = () => {
       const store = useBoardStore.getState();
 
+      if (drag.kind === 'textbox') {
+        store.setMarquee(null);
+        const end = drag.end;
+        const dragged =
+          Math.hypot(end.x - drag.origin.x, end.y - drag.origin.y) * store.viewport.zoom >=
+          DRAG_THRESHOLD * 2;
+        const element = createElement({
+          type: 'text',
+          box: { x: drag.origin.x, y: drag.origin.y, w: 1, h: 1 },
+          z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+        });
+        const box = dragged ? rectFromPoints(drag.origin, end) : null;
+        const size = box ?? defaultTextBox(element.style);
+        Object.assign(element, box ?? { x: drag.origin.x, y: drag.origin.y }, {
+          w: Math.max(40, size.w),
+          h: Math.max(element.style.fontSize * element.style.lineHeight, size.h),
+        });
+        element.text = '';
+        store.addElement(element);
+        store.setTool('select');
+        store.beginEditing(element.id);
+      }
+
       if (drag.kind === 'draw') {
         const dragged = drag.moved;
         const element = dragged
@@ -745,9 +806,27 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       }
 
       if (drag.kind === 'ink') {
-        const simplified = simplify(drag.points, 0.7);
+        // Tolerance in screen pixels, so writing zoomed in keeps its detail.
+        const simplified = simplify(drag.points, 0.3 / store.viewport.zoom);
         store.setDraft(null);
-        if (simplified.length >= 2 || drag.points.length >= 2) {
+        const shape = drag.smart ? recognizeShape(drag.points) : null;
+        if (shape) {
+          // A smart shape: drawn in the pen's colour, as an outline, ready for text.
+          const element = createElement({
+            type: shape.type,
+            box: shape.box,
+            z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+            style: {
+              fill: null,
+              stroke: store.inkColor,
+              strokeWidth: Math.min(8, Math.max(2, store.inkWidth * 0.6)),
+              radius: shape.type === 'rect' ? 6 : 0,
+            },
+          });
+          element.rotation = shape.rotation;
+          store.addElement(element);
+          store.clearSelection();
+        } else if (simplified.length >= 2 || drag.points.length >= 2) {
           const element = inkDraft(simplified.length >= 2 ? simplified : drag.points);
           store.addElement(element);
           // Writing is writing: the stroke is not selected, so the next one starts clean.
@@ -810,6 +889,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     const onContextMenu = (event: MouseEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
       event.preventDefault();
+      // On a Mac, Ctrl-click is a right-click: drawing a smart shape is not a menu.
+      if (drag.kind === 'ink' || useBoardStore.getState().tool === 'pen') return;
 
       const store = useBoardStore.getState();
       const point = board(event);
@@ -840,7 +921,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         target.type === 'text' ||
         target.type === 'sticky' ||
         target.type === 'frame' ||
-        target.type === 'code'
+        target.type === 'code' ||
+        canHoldLabel(target)
       ) {
         store.beginEditing(target.id);
       } else if (target.type === 'table' && target.table && target.rotation === 0) {

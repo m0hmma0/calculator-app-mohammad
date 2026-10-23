@@ -22,6 +22,17 @@ function viewCentre() {
   };
 }
 
+/**
+ * Where the next imported file goes: under the last one, when several are imported
+ * together, so they make a column rather than a pile.
+ */
+let below: { x: number; y: number } | null = null;
+
+/** Starts a fresh batch: the next import is centred in view again. */
+export function startImportBatch(): void {
+  below = null;
+}
+
 function place(elements: BoardElement[]) {
   const store = useBoardStore.getState();
   const minX = Math.min(...elements.map((element) => element.x));
@@ -29,8 +40,9 @@ function place(elements: BoardElement[]) {
   const maxX = Math.max(...elements.map((element) => element.x + element.w));
   const maxY = Math.max(...elements.map((element) => element.y + element.h));
   const centre = viewCentre();
-  const target = { x: centre.x - (maxX - minX) / 2, y: centre.y - (maxY - minY) / 2 };
+  const target = below ?? { x: centre.x - (maxX - minX) / 2, y: centre.y - (maxY - minY) / 2 };
   store.addElements(copiesOf(elements, target, store.elements.at(-1)?.z ?? null));
+  below = { x: target.x, y: target.y + (maxY - minY) + PAGE_GAP };
 }
 
 async function importSvg(file: File) {

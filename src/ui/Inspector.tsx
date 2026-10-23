@@ -1,13 +1,14 @@
 import { FONT_LABELS, type FontKey } from '@/canvas/fonts';
 import { LANGUAGES } from '@/model/highlight';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
-import { isTextual } from '@/model/element';
+import { canHoldLabel, isTextual, type BoardElement, type ElementId } from '@/model/element';
+import { listKindOf, toggleList, type ListKind } from '@/text/lists';
 import { selectionAABB } from '@/model/bounds';
 import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
-import { togglePane, useUiPrefs } from '@/state/uiPrefs';
+import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import styles from './Inspector.module.css';
 
 const FILLS = [
@@ -55,7 +56,8 @@ export function Inspector() {
   const styleSelection = useBoardStore((state) => state.styleSelection);
   const setSelectionOpacity = useBoardStore((state) => state.setSelectionOpacity);
   const alignSelection = useBoardStore((state) => state.alignSelection);
-  const distributeSelection = useBoardStore((state) => state.distributeSelection);
+  const arrangeSelection = useBoardStore((state) => state.arrangeSelection);
+  const showGeometry = useUiPrefs((state) => state.geometry);
   const reorderSelection = useBoardStore((state) => state.reorderSelection);
   const toggleLockSelection = useBoardStore((state) => state.toggleLockSelection);
   const toggleHiddenSelection = useBoardStore((state) => state.toggleHiddenSelection);
@@ -78,6 +80,26 @@ export function Inspector() {
 
   // The history panel takes this place, and the inspector describes the live board.
   // Nothing to adjust for someone who can only look.
+  /**
+   * Lists are written into the text as markers, word-processor style. A box from
+   * before that, listed by its style, is converted the first time it is touched.
+   */
+  const listOf = (element: BoardElement) =>
+    element.style.list !== 'none' ? element.style.list : listKindOf(element.text ?? '');
+  const toggleListOn = (kind: ListKind) => {
+    const patches = new Map<ElementId, Partial<BoardElement>>();
+    for (const element of selected) {
+      if (element.text === undefined) continue;
+      const legacy = element.style.list;
+      const style = { ...element.style, list: 'none' as const };
+      patches.set(
+        element.id,
+        legacy === kind ? { style } : { style, text: toggleList(element.text, kind) },
+      );
+    }
+    applyDiscrete(patches);
+  };
+
   // It opens only when asked for, from the bottom bar, and closes with its ×.
   if (historyOpen || !editable || !open) return null;
 
@@ -99,18 +121,6 @@ export function Inspector() {
             <p className={styles.label}>
               {selected.length > 1 ? `${selected.length} selected` : first.type}
             </p>
-            <dl className={styles.geometry}>
-              <dt>X</dt>
-              <dd data-testid="geo-x">{Math.round(box?.x ?? 0)}</dd>
-              <dt>Y</dt>
-              <dd data-testid="geo-y">{Math.round(box?.y ?? 0)}</dd>
-              <dt>W</dt>
-              <dd data-testid="geo-w">{Math.round(box?.w ?? 0)}</dd>
-              <dt>H</dt>
-              <dd data-testid="geo-h">{Math.round(box?.h ?? 0)}</dd>
-              <dt>∠</dt>
-              <dd data-testid="geo-angle">{degreesOf(first.rotation)}°</dd>
-            </dl>
           </div>
 
           {first.type === 'table' && first.table && selected.length === 1 ? (
@@ -188,7 +198,7 @@ export function Inspector() {
             </div>
           ) : null}
 
-          {isTextual(first) ? (
+          {isTextual(first) || (canHoldLabel(first) && first.text) ? (
             <div className={styles.section} data-testid="text-controls">
               <p className={styles.label}>Text</p>
               <div className={styles.buttons}>
@@ -268,22 +278,18 @@ export function Inspector() {
                 <button
                   type="button"
                   className={styles.button}
-                  aria-pressed={first.style.list === 'bullet'}
+                  aria-pressed={listOf(first) === 'bullet'}
                   data-testid="text-bullet"
-                  onClick={() =>
-                    styleSelection({ list: first.style.list === 'bullet' ? 'none' : 'bullet' })
-                  }
+                  onClick={() => toggleListOn('bullet')}
                 >
                   • list
                 </button>
                 <button
                   type="button"
                   className={styles.button}
-                  aria-pressed={first.style.list === 'number'}
+                  aria-pressed={listOf(first) === 'number'}
                   data-testid="text-number"
-                  onClick={() =>
-                    styleSelection({ list: first.style.list === 'number' ? 'none' : 'number' })
-                  }
+                  onClick={() => toggleListOn('number')}
                 >
                   1. list
                 </button>
@@ -386,7 +392,18 @@ export function Inspector() {
                   className={styles.button}
                   aria-pressed={first.style.dash === dash}
                   data-testid={`dash-${dash}`}
-                  onClick={() => styleSelection({ dash })}
+                  onClick={() =>
+                    // A dashed outline needs an outline: a shape without one gets one.
+                    styleSelection(
+                      dash !== 'solid' && !first.style.stroke && first.type !== 'path'
+                        ? {
+                            dash,
+                            stroke: 'var(--text)',
+                            strokeWidth: Math.max(2, first.style.strokeWidth),
+                          }
+                        : { dash },
+                    )
+                  }
                 >
                   {dash}
                 </button>
@@ -455,18 +472,20 @@ export function Inspector() {
               <button
                 type="button"
                 className={styles.button}
-                data-testid="distribute-x"
-                onClick={() => distributeSelection('x')}
+                title="Side by side, a little apart, lined up along the top"
+                data-testid="arrange-row"
+                onClick={() => arrangeSelection('row')}
               >
-                distribute ↔
+                in a row ↔
               </button>
               <button
                 type="button"
                 className={styles.button}
-                data-testid="distribute-y"
-                onClick={() => distributeSelection('y')}
+                title="One under another, a little apart, lined up along the left"
+                data-testid="arrange-column"
+                onClick={() => arrangeSelection('column')}
               >
-                distribute ↕
+                in a column ↕
               </button>
             </div>
             <div className={styles.buttons}>
@@ -526,6 +545,28 @@ export function Inspector() {
               </button>
             </div>
           </div>
+          <details
+            className={styles.details}
+            open={showGeometry}
+            data-testid="geometry"
+            onToggle={(event) => {
+              if (event.currentTarget.open !== showGeometry) toggleGeometry();
+            }}
+          >
+            <summary>Position and size</summary>
+            <dl className={styles.geometry}>
+              <dt>X</dt>
+              <dd data-testid="geo-x">{Math.round(box?.x ?? 0)}</dd>
+              <dt>Y</dt>
+              <dd data-testid="geo-y">{Math.round(box?.y ?? 0)}</dd>
+              <dt>W</dt>
+              <dd data-testid="geo-w">{Math.round(box?.w ?? 0)}</dd>
+              <dt>H</dt>
+              <dd data-testid="geo-h">{Math.round(box?.h ?? 0)}</dd>
+              <dt>∠</dt>
+              <dd data-testid="geo-angle">{degreesOf(first.rotation)}°</dd>
+            </dl>
+          </details>
         </>
       ) : (
         <p className={styles.hint}>Nothing selected. Draw a shape, or drag a box to select.</p>

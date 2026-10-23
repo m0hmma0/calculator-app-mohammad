@@ -37,6 +37,16 @@ export const TOOL_SPECS: ToolSpec[] = [
     path: 'M8 2.4l1.7 3.7 4 .5-3 2.7.8 4L8 11.3l-3.5 2 .8-4-3-2.7 4-.5Z',
   },
   { id: 'polygon', label: 'Polygon', path: 'M8 2.5l5.2 3.8-2 6.2H4.8l-2-6.2Z' },
+  {
+    id: 'cloud',
+    label: 'Cloud',
+    path: 'M4.3 12.2a2.4 2.4 0 0 1-.5-4.7 2.6 2.6 0 0 1 3.4-2.9 3 3 0 0 1 5.4 1 2.4 2.4 0 0 1 .8 4.6 2.2 2.2 0 0 1-2.4 2Z',
+  },
+  {
+    id: 'spike',
+    label: 'Spike',
+    path: 'M8 1.8l1.3 3.6 3.6-1.6-1.7 3.5 3.5 1.4-3.6 1.3 1.4 3.7-3.4-1.9L8 14.2l-1.1-3.4-3.4 1.9 1.4-3.7-3.6-1.3 3.5-1.4-1.7-3.5 3.6 1.6Z',
+  },
   { id: 'line', label: 'Line', shortcut: 'L', path: 'M3 13 13 3' },
   { id: 'arrow', label: 'Arrow', shortcut: 'A', path: 'M3 13 13 3M8.4 3h4.6v4.6' },
   {

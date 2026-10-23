@@ -52,6 +52,12 @@ export function polygonPoints(element: BoardElement): Point[] {
       return points;
     }
 
+    case 'cloud':
+      return fitToBox(cloudOutline(), w, h);
+
+    case 'spike':
+      return fitToBox(spikeOutline(), w, h);
+
     default:
       return [
         { x: 0, y: 0 },
@@ -67,7 +73,57 @@ export const POLYGONAL: ReadonlySet<ElementType> = new Set([
   'diamond',
   'polygon',
   'star',
+  'cloud',
+  'spike',
 ]);
+
+/** Stretches an outline drawn around the origin to fill the box (0,0)–(w,h). */
+function fitToBox(points: readonly Point[], w: number, h: number): Point[] {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const spanX = Math.max(...xs) - minX || 1;
+  const spanY = Math.max(...ys) - minY || 1;
+  return points.map((point) => ({
+    x: ((point.x - minX) / spanX) * w,
+    y: ((point.y - minY) / spanY) * h,
+  }));
+}
+
+let cloud: Point[] | null = null;
+/**
+ * A cloud: an oval scalloped into round bulges, with sharp dips where they meet.
+ * Computed once — every cloud is this outline stretched to its box.
+ */
+function cloudOutline(): Point[] {
+  if (cloud) return cloud;
+  const bumps = 9;
+  const samples = 216;
+  cloud = [];
+  for (let index = 0; index < samples; index += 1) {
+    const angle = (index / samples) * Math.PI * 2;
+    const swell = 1 + 0.2 * Math.abs(Math.sin((bumps * angle) / 2));
+    cloud.push({ x: Math.cos(angle) * 1.45 * swell, y: Math.sin(angle) * swell });
+  }
+  return cloud;
+}
+
+let spike: Point[] | null = null;
+/** A burst: sharp points of uneven length around a rounder middle, like a "pow!". */
+function spikeOutline(): Point[] {
+  if (spike) return spike;
+  const points = 11;
+  spike = [];
+  for (let index = 0; index < points * 2; index += 1) {
+    const angle = (index / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+    // Fixed, uneven lengths: the hand-drawn look, the same every time.
+    const radius =
+      index % 2 === 0 ? 1 - 0.22 * (((index / 2) * 0.618) % 1) : 0.52 + 0.08 * ((index * 0.37) % 1);
+    spike.push({ x: Math.cos(angle) * 1.35 * radius, y: Math.sin(angle) * radius });
+  }
+  return spike;
+}
 
 /** The two ends of a line or arrow, in local coordinates, start first. */
 export function lineEnds(element: BoardElement): [Point, Point] {

@@ -55,7 +55,7 @@ describe('SVG export', () => {
         make('triangle', { x: 0 }),
         make('line', { x: 200 }),
         make('arrow', { x: 400 }),
-        make('text', { x: 600, text: 'hello' }),
+        make('text', { x: 600, w: 300, text: 'hello' }),
       ],
       { resolve },
     );

@@ -343,20 +343,22 @@ test.describe('arranging', () => {
   });
 
   // Checklist item 12.
-  test('distribute equalises the gaps', async ({ page }) => {
-    await draw(page, 'KeyR', { x: 260, y: 250 }, { x: 320, y: 330 });
-    await draw(page, 'KeyR', { x: 360, y: 250 }, { x: 420, y: 330 });
-    await draw(page, 'KeyR', { x: 700, y: 250 }, { x: 760, y: 330 });
-    await page.keyboard.press('KeyV');
-    await dragFrom(page, { x: 220, y: 210 }, { x: 820, y: 380 });
+  test('arranging puts overlapping shapes in a row, then in a column', async ({ page }) => {
+    // Three 60×80 rectangles, one on top of another.
+    for (let index = 0; index < 3; index += 1) {
+      await draw(page, 'KeyR', { x: 400, y: 250 }, { x: 460, y: 330 });
+    }
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    const piled = await geo(page);
+    expect(piled).toMatchObject({ w: 60, h: 80 });
 
-    const before = await geo(page);
-    await page.getByTestId('distribute-x').click();
-    const after = await geo(page);
+    // Side by side, 24 apart, tops lined up.
+    await page.getByTestId('arrange-row').click();
+    expect(await geo(page)).toMatchObject({ x: piled.x, y: piled.y, w: 60 * 3 + 24 * 2, h: 80 });
 
-    // The outer edges do not move when distributing.
-    expect(after.x).toBeCloseTo(before.x, 0);
-    expect(after.w).toBeCloseTo(before.w, 0);
+    // One under another, lefts lined up.
+    await page.getByTestId('arrange-column').click();
+    expect(await geo(page)).toMatchObject({ x: piled.x, y: piled.y, w: 60, h: 80 * 3 + 24 * 2 });
   });
 });
 

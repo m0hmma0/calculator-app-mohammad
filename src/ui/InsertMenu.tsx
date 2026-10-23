@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { importFile, IMPORT_ACCEPT, useImport } from '@/importers/importFile';
+import { importFile, IMPORT_ACCEPT, startImportBatch, useImport } from '@/importers/importFile';
 import { insertTable, STAMPS } from '@/input/insertions';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore, type Tool } from '@/state/boardStore';
@@ -24,6 +24,8 @@ const SHAPES: Tool[] = [
   'diamond',
   'star',
   'polygon',
+  'cloud',
+  'spike',
   'line',
   'arrow',
 ];
@@ -128,7 +130,9 @@ export function InsertMenu() {
           const files = [...(event.target.files ?? [])];
           event.target.value = '';
           void (async () => {
+            startImportBatch();
             for (const file of files) await importFile(file);
+            startImportBatch();
           })();
         }}
       />

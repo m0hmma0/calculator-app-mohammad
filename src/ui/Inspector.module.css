@@ -3,7 +3,7 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  /* As tall as what it holds, never taller than the board. */
+  /* As tall as what it holds, never taller than the board — and it scrolls. */
   max-height: calc(100% - 24px);
   width: 226px;
   display: flex;
@@ -14,7 +14,9 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-2);
   padding: 12px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   font-size: 13px;
 }
 
@@ -254,4 +256,17 @@
     max-height: 46dvh;
     overflow-y: auto;
   }
+}
+
+.panel > * {
+  flex-shrink: 0;
+}
+
+.details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
 }

@@ -3,7 +3,16 @@ import type { Point, Rect } from '@/geometry';
 export type ElementId = string;
 
 export type ShapeType =
-  'rect' | 'ellipse' | 'triangle' | 'diamond' | 'star' | 'polygon' | 'line' | 'arrow';
+  | 'rect'
+  | 'ellipse'
+  | 'triangle'
+  | 'diamond'
+  | 'star'
+  | 'polygon'
+  | 'cloud'
+  | 'spike'
+  | 'line'
+  | 'arrow';
 
 export type ContentType =
   'path' | 'text' | 'sticky' | 'image' | 'frame' | 'table' | 'code' | 'embed';
@@ -181,6 +190,47 @@ export function isTextual(element: BoardElement): boolean {
   return element.type === 'text' || element.type === 'sticky';
 }
 
+/** Shapes that can hold a label typed into them (lines and arrows cannot). */
+const LABELLED: ReadonlySet<ElementType> = new Set([
+  'rect',
+  'ellipse',
+  'triangle',
+  'diamond',
+  'star',
+  'polygon',
+  'cloud',
+  'spike',
+]);
+
+export function canHoldLabel(element: Pick<BoardElement, 'type'>): boolean {
+  return LABELLED.has(element.type);
+}
+
+/**
+ * Where a shape's label goes: a box inside the shape, so the words sit within its
+ * outline rather than across its corners.
+ */
+export function labelBox(element: BoardElement): { x: number; y: number; w: number; h: number } {
+  const inset =
+    element.type === 'rect'
+      ? 0.04
+      : element.type === 'triangle'
+        ? 0.22
+        : element.type === 'spike' || element.type === 'star'
+          ? 0.26
+          : 0.15;
+  const dx = element.w * inset;
+  const dy = element.h * inset;
+  // A triangle's room is in its lower half.
+  const shiftY = element.type === 'triangle' ? element.h * 0.12 : 0;
+  return {
+    x: element.x + dx,
+    y: element.y + dy + shiftY,
+    w: element.w - dx * 2,
+    h: element.h - dy * 2,
+  };
+}
+
 export function isConnector(element: BoardElement): boolean {
   return element.type === 'arrow' || element.type === 'line';
 }
@@ -190,6 +240,7 @@ export const TEXT_STYLE: Partial<ElementStyle> = {
   fill: null,
   stroke: null,
   textColor: 'var(--text)',
+  fontSize: 40,
 };
 export const STICKY_STYLE: Partial<ElementStyle> = {
   fill: 'var(--sticky)',

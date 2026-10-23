@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { textHeight } from '@/text/measure';
 import {
   addPage,
   applyPatches,
@@ -68,6 +69,8 @@ export const SHAPE_TOOLS: readonly ShapeType[] = [
   'diamond',
   'star',
   'polygon',
+  'cloud',
+  'spike',
   'line',
   'arrow',
 ];
@@ -180,6 +183,11 @@ interface BoardState {
   reorderSelection: (command: ReorderCommand) => void;
   alignSelection: (edge: 'left' | 'hcentre' | 'right' | 'top' | 'vcentre' | 'bottom') => void;
   distributeSelection: (axis: 'x' | 'y') => void;
+  /**
+   * Lays the selection out side by side (`row`) or one under another (`column`),
+   * a fixed gap apart, lined up along the top or the left — however they overlapped.
+   */
+  arrangeSelection: (direction: 'row' | 'column') => void;
   styleSelection: (patch: Partial<ElementStyle>) => void;
   setSelectionOpacity: (opacity: number) => void;
 
@@ -622,6 +630,36 @@ export const useBoardStore = create<BoardState>((set, get) => {
       get().applyDiscrete(patches);
     },
 
+    arrangeSelection: (direction) => {
+      const { elements } = get();
+      const chosen = selectedElements();
+      if (chosen.length < 2) return;
+      const row = direction === 'row';
+      const GAP = 24;
+
+      // A group moves by moving everything inside it.
+      const insideOf = (id: ElementId): BoardElement[] => {
+        const children = elements.filter((element) => element.parentId === id);
+        return children.flatMap((child) => (child.type === 'group' ? insideOf(child.id) : [child]));
+      };
+      const items = chosen
+        .map((element) => ({ element, box: elementAABB(element) }))
+        .sort((a, b) => (row ? a.box.x - b.box.x : a.box.y - b.box.y));
+      const startX = Math.min(...items.map((item) => item.box.x));
+      const startY = Math.min(...items.map((item) => item.box.y));
+
+      const patches = new Map<ElementId, Partial<BoardElement>>();
+      let cursor = row ? startX : startY;
+      for (const { element, box } of items) {
+        const dx = (row ? cursor : startX) - box.x;
+        const dy = (row ? startY : cursor) - box.y;
+        const moving = element.type === 'group' ? insideOf(element.id) : [element];
+        for (const each of moving) patches.set(each.id, { x: each.x + dx, y: each.y + dy });
+        cursor += (row ? box.w : box.h) + GAP;
+      }
+      get().applyDiscrete(patches);
+    },
+
     styleSelection: (patch) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of selectedElements()) {
@@ -734,7 +772,13 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
     setElementText: (id, text) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
-      patches.set(id, { text });
+      const element = get().elements.find((candidate) => candidate.id === id);
+      // A text box grows to hold what is typed, so nothing spills out of reach of a click.
+      const needed = element?.type === 'text' ? textHeight(element, text) : null;
+      patches.set(
+        id,
+        needed !== null && element && needed > element.h ? { text, h: needed } : { text },
+      );
       get().applyDiscrete(patches);
     },
 

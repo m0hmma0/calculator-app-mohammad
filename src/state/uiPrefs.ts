@@ -10,6 +10,8 @@ interface UiPrefs {
   layers: boolean;
   /** The side panel: style, size and arrangement of the selection. Opened by hand. */
   pane: boolean;
+  /** The selection's position and size, folded away at the foot of the side panel. */
+  geometry: boolean;
   /** The bottom bar showing all its buttons, rather than folded to one. */
   bottomBar: boolean;
   /** Timer lengths used most recently, newest first, in seconds. */
@@ -24,6 +26,7 @@ function load(): UiPrefs {
     minimap: false,
     layers: false,
     pane: false,
+    geometry: false,
     bottomBar: true,
     recentTimers: [],
   };
@@ -33,6 +36,7 @@ function load(): UiPrefs {
       minimap: stored.minimap === true,
       layers: stored.layers === true,
       pane: stored.pane === true,
+      geometry: stored.geometry === true,
       bottomBar: stored.bottomBar !== false,
       recentTimers: Array.isArray(stored.recentTimers)
         ? stored.recentTimers
@@ -58,6 +62,7 @@ useUiPrefs.subscribe((state) => {
 export const toggleMinimap = () => useUiPrefs.setState((state) => ({ minimap: !state.minimap }));
 export const toggleLayers = () => useUiPrefs.setState((state) => ({ layers: !state.layers }));
 export const togglePane = () => useUiPrefs.setState((state) => ({ pane: !state.pane }));
+export const toggleGeometry = () => useUiPrefs.setState((state) => ({ geometry: !state.geometry }));
 export const toggleBottomBar = () =>
   useUiPrefs.setState((state) => ({ bottomBar: !state.bottomBar }));
 
