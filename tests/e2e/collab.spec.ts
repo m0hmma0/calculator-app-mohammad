@@ -449,7 +449,10 @@ test.describe('a large board', () => {
     const total = (page: Page) =>
       page.getByTestId('stat-visible').evaluate((node) => node.textContent!.split('/')[1]!.trim());
 
-    for (const page of [a, b]) await page.getByTestId('toggle-dev-panel').click();
+    for (const page of [a, b]) {
+      await page.keyboard.press('ControlOrMeta+KeyK');
+      await page.getByTestId('command-dev-panel').click();
+    }
     await a.getByTestId('load-5000').click();
     await expect.poll(() => total(b), { timeout: 20_000 }).toBe('5,000');
 
@@ -472,7 +475,10 @@ test.describe('a large board', () => {
     const c = await third.newPage();
     await signIn(c, account);
     await c.goto(`/b/${boardId}`);
-    await c.getByTestId('toggle-dev-panel').click();
+    // The palette's keys belong to the board, so the board has to be there first.
+    await expect(c.getByTestId('board-canvas')).toBeVisible();
+    await c.keyboard.press('ControlOrMeta+KeyK');
+    await c.getByTestId('command-dev-panel').click();
     await expect.poll(() => total(c), { timeout: 20_000 }).toBe('5,000');
     await third.close();
     await close();
@@ -492,6 +498,7 @@ test.describe('version history', () => {
     await expect(layers(b)).toHaveCount(1);
 
     // Name this moment.
+    await a.getByTestId('tools-menu').click();
     await a.getByTestId('open-history').click();
     await a.getByTestId('checkpoint-name').fill('One box');
     await a.getByTestId('save-checkpoint').click();
@@ -510,6 +517,7 @@ test.describe('version history', () => {
     expect(await shapeInk(a, second)).toBeGreaterThan(0.2);
 
     // 10. Drag the scrubber to the very start: the board rewinds to empty.
+    await a.getByTestId('tools-menu').click();
     await a.getByTestId('open-history').click();
     const scrubber = a.getByTestId('history-scrubber');
     await expect(scrubber).toHaveAttribute('max', /[1-9]/);
@@ -534,6 +542,7 @@ test.describe('version history', () => {
     await expect(layers(b)).toHaveCount(1);
 
     // And what came after is still in history.
+    await a.getByTestId('tools-menu').click();
     await a.getByTestId('open-history').click();
     const max = Number(await a.getByTestId('history-scrubber').getAttribute('max'));
     await a.getByTestId('history-scrubber').fill(String(max - 1));

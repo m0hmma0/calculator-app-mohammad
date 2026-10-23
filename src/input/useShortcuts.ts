@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { closeHistory, useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
 import { useBoardStore, type Tool } from '@/state/boardStore';
+import { toggleMinimap } from '@/state/uiPrefs';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -183,6 +184,11 @@ export function useShortcuts(): void {
           if (!event.shiftKey) return;
           event.preventDefault();
           store.zoomToSelection();
+          return;
+        case 'KeyM':
+          if (event.shiftKey) return;
+          event.preventDefault();
+          toggleMinimap();
           return;
         case 'Equal':
         case 'NumpadAdd':

@@ -1,6 +1,3 @@
-import { openHistory, useHistory } from '@/collab/history';
-import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
-import { useComments } from '@/sharing/comments';
 import { peerList, presenter, usePresence, type Peer } from '@/collab/presence';
 import type { PeerIdentity } from '@shared/collab';
 import styles from './PeerBar.module.css';
@@ -56,14 +53,6 @@ export function PeerBar() {
   const following = usePresence((state) => state.following);
   const spotlight = usePresence((state) => state.spotlight);
   const dismissed = usePresence((state) => state.dismissedSpotlight);
-  const historyOpen = useHistory((state) => state.open);
-  const editable = useBoardAccess(selectCanEdit);
-  const commentsOpen = useComments((state) => state.visible);
-  const openThreads = useComments(
-    (state) =>
-      state.comments.filter((comment) => comment.threadId === comment.id && !comment.resolvedAt)
-        .length,
-  );
 
   if (!status) return null;
   const list = peerList(peers);
@@ -122,31 +111,6 @@ export function PeerBar() {
       >
         {spotlight ? 'Stop presenting' : 'Present'}
       </button>
-      <button
-        type="button"
-        className={styles.action}
-        aria-pressed={commentsOpen}
-        title="Comments"
-        data-testid="open-comments"
-        onClick={() =>
-          useComments.setState({ visible: !commentsOpen, placing: false, draftAt: null })
-        }
-      >
-        Comments{openThreads > 0 ? ` (${openThreads})` : ''}
-      </button>
-      {editable ? (
-        <button
-          type="button"
-          className={styles.action}
-          aria-pressed={historyOpen}
-          disabled={status !== 'connected'}
-          title="Version history"
-          data-testid="open-history"
-          onClick={openHistory}
-        >
-          History
-        </button>
-      ) : null}
     </div>
   );
 }

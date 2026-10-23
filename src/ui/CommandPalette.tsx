@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { insertCode, insertTable } from '@/input/insertions';
+import { insertTable } from '@/input/insertions';
+import { toggleLayers, toggleMinimap } from '@/state/uiPrefs';
 import { useBoardAccess } from '@/sharing/boardAccess';
 import { exportBlob, downloadBlob, type ExportFormat } from '@/export/exporters';
 import { useBoardStore, type Tool } from '@/state/boardStore';
@@ -84,7 +85,6 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       { id: 'hundred', label: 'Zoom to 100%', hint: '⇧0', run: () => store().zoomTo100() },
       { id: 'select-all', label: 'Select all', hint: '⌘A', run: () => store().selectAll() },
       { id: 'insert-table', label: 'Insert a table', run: insertTable },
-      { id: 'insert-code', label: 'Insert a code block', run: insertCode },
       { id: 'group', label: 'Group selection', hint: '⌘G', run: () => store().groupSelection() },
       // Only where the owner allows it — the menu is where "no export" shows.
       ...(canExport
@@ -104,6 +104,13 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
         label: 'Keyboard shortcuts',
         hint: '?',
         run: () => store().toggleShortcuts(),
+      },
+      { id: 'minimap', label: 'Show or hide the minimap', hint: 'M', run: toggleMinimap },
+      { id: 'layers', label: 'Show or hide the object list', run: toggleLayers },
+      {
+        id: 'dev-panel',
+        label: 'Renderer stats and test content',
+        run: () => store().toggleDevPanel(),
       },
       { id: 'clear', label: 'Clear the board', run: () => store().clearBoard() },
     ];

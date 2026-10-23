@@ -36,6 +36,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     rows: [
       ['Scroll', 'Pan'],
       ['⌘Scroll', 'Zoom'],
+      ['M', 'Show or hide the minimap'],
       ['⇧1 · ⇧2 · ⇧0', 'Fit · Selection · 100%'],
       ['+ · −', 'Zoom in · out'],
       ['?', 'This sheet'],

@@ -134,7 +134,7 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
     await a.keyboard.press('Escape');
     await expect(layerItems(b)).toHaveCount(3);
 
-    await a.getByTestId('workshop-menu').click();
+    await a.getByTestId('insert-menu').click();
     await a.getByTestId('present-start').click();
     await expect(a.getByTestId('presentation-counter')).toHaveText('1 / 2');
 
@@ -156,18 +156,26 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
   }
 });
 
+/** Starts the board's timer from the Insert menu with a length typed in. */
+async function startTimer(page: Page, minutes: number, seconds: number) {
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('timer-minutes').fill(String(minutes));
+  await page.getByTestId('timer-seconds').fill(String(seconds));
+  await page.getByTestId('timer-start').click();
+}
+
 // Checklist item 2.
 test('a timer counts down on every screen and ends on all of them together', async ({
   browser,
 }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(90_000);
   const { a, b, close } = await twoWindows(browser, 'timer');
   try {
-    await a.getByTestId('workshop-menu').click();
-    await a.getByTestId('timer-start-1').click();
+    // A length in minutes and seconds, typed in.
+    await startTimer(a, 0, 20);
 
     for (const page of [a, b]) {
-      await expect(page.getByTestId('timer-display')).toHaveText(/^(1:00|0:5\d)$/);
+      await expect(page.getByTestId('timer-display')).toHaveText(/^0:(20|1\d)$/);
     }
     // Both show the same time — they count to the same instant on the room's clock.
     const seconds = async (page: Page) => {
@@ -180,7 +188,7 @@ test('a timer counts down on every screen and ends on all of them together', asy
     // It runs out on both.
     for (const page of [a, b]) {
       await expect(page.getByTestId('timer-display')).toHaveText("Time's up", {
-        timeout: 70_000,
+        timeout: 30_000,
       });
     }
     await expect(a.getByTestId('timer')).toHaveAttribute('data-state', 'done');
@@ -194,14 +202,32 @@ test('a timer counts down on every screen and ends on all of them together', asy
   }
 });
 
-test('a timer started at five minutes shows five minutes everywhere', async ({ browser }) => {
-  const { a, b, close } = await twoWindows(browser, 'timer5');
+test('the timer offers the lengths used last, newest first', async ({ browser }) => {
+  const { a, b, close } = await twoWindows(browser, 'timer-recent');
   try {
-    await a.getByTestId('workshop-menu').click();
-    await a.getByTestId('timer-start-5').click();
+    await startTimer(a, 5, 0);
     for (const page of [a, b]) {
       await expect(page.getByTestId('timer-display')).toHaveText(/^(5:00|4:5\d)$/);
     }
+    await startTimer(a, 1, 30);
+    await expect(b.getByTestId('timer-display')).toHaveText(/^(1:30|1:2\d)$/);
+
+    // The two lengths used, the latest first; one click starts one again.
+    await a.getByTestId('insert-menu').click();
+    await expect(a.getByTestId('timer-recent-0')).toHaveText('1:30');
+    await expect(a.getByTestId('timer-recent-1')).toHaveText('5:00');
+    await expect(a.getByTestId('timer-recent-2')).toHaveCount(0);
+    await a.getByTestId('timer-recent-1').click();
+    await expect(b.getByTestId('timer-display')).toHaveText(/^(5:00|4:5\d)$/);
+
+    // Still remembered after a reload, and the box starts at the latest length.
+    await a.reload();
+    await a.getByTestId('insert-menu').click();
+    await expect(a.getByTestId('timer-recent-0')).toHaveText('5:00');
+    await expect(a.getByTestId('timer-minutes')).toHaveValue('5');
+    await expect(a.getByTestId('timer-seconds')).toHaveValue('0');
+    await a.keyboard.press('Escape');
+
     await a.getByTestId('timer-stop').click();
     await expect(b.getByTestId('timer')).toBeHidden();
   } finally {
@@ -231,7 +257,7 @@ async function twoStickies(a: Page, b: Page) {
 }
 
 async function startVote(page: Page) {
-  await page.getByTestId('workshop-menu').click();
+  await page.getByTestId('insert-menu').click();
   await page.getByTestId('vote-start').click();
 }
 
@@ -276,7 +302,7 @@ test('dot votes from two people add up live on both screens', async ({ browser }
     await expect(b.getByTestId(`vote-add-${second}`)).toBeEnabled();
 
     // Closing the vote keeps the result and stops the voting.
-    await a.getByTestId('workshop-menu').click();
+    await a.getByTestId('insert-menu').click();
     await a.getByTestId('vote-end').click();
     await expect(b.getByTestId(`vote-add-${first}`)).toBeHidden();
     await expect(b.getByTestId(`vote-count-${first}`)).toHaveText('3');
@@ -362,6 +388,8 @@ test('a styled group saved to the library drops onto another board intact', asyn
   await expect(layerItems(page)).toHaveText(['group']);
   const saved = await geo(page);
 
+  await page.getByTestId('tools-menu').click();
+
   await page.getByTestId('library-menu').click();
   await page.getByTestId('library-name').fill('Starter kit');
   await page.getByTestId('library-save').click();
@@ -373,6 +401,7 @@ test('a styled group saved to the library drops onto another board intact', asyn
   await page.goto('/');
   await createBoard(page);
   await expect(layerItems(page)).toHaveCount(0);
+  await page.getByTestId('tools-menu').click();
   await page.getByTestId('library-menu').click();
   await page.getByTestId('library-insert-0').click();
 
@@ -390,6 +419,7 @@ test('a styled group saved to the library drops onto another board intact', asyn
 
   // It is still there after a reload, and can be removed.
   await page.reload();
+  await page.getByTestId('tools-menu').click();
   await page.getByTestId('library-menu').click();
   await expect(page.getByTestId('library-insert-0')).toContainText('Starter kit');
   await page.getByTestId('library-remove-0').click();

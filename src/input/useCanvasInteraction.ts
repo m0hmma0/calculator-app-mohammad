@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react';
+import { placeStamp } from './insertions';
 import { tableGrid } from '@/canvas/renderContent';
 import { useEmbeds } from '@/state/embedStore';
 import { useHistory } from '@/collab/history';
@@ -363,6 +364,11 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return;
       }
 
+      if (tool === 'stamp') {
+        placeStamp(board(event));
+        return;
+      }
+
       if (tool === 'text' || tool === 'sticky') {
         const origin = board(event);
         const sticky = tool === 'sticky';
@@ -479,6 +485,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       if (tool === 'hand') return setCursor('grab');
       if (isShapeTool(tool)) return setCursor('crosshair');
+      if (tool === 'stamp') return setCursor('stamp');
       if (!lastClient) return setCursor('default');
 
       const point = board(lastClient);

@@ -1,0 +1,23 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:4173",
+      "localStorage": [
+        {
+          "name": "sabboura:ui",
+          "value": "{\"minimap\": false, \"layers\": true, \"recentTimers\": []}"
+        }
+      ]
+    },
+    {
+      "origin": "http://localhost:8788",
+      "localStorage": [
+        {
+          "name": "sabboura:ui",
+          "value": "{\"minimap\": false, \"layers\": true, \"recentTimers\": []}"
+        }
+      ]
+    }
+  ]
+}

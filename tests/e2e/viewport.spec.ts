@@ -27,7 +27,8 @@ async function drawnCounts(page: Page): Promise<{ visible: number; total: number
 }
 
 async function loadShapes(page: Page, count: 500 | 5000 | 20000) {
-  await page.getByTestId('toggle-dev-panel').click();
+  await page.keyboard.press('ControlOrMeta+KeyK');
+  await page.getByTestId('command-dev-panel').click();
   await page.getByTestId(`load-${count}`).click();
   // Loading fits the board, so every shape ends up on screen.
   await expect.poll(() => drawnCounts(page)).toEqual({ visible: count, total: count });
@@ -156,11 +157,15 @@ test.describe('culling and the minimap', () => {
     await expect.poll(async () => (await drawnCounts(page)).visible).toBeLessThan(500);
   });
 
-  test('the minimap appears with content and moves the view when clicked', async ({ page }) => {
+  test('the minimap is shown on request and moves the view when clicked', async ({ page }) => {
     await expect(page.getByTestId('minimap')).toHaveCount(0);
 
     await loadShapes(page, 500);
     const minimap = page.getByTestId('minimap');
+    // Hidden until asked for, even with content on the board.
+    await expect(minimap).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('KeyM');
     await expect(minimap).toBeVisible();
 
     const before = await canvasSignature(page);

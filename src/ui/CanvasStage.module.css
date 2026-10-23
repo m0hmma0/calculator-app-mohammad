@@ -141,3 +141,8 @@
 :global(html[data-presenting]) .stage > :not(canvas, [data-present-keep]) {
   display: none;
 }
+
+/* The stamp tool carries its emoji; the stage sets which one. */
+.stage[data-cursor='stamp'] {
+  cursor: var(--stamp-cursor, crosshair);
+}

@@ -7,6 +7,7 @@ import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
+import { useUiPrefs } from '@/state/uiPrefs';
 import styles from './Inspector.module.css';
 
 const FILLS = [
@@ -44,6 +45,7 @@ export function Inspector() {
   const selection = useBoardStore((state) => state.selection);
   const historyOpen = useHistory((state) => state.open);
   const editable = useBoardAccess(selectCanEdit);
+  const showLayers = useUiPrefs((state) => state.layers);
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
   const selectOnly = useBoardStore((state) => state.selectOnly);
@@ -76,6 +78,8 @@ export function Inspector() {
   // The history panel takes this place, and the inspector describes the live board.
   // Nothing to adjust for someone who can only look.
   if (historyOpen || !editable) return null;
+  // With the object list switched off, an empty selection leaves nothing to show.
+  if (!first && !showLayers) return null;
 
   return (
     <aside className={styles.panel} data-hud data-testid="inspector">
@@ -517,34 +521,36 @@ export function Inspector() {
         <p className={styles.hint}>Nothing selected. Draw a shape, or drag a box to select.</p>
       )}
 
-      <ul className={styles.layers} data-testid="layers">
-        {visibleLayers.map((element) => (
-          <li key={element.id}>
-            <button
-              type="button"
-              className={styles.layer}
-              aria-selected={ids.has(element.id)}
-              data-testid={`layer-${element.id}`}
-              onClick={() => selectOnly([element.id])}
-            >
-              <span className={styles.layerName}>{element.type}</span>
-              {element.locked ? (
-                <span className={styles.badge} title="Locked" data-testid="layer-locked">
-                  🔒
-                </span>
-              ) : null}
-              {element.hidden ? (
-                <span className={styles.badge} title="Hidden">
-                  ◌
-                </span>
-              ) : null}
-            </button>
-          </li>
-        ))}
-        {hiddenLayerCount > 0 ? (
-          <li className={styles.more}>and {hiddenLayerCount.toLocaleString()} more</li>
-        ) : null}
-      </ul>
+      {showLayers ? (
+        <ul className={styles.layers} data-testid="layers">
+          {visibleLayers.map((element) => (
+            <li key={element.id}>
+              <button
+                type="button"
+                className={styles.layer}
+                aria-selected={ids.has(element.id)}
+                data-testid={`layer-${element.id}`}
+                onClick={() => selectOnly([element.id])}
+              >
+                <span className={styles.layerName}>{element.type}</span>
+                {element.locked ? (
+                  <span className={styles.badge} title="Locked" data-testid="layer-locked">
+                    🔒
+                  </span>
+                ) : null}
+                {element.hidden ? (
+                  <span className={styles.badge} title="Hidden">
+                    ◌
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          ))}
+          {hiddenLayerCount > 0 ? (
+            <li className={styles.more}>and {hiddenLayerCount.toLocaleString()} more</li>
+          ) : null}
+        </ul>
+      ) : null}
     </aside>
   );
 }

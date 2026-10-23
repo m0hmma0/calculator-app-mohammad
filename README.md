@@ -153,6 +153,14 @@ every sharing change.
 
 ## Workshop tools and rich content
 
+The board's top bar holds only the everyday tools (select, hand, pen, eraser, laser)
+and two menus. **Insert** has shapes, lines and arrows, sticky notes, text, frames,
+tables, stamps (the emoji becomes the pointer; each click puts one down; Escape puts it
+away), Import (pictures, SVG, PDF), and the workshop: present, timer, dot voting, and
+the minimap (also `M`). **Tools** has version history, comments, the library and the
+object list. The minimap and the object list are off until asked for, remembered per
+browser in `sabboura:ui`.
+
 - **Pages.** A board has pages along the bottom; each keeps its own content and its
   own camera. Elements carry a `page` field — absent means the first page, so every
   board from before pages still opens unchanged.
@@ -160,14 +168,16 @@ every sharing change.
   to bottom, left to right in a row); arrow keys, Space and Page Up/Down move, Escape
   leaves. Presenting is spotlighting: everyone else on the board follows, and each
   follower's screen fits the same frame.
-- **Timer and dot voting.** Both live in the board's document but outside the
+- **Timer and dot voting.** The timer takes any length in minutes and seconds and offers
+  the last four used. Both live in the board's document but outside the
   element map, so they are shared, survive a reload, and are not undoable. The timer
   counts to an instant on the room's clock (the welcome message carries it), so every
   screen ends together. Each tab writes its own ballot, so nobody's dots overwrite
   anybody else's; the budget is per person.
-- **Tables, code blocks, stamps** from the Insert menu. Table cells are separate
-  entries, so two people typing in different cells both keep what they typed. Code is
-  highlighted by a small built-in tokenizer and edited as plain text.
+- **Tables and stamps** from the Insert menu. Table cells are separate entries, so two
+  people typing in different cells both keep what they typed. Code blocks were taken
+  out of the menu at the user's request; ones already on a board still draw
+  highlighted and edit as plain text.
 - **Links.** A pasted YouTube link becomes a video that plays in place
   (youtube-nocookie); any other link becomes a card, filled in by `/api/unfurl`, which
   fetches the page from the Worker, refuses private addresses, and reads Open Graph.

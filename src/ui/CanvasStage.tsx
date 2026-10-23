@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { drawGrid } from '@/canvas/grid';
 import { renderElements } from '@/canvas/renderElements';
 import { renderLaser } from '@/canvas/renderLaser';
@@ -14,6 +14,8 @@ import { useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
 import { isTrailAlive } from '@/laser/laser';
 import { useShortcuts } from '@/input/useShortcuts';
+import { stampCursor } from '@/input/insertions';
+import { useUiPrefs } from '@/state/uiPrefs';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
@@ -48,6 +50,8 @@ export function CanvasStage() {
   const devPanelOpen = useBoardStore((state) => state.devPanelOpen);
   const viewport = useBoardStore((state) => state.viewport);
   const isEmpty = useBoardStore((state) => state.elements.length === 0);
+  const stamp = useBoardStore((state) => state.stamp);
+  const minimap = useUiPrefs((state) => state.minimap);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, frame: CanvasFrame) => {
     const host = ctx.canvas.parentElement;
@@ -219,7 +223,13 @@ export function CanvasStage() {
   }, [redraw]);
 
   return (
-    <div ref={hostRef} className={styles.stage} data-cursor="default" data-testid="stage">
+    <div
+      ref={hostRef}
+      className={styles.stage}
+      data-cursor="default"
+      data-testid="stage"
+      style={{ '--stamp-cursor': stampCursor(stamp) } as CSSProperties}
+    >
       <canvas
         ref={canvasRef}
         className={styles.canvas}
@@ -231,21 +241,20 @@ export function CanvasStage() {
       {isEmpty ? (
         <div className={styles.empty}>
           <div className={styles.card}>
-            <p className={styles.eyebrow}>Phase 2 · shapes and selection</p>
             <h2 className={styles.title}>Draw something</h2>
             <p className={styles.body}>
-              Press <span className={styles.key}>R</span> for a rectangle,{' '}
-              <span className={styles.key}>O</span> for an ellipse,{' '}
-              <span className={styles.key}>L</span> or <span className={styles.key}>A</span> for a
-              line or arrow. <span className={styles.key}>V</span> selects,{' '}
-              <span className={styles.key}>Space</span> pans.
+              Shapes, notes, text and frames are in <strong>Insert</strong> — or press{' '}
+              <span className={styles.key}>R</span> <span className={styles.key}>O</span>{' '}
+              <span className={styles.key}>N</span> <span className={styles.key}>T</span>.{' '}
+              <span className={styles.key}>P</span> draws, <span className={styles.key}>V</span>{' '}
+              selects, <span className={styles.key}>Space</span> pans.
             </p>
           </div>
         </div>
       ) : null}
 
       <div className={styles.hud} data-hud>
-        <Minimap />
+        {minimap ? <Minimap /> : null}
         <PageBar />
         <ZoomControls />
       </div>

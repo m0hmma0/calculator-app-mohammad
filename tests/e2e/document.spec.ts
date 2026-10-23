@@ -275,7 +275,10 @@ test.describe('command palette', () => {
 
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('command-palette')).toHaveCount(0);
-    await expect(page.getByTestId('tool-rect')).toHaveAttribute('aria-pressed', 'true');
+    // The rectangle is an Insert tool now; its button shows one is in hand.
+    await expect(page.getByTestId('insert-menu')).toHaveAttribute('data-active', 'true');
+    await page.getByTestId('insert-menu').click();
+    await expect(page.getByTestId('insert-tool-rect')).toHaveAttribute('aria-checked', 'true');
   });
 
   test('matches loosely and closes on Escape', async ({ page }) => {

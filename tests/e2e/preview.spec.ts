@@ -56,6 +56,9 @@ test.describe('artifact preview', () => {
     );
     await page.goto(`file://${wrapped}`);
     await expect(page.getByTestId('board-canvas')).toBeVisible();
+    // A file:// page has no stored preferences, so the object list starts off.
+    await page.getByTestId('tools-menu').click();
+    await page.getByTestId('toggle-layers').click();
 
     await page.getByTestId('insert-menu').click();
     await page.getByTestId('insert-import').click();

@@ -12,6 +12,7 @@ export const useImport = create<{ status: string | null; error: string | null }>
 }));
 
 const PAGE_GAP = 40;
+const RASTER_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'] as const;
 
 function viewCentre() {
   const { viewport, stageSize } = useBoardStore.getState();
@@ -56,19 +57,49 @@ async function importPdf(file: File) {
   if (elements.length > 0) place(elements);
 }
 
+async function importImage(file: File) {
+  const image = await storeImage(file);
+  const element = createElement({
+    type: 'image',
+    box: { x: 0, y: 0, ...initialImageBox(image) },
+    z: 'a0',
+  });
+  element.image = image;
+  place([element]);
+}
+
+/** What the Import button offers to open. */
+export const IMPORT_ACCEPT = [
+  ...RASTER_TYPES,
+  '.png,.jpg,.jpeg,.webp,.gif,.avif',
+  '.svg',
+  'image/svg+xml',
+  '.pdf',
+  'application/pdf',
+].join(',');
+
 export const isSvgFile = (file: File) =>
   file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
 export const isPdfFile = (file: File) =>
   file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-/** SVG as editable shapes, PDF as a picture per page. Anything else is refused. */
+/** A picture: stored as it is, like a pasted or dropped one. */
+export const isRasterImage = (file: File) =>
+  (RASTER_TYPES as readonly string[]).includes(file.type) ||
+  /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name);
+
+/**
+ * Any file the board understands: a picture as a picture, an SVG as shapes that can
+ * be edited, a PDF as a picture per page. Anything else is refused, with a reason.
+ */
 export async function importFile(file: File): Promise<void> {
   if (boardDoc().readOnly) return;
   useImport.setState({ status: `Importing ${file.name}…`, error: null });
   try {
     if (isSvgFile(file)) await importSvg(file);
     else if (isPdfFile(file)) await importPdf(file);
-    else throw new Error('Only SVG and PDF files can be imported this way.');
+    else if (isRasterImage(file)) await importImage(file);
+    else throw new Error(`${file.name} is not a picture, an SVG or a PDF.`);
     useImport.setState({ status: null });
   } catch (error) {
     useImport.setState({ status: null, error: (error as Error).message });

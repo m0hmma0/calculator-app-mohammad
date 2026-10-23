@@ -76,9 +76,10 @@ test.describe('drawing', () => {
     expect(circle.w).toBe(circle.h);
   });
 
-  test('draws every shape the toolbar offers', async ({ page }) => {
+  test('draws every shape the Insert menu offers', async ({ page }) => {
     for (const [index, tool] of ['triangle', 'diamond', 'star', 'polygon'].entries()) {
-      await page.getByTestId(`tool-${tool}`).click();
+      await page.getByTestId('insert-menu').click();
+      await page.getByTestId(`insert-tool-${tool}`).click();
       const x = 260 + index * 120;
       await dragFrom(page, { x, y: 250 }, { x: x + 90, y: 340 });
     }

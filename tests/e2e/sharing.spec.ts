@@ -373,6 +373,7 @@ test.describe('comments', () => {
     await expect(layers(owner.page)).toHaveCount(1);
 
     // …but can comment, pinned where they click, mentioning the owner.
+    await bob.page.getByTestId('tools-menu').click();
     await bob.page.getByTestId('open-comments').click();
     await bob.page.getByTestId('new-comment').click();
     await bob.page.getByTestId('comment-place').click({ position: { x: 300, y: 200 } });
@@ -383,6 +384,7 @@ test.describe('comments', () => {
     await expect(bob.page.getByTestId('comment-thread')).toHaveCount(1);
 
     // The owner's open board shows it straight away.
+    await owner.page.getByTestId('tools-menu').click();
     await owner.page.getByTestId('open-comments').click();
     await expect(owner.page.getByTestId('comment-thread')).toContainText('What about this');
     await expect(owner.page.getByTestId('comment-pin')).toHaveCount(1);
@@ -396,6 +398,7 @@ test.describe('comments', () => {
     await owner.page.getByTestId('notification-item').first().getByRole('link').click();
 
     // Resolving hides the thread; it can still be shown.
+    await owner.page.getByTestId('tools-menu').click();
     await owner.page.getByTestId('open-comments').click();
     await owner.page.getByTestId('resolve-thread').click();
     await expect(owner.page.getByTestId('comment-thread')).toHaveCount(0);

@@ -45,7 +45,7 @@ import { generateDemoElements } from '@/scene/demoElements';
 import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
-export type ContentTool = 'pen' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame';
+export type ContentTool = 'pen' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame' | 'stamp';
 
 export type Tool = 'select' | 'hand' | ShapeType | ContentTool;
 
@@ -58,6 +58,7 @@ export const CONTENT_TOOLS: readonly ContentTool[] = [
   'text',
   'sticky',
   'frame',
+  'stamp',
 ];
 
 export const SHAPE_TOOLS: readonly ShapeType[] = [
@@ -82,6 +83,8 @@ interface BoardState {
   stageSize: Size;
 
   tool: Tool;
+  /** The emoji the stamp tool puts down. */
+  stamp: string;
   spaceHeld: boolean;
   panning: boolean;
 
@@ -145,6 +148,8 @@ interface BoardState {
   zoomToSelection: () => void;
 
   setTool: (tool: Tool) => void;
+  /** Picks up a stamp: the stamp tool, with this emoji on the pointer. */
+  setStamp: (stamp: string) => void;
   setSpaceHeld: (held: boolean) => void;
   setPanning: (panning: boolean) => void;
   setSnapEnabled: (enabled: boolean) => void;
@@ -251,6 +256,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     stageSize: { width: 1, height: 1 },
 
     tool: 'select',
+    stamp: '👍',
     spaceHeld: false,
     panning: false,
 
@@ -391,6 +397,10 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setTool: (tool) => {
       if (board.readOnly && !VIEWER_TOOLS.has(tool)) return;
       bump({ tool });
+    },
+    setStamp: (stamp) => {
+      if (board.readOnly) return;
+      bump({ tool: 'stamp', stamp });
     },
     setSpaceHeld: (spaceHeld) => set({ spaceHeld }),
     setPanning: (panning) => set({ panning }),

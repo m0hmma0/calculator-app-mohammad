@@ -17,7 +17,9 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   workers: isCI ? 1 : undefined,
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list']],
-  use: { trace: 'on-first-retry' },
+  // Every test starts with the object list switched on: the specs read the board
+  // through it. Tests of a first visit opt out with an empty storage state.
+  use: { trace: 'on-first-retry', storageState: 'tests/e2e/prefs.json' },
 
   projects: [
     {

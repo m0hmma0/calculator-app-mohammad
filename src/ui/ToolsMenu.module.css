@@ -1,0 +1,30 @@
+.wide {
+  width: 268px;
+}
+
+.count {
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+
+.back {
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  padding: 4px 6px 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.back:hover {
+  color: var(--accent-ink);
+}

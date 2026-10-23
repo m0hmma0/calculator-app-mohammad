@@ -112,10 +112,11 @@ usePresence.subscribe((state, previous) => {
   if (state.self !== previous.self && doc) read(doc);
 });
 
-export function startTimer(minutes: number): void {
-  if (!doc) return;
+/** Starts the board's timer for this many seconds, replacing any that is running. */
+export function startTimer(seconds: number): void {
+  if (!doc || !(seconds > 0)) return;
   const board = doc;
-  const durationMs = Math.round(minutes * 60_000);
+  const durationMs = Math.round(seconds * 1000);
   transactLocal(board, () => {
     metaOf(board.doc).set('timer', {
       endsAt: serverNow() + durationMs,

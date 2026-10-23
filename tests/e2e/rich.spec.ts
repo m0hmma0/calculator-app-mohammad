@@ -84,7 +84,7 @@ test.describe('presentation', () => {
 
   test('arrow keys walk the frames, each filling the screen', async ({ page }) => {
     await threeFrames(page);
-    await page.getByTestId('workshop-menu').click();
+    await page.getByTestId('insert-menu').click();
     await page.getByTestId('present-start').click();
 
     await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
@@ -129,7 +129,7 @@ test.describe('presentation', () => {
   });
 
   test('says so when there is nothing to present', async ({ page }) => {
-    await page.getByTestId('workshop-menu').click();
+    await page.getByTestId('insert-menu').click();
     await page.getByTestId('present-start').click();
     await expect(page.getByText('Add a frame first')).toBeVisible();
     await expect(page.getByTestId('presentation-bar')).toBeHidden();
@@ -186,38 +186,112 @@ test('a table takes typing cell by cell and grows a row', async ({ page }) => {
   await expect(page.getByTestId('table-size')).toHaveText('Table · 6 × 3');
 });
 
-// Checklist item 6.
-test('a code block is highlighted, and stays selectable and editable', async ({ page }) => {
+test('shapes, notes and frames are picked from Insert and work as before', async ({ page }) => {
   await page.getByTestId('insert-menu').click();
-  await page.getByTestId('insert-code').click();
-  const box = await geo(page);
-  const origin = (await page.getByTestId('stage').boundingBox())!;
-  const area = { x: origin.x + box.x, y: origin.y + box.y, w: box.w, h: box.h };
+  await page.getByTestId('insert-tool-ellipse').click();
+  // The menu closes, and its button shows a tool from it is in hand.
+  await expect(page.getByTestId('insert-panel')).toBeHidden();
+  await expect(page.getByTestId('insert-menu')).toHaveAttribute('data-active', 'true');
+  await page.mouse.move(300, 300);
+  await page.mouse.down();
+  await page.mouse.move(420, 380, { steps: 5 });
+  await page.mouse.up();
+  await expect(layerItems(page)).toHaveText(['ellipse']);
 
-  // Keywords, comments and strings are each drawn in their own colour.
-  await expect.poll(() => colourFraction(page, '#c792ea', area)).toBeGreaterThan(0.0005);
-  expect(await colourFraction(page, '#c3e88d', area)).toBeGreaterThan(0.0005);
-  expect(await colourFraction(page, '#7f849c', area)).toBeGreaterThan(0.0005);
-
-  // Click away, then click it again: it is an element like any other.
-  await page.mouse.click(origin.x + 40, origin.y + 40);
-  await expect(page.getByTestId('geo-x')).toBeHidden();
-  await page.mouse.click(area.x + 30, area.y + area.h - 20);
-  expect(await geo(page)).toEqual(box);
-
-  // Double-click: the code itself, in an editor, with its text selectable.
-  await page.mouse.dblclick(area.x + 60, area.y + 30);
-  const editor = page.getByTestId('text-editor');
-  await expect(editor).toBeVisible();
-  await expect(editor).toContainText('function greet(name)');
-  await page.keyboard.press('ControlOrMeta+KeyA');
-  const selected = await page.evaluate(() => window.getSelection()?.toString() ?? '');
-  expect(selected).toContain('return');
-
-  // A language chosen by hand sticks.
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-tool-sticky').click();
+  await page.mouse.click(600, 350);
+  await expect(page.getByTestId('text-editor')).toBeVisible();
+  await page.keyboard.type('a note');
   await page.keyboard.press('Escape');
-  await page.getByTestId('code-language').selectOption('python');
-  await expect(page.getByTestId('code-language')).toHaveValue('python');
+  await expect(layerItems(page)).toHaveText(['sticky', 'ellipse']);
+
+  // The toolbar keeps only the everyday tools.
+  for (const id of ['select', 'hand', 'pen', 'eraser', 'laser']) {
+    await expect(page.getByTestId(`tool-${id}`)).toBeVisible();
+  }
+  for (const id of ['rect', 'ellipse', 'line', 'arrow', 'text', 'sticky', 'frame']) {
+    await expect(page.getByTestId(`tool-${id}`)).toHaveCount(0);
+  }
+});
+
+test('a stamp rides on the pointer and lands wherever it is clicked', async ({ page }) => {
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-stamp-⭐').click();
+  const stage = page.getByTestId('stage');
+  await page.mouse.move(400, 350);
+  await expect(stage).toHaveAttribute('data-cursor', 'stamp');
+  // The pointer is the star itself.
+  const cursor = await stage.evaluate((node) => getComputedStyle(node).cursor);
+  expect(cursor).toContain('data:image/svg+xml');
+  expect(decodeURIComponent(cursor)).toContain('⭐');
+
+  // Each click puts one down, centred where it was clicked; the stamp stays in hand.
+  await page.mouse.click(400, 350);
+  await page.mouse.click(560, 350);
+  await expect(layerItems(page)).toHaveCount(2);
+  await expect(page.getByTestId('insert-menu')).toHaveAttribute('data-active', 'true');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('insert-menu')).not.toHaveAttribute('data-active', 'true');
+  await layerItems(page).last().locator('button').click();
+  const box = await geo(page);
+  const origin = (await stage.boundingBox())!;
+  expect(origin.x + box.x + box.w / 2).toBeCloseTo(400, -1);
+  expect(origin.y + box.y + box.h / 2).toBeCloseTo(350, -1);
+});
+
+test('Import takes a picture from the computer as well', async ({ page }) => {
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-import').click();
+  await page.getByTestId('import-file').setInputFiles({
+    name: 'dot.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  });
+  await expect(layerItems(page)).toHaveText(['image']);
+
+  // Something it cannot read is refused, with a reason.
+  await page.getByTestId('import-file').setInputFiles({
+    name: 'notes.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('hello'),
+  });
+  await expect(page.getByTestId('import-status')).toContainText('notes.txt is not a picture');
+});
+
+test.describe('a fresh browser', () => {
+  // No stored preferences: what a first-time visitor sees.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('keeps the object list and the minimap hidden until asked for', async ({ page }) => {
+    await drag(page, 'KeyR', [300, 300], [420, 380]);
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('layers')).toHaveCount(0);
+    await expect(page.getByTestId('minimap')).toHaveCount(0);
+    // Nothing selected and no list: no side panel at all.
+    await expect(page.getByTestId('inspector')).toHaveCount(0);
+    // Nor the app's name, nor the renderer button, in the board's top bar.
+    await expect(page.getByText('Sabboura', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Renderer' })).toHaveCount(0);
+
+    await page.getByTestId('insert-menu').click();
+    await page.getByTestId('toggle-minimap').click();
+    await expect(page.getByTestId('minimap')).toBeVisible();
+    await page.getByTestId('tools-menu').click();
+    await page.getByTestId('toggle-layers').click();
+    await expect(layerItems(page)).toHaveText(['rect']);
+
+    // Both choices are remembered, and M hides the minimap again.
+    await page.reload();
+    await expect(page.getByTestId('minimap')).toBeVisible();
+    await expect(layerItems(page)).toHaveText(['rect']);
+    await page.keyboard.press('KeyM');
+    await expect(page.getByTestId('minimap')).toHaveCount(0);
+  });
 });
 
 // Checklist item 7.

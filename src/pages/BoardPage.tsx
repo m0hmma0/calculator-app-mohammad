@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { InsertMenu } from '@/ui/InsertMenu';
-import { WorkshopMenu } from '@/ui/WorkshopMenu';
-import { LibraryMenu } from '@/ui/LibraryMenu';
+import { ToolsMenu } from '@/ui/ToolsMenu';
 import { applyHistoryMessage, applyHistoryState, attachHistory } from '@/collab/history';
 import { applyServerMessage, resetPresence, usePresence } from '@/collab/presence';
 import { startPresence, type PresenceHandle } from '@/collab/publish';
@@ -162,9 +161,8 @@ function BoardView({ boardId }: { boardId: string }) {
     <>
       <TopBar
         boardName={record?.title ?? sharedTitle ?? 'Board'}
-        badge={role && role !== 'owner' ? ROLE_LABEL[role] : 'Phase 8'}
+        badge={role && role !== 'owner' ? ROLE_LABEL[role] : undefined}
         onRenameBoard={owner ? rename : undefined}
-        compact
         leading={
           back ? (
             <Link to={back} className={styles.back} data-testid="back-to-boards">
@@ -175,8 +173,7 @@ function BoardView({ boardId }: { boardId: string }) {
       >
         <ToolBar />
         <InsertMenu />
-        <WorkshopMenu />
-        <LibraryMenu />
+        <ToolsMenu />
         <PeerBar />
         {owner ? (
           <button

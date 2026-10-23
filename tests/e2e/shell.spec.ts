@@ -5,7 +5,8 @@ test.describe('app shell', () => {
     await page.goto('/');
 
     await expect(page.getByRole('banner')).toBeVisible();
-    await expect(page.getByText('Sabboura')).toBeVisible();
+    // On a board the bar is all board: its name, no app wordmark taking room.
+    await expect(page.getByTestId('board-title')).toBeVisible();
 
     const canvas = page.getByTestId('board-canvas');
     await expect(canvas).toBeVisible();

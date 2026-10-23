@@ -4,6 +4,9 @@
 }
 
 .trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-2);
@@ -20,15 +23,32 @@
   color: var(--accent-ink);
 }
 
+/* A tool from this menu is in hand. */
+.trigger[data-active] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.current {
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .menu {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  /* The menus sit at the right of the bar; they open leftwards, into the room. */
+  right: 0;
   z-index: 30;
-  width: 200px;
+  width: 248px;
+  max-height: calc(100dvh - var(--topbar-h, 52px) - 24px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   padding: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -36,7 +56,52 @@
   box-shadow: var(--shadow-2);
 }
 
-.menu > button {
+.label {
+  margin: 8px 8px 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.label:first-child {
+  margin-top: 2px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+
+.grid button {
+  display: grid;
+  place-items: center;
+  height: 34px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.grid button:hover {
+  background: var(--surface-2);
+}
+
+.grid button[aria-checked='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.stamp {
+  font-size: 20px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   border: 0;
   background: none;
   text-align: left;
@@ -48,68 +113,110 @@
   cursor: pointer;
 }
 
-.menu > button:hover {
+.item:hover {
   background: var(--surface-2);
 }
 
-.label {
-  margin: 6px 8px 2px;
+.item[aria-checked='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.item > span:not(.spacer) {
+  flex: 1;
+}
+
+.item kbd,
+.item small {
+  font: inherit;
   font-size: 11px;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-.stamps {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
+.spacer {
+  width: 15px;
+  flex: none;
 }
 
-.stamps button {
-  border: 0;
-  background: none;
-  font-size: 20px;
-  padding: 4px;
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.timer svg {
+  flex: none;
+  color: var(--text);
+  margin-right: 4px;
+}
+
+.timer input {
+  width: 42px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: var(--radius-sm);
+  padding: 4px 5px;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer button {
+  margin-left: auto;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12.5px;
   cursor: pointer;
 }
 
-.stamps button:hover {
-  background: var(--surface-2);
+.timer button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 4px 32px;
+}
+
+.recent button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.recent button:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .hint {
-  margin: 6px 8px 2px;
+  margin: 2px 8px 4px;
   font-size: 11.5px;
   color: var(--text-muted);
-}
-
-.row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
-}
-
-.row button {
-  border: 0;
-  background: none;
-  padding: 6px 2px;
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 12px;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.row button:hover {
-  background: var(--surface-2);
 }
 
 .status {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  right: 0;
   z-index: 29;
   display: flex;
   align-items: center;
@@ -133,4 +240,9 @@
   background: none;
   color: inherit;
   cursor: pointer;
+}
+
+.item:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
