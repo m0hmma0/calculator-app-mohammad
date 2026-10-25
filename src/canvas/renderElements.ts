@@ -137,6 +137,8 @@ function drawContent(
       drawImage(ctx, element, onImageReady, colors);
       break;
 
+    // A text box is drawn like a note: its fill and outline, if it has any, under the words.
+    case 'text':
     case 'sticky':
     case 'frame': {
       const fill = resolveColor(element.style.fill, colors);
@@ -170,10 +172,6 @@ function drawContent(
       else drawText(ctx, element, colors);
       break;
     }
-
-    case 'text':
-      drawText(ctx, element, colors);
-      break;
 
     case 'table':
       drawTable(ctx, element, colors, zoom);

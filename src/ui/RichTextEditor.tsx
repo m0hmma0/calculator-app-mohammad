@@ -5,14 +5,27 @@ import { detectDirection } from '@/model/textLayout';
 import { useBoardStore } from '@/state/boardStore';
 import { readBox, renderInto, selectionIn, selectRange } from '@/text/domText';
 import { autoFormat, onBackspace, onEnter, type TextEdit } from '@/text/lists';
-import { marksAt, marksEqual, rangeHas, type MarkName, type MarkSet } from '@/text/marks';
-import { useTextSelection } from '@/text/selection';
+import {
+  linkAround,
+  looksLikeLink,
+  marksAt,
+  marksEqual,
+  normaliseLink,
+  openLink,
+  rangeHas,
+  rangeValue,
+  type MarkFormats,
+  type MarkName,
+  type MarkSet,
+} from '@/text/marks';
+import { CLOSED_SELECTION, useTextSelection } from '@/text/selection';
 import styles from './TextEditor.module.css';
 
 /**
  * Typing with formatting: an editable box laid over the element, showing bold,
- * italic and underline as they are. The browser still supplies the caret, selection,
- * input methods and Arabic shaping; this keeps the box and the shared text in step.
+ * italic, underline, colours, highlights and links as they are. The browser still
+ * supplies the caret, selection, input methods and Arabic shaping; this keeps the box
+ * and the shared text in step.
  *
  * The box is redrawn from the text only when the two differ — after a list step, a
  * formatting change, or someone else's typing — and the caret is put back where it
@@ -42,6 +55,12 @@ export function RichTextEditor({
   const text = element.text ?? '';
   const marks = element.marks;
   const id = element.id;
+  // The formatting controls call back into this box later; they read the text as it
+  // is then, not as it was when they were handed over.
+  const latest = useRef(marks);
+  useLayoutEffect(() => {
+    latest.current = marks;
+  }, [marks]);
 
   // Opening: fill the box, focus it, caret at the end.
   useLayoutEffect(() => {
@@ -94,15 +113,22 @@ export function RichTextEditor({
     const range = selectionIn(root);
     if (!range) return;
     seen.current = { text: readBox(root).text, ...range };
+    const { start, end } = range;
+    const marks = latest.current;
     const active: MarkSet =
-      range.start === range.end
-        ? (pendingMarks.current ?? marksAt(marks, range.start - 1))
+      start === end
+        ? (pendingMarks.current ?? marksAt(marks, start - 1))
         : {
-            bold: rangeHas(marks, range.start, range.end, 'bold'),
-            italic: rangeHas(marks, range.start, range.end, 'italic'),
-            underline: rangeHas(marks, range.start, range.end, 'underline'),
+            bold: rangeHas(marks, start, end, 'bold'),
+            italic: rangeHas(marks, start, end, 'italic'),
+            underline: rangeHas(marks, start, end, 'underline'),
+            color: rangeValue(marks, start, end, 'color'),
+            highlight: rangeValue(marks, start, end, 'highlight'),
+            link: rangeValue(marks, start, end, 'link'),
           };
-    useTextSelection.setState({ id, ...range, active, toggle });
+    const link =
+      start === end || rangeValue(marks, start, end, 'link') ? linkAround(marks, start) : null;
+    useTextSelection.setState({ id, ...range, active, link, toggle, format, setLink, refocus });
   };
 
   const apply = (edit: TextEdit) => {
@@ -116,21 +142,83 @@ export function RichTextEditor({
     }
   };
 
+  /** The selection now, or — while a control has the focus — as it last was. */
+  const rangeNow = () => {
+    const root = ref.current;
+    return (root && selectionIn(root)) ?? seen.current;
+  };
+
   /** Bold, italic or underline: on the selection, or on what is typed next. */
   const toggle = (name: MarkName) => {
-    const root = ref.current;
-    if (!root) return;
-    const range = selectionIn(root) ?? seen.current;
+    const range = rangeNow();
     if (!range) return;
+    const marks = latest.current;
     if (range.start === range.end) {
       const now = pendingMarks.current ?? marksAt(marks, range.start - 1);
       pendingMarks.current = { ...now, [name]: !now[name] };
-      useTextSelection.setState({ active: pendingMarks.current, toggle });
+      useTextSelection.setState({ active: pendingMarks.current });
       return;
     }
     const on = !rangeHas(marks, range.start, range.end, name);
     pendingCaret.current = { start: range.start, end: range.end };
     formatText(id, range.start, range.end, { [name]: on });
+  };
+
+  /** A colour or a highlight: on the selection, or on what is typed next. */
+  const format = (formats: MarkFormats) => {
+    const range = rangeNow();
+    if (!range) return;
+    if (range.start === range.end) {
+      const now = pendingMarks.current ?? marksAt(latest.current, range.start - 1);
+      const next: MarkSet = { ...now };
+      for (const [name, value] of Object.entries(formats) as Array<[keyof MarkSet, unknown]>) {
+        if (typeof value === 'string') (next as Record<string, unknown>)[name] = value;
+        else delete next[name];
+      }
+      pendingMarks.current = next;
+      useTextSelection.setState({ active: next });
+      return;
+    }
+    pendingCaret.current = { start: range.start, end: range.end };
+    formatText(id, range.start, range.end, formats);
+  };
+
+  /**
+   * Links the selected words to an address. With nothing selected, inside a link, it
+   * changes (or, given null, removes) that whole link; anywhere else it writes the
+   * address in as its own link.
+   */
+  const setLink = (url: string | null) => {
+    const root = ref.current;
+    const range = rangeNow();
+    if (!root || !range) return;
+    let { start, end } = range;
+    const around = linkAround(latest.current, start);
+    if (start === end && around) ({ from: start, to: end } = around);
+    if (start === end) {
+      if (!url) return;
+      const words = url.replace(/^mailto:/, '');
+      const current = readBox(root).text;
+      apply({
+        text: current.slice(0, start) + words + current.slice(end),
+        start: start + words.length,
+        end: start + words.length,
+      });
+      formatText(id, start, start + words.length, { link: url });
+      return;
+    }
+    pendingCaret.current = { start: end, end };
+    seen.current = { text: readBox(root).text, start: end, end };
+    formatText(id, start, end, { link: url });
+  };
+
+  /** Back into the box, the caret where it was. */
+  const refocus = () => {
+    const root = ref.current;
+    if (!root) return;
+    root.focus({ preventScroll: true });
+    const range = pendingCaret.current ?? seen.current;
+    if (range) selectRange(root, range.start, range.end);
   };
 
   /** The box was edited by the browser: carry its text into the document. */
@@ -144,12 +232,23 @@ export function RichTextEditor({
     if (range) pendingCaret.current = range;
     setElementText(id, shown);
     const chosen = pendingMarks.current;
-    if (chosen && splice.insert.length > 0) {
-      formatText(id, splice.index, splice.index + splice.insert.length, {
+    const formats: MarkFormats = {};
+    if (chosen) {
+      Object.assign(formats, {
         bold: Boolean(chosen.bold),
         italic: Boolean(chosen.italic),
         underline: Boolean(chosen.underline),
+        color: chosen.color ?? null,
+        highlight: chosen.highlight ?? null,
       });
+    }
+    // Typing just after a link carries on in plain words; only inside one is it linked.
+    const before = marksAt(marks, splice.index - 1).link;
+    if (before && before !== marksAt(marks, splice.index + splice.remove).link) {
+      formats.link = null;
+    }
+    if (splice.insert.length > 0 && Object.keys(formats).length > 0) {
+      formatText(id, splice.index, splice.index + splice.insert.length, formats);
     }
     pendingMarks.current = null;
     // "- " at the start of a line becomes a bullet as it is typed.
@@ -215,6 +314,11 @@ export function RichTextEditor({
           const pasted = event.dataTransfer?.getData('text/plain') ?? event.data;
           if (pasted === null || pasted === undefined) return;
           event.preventDefault();
+          // An address pasted over words links them, as in a word processor.
+          if (event.inputType === 'insertFromPaste' && start !== end && looksLikeLink(pasted)) {
+            setLink(normaliseLink(pasted));
+            return;
+          }
           replaceSelection(pasted.replace(/\r\n?/g, '\n'));
           return;
         }
@@ -253,10 +357,7 @@ export function RichTextEditor({
   });
 
   // Leaving the box: the formatting controls go back to the whole element.
-  useEffect(
-    () => () => useTextSelection.setState({ id: null, start: 0, end: 0, active: {}, toggle: null }),
-    [],
-  );
+  useEffect(() => () => useTextSelection.setState({ ...CLOSED_SELECTION }), []);
 
   return (
     <div
@@ -279,6 +380,11 @@ export function RichTextEditor({
         if (key === 'b' || key === 'i' || key === 'u') {
           event.preventDefault();
           toggle(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline');
+        } else if (key === 'k') {
+          // A link: the address field opens above the box.
+          event.preventDefault();
+          publish();
+          useTextSelection.setState({ linkOpen: true });
         } else if (key === 'z' || key === 'y') {
           // Undo is the board's: it knows what this person typed, and nobody else.
           event.preventDefault();
@@ -287,7 +393,20 @@ export function RichTextEditor({
           else store.undo();
         }
       }}
-      onBlur={endEditing}
+      onClick={(event) => {
+        // Ctrl/⌘-click follows a link, as in a word processor; a plain click edits.
+        if (!event.ctrlKey && !event.metaKey) return;
+        const url = (event.target as Element).closest?.('[data-link]')?.getAttribute('data-link');
+        if (!url) return;
+        event.preventDefault();
+        openLink(url);
+      }}
+      onBlur={(event) => {
+        // Over to the formatting bar (the address field, say): still typing here.
+        const next = event.relatedTarget;
+        if (next instanceof Element && next.closest('[data-format-bar]')) return;
+        endEditing();
+      }}
     />
   );
 }

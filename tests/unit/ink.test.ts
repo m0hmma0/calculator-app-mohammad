@@ -4,6 +4,7 @@ import {
   eraseThrough,
   fromFlat,
   simplify,
+  snapLevel,
   straightenFrom,
   strokeBounds,
   strokeHit,
@@ -79,6 +80,30 @@ describe('straightenFrom', () => {
 
   it('returns just the cursor for an empty stroke', () => {
     expect(straightenFrom([], 0, ink(3, 4))).toEqual([ink(3, 4)]);
+  });
+
+  it('pulls a nearly level or nearly upright line exactly straight', () => {
+    // 5° off level, either way along: dead level.
+    const tilted = { x: 100 * Math.cos(0.087), y: 100 * Math.sin(0.087) };
+    expect(snapLevel({ x: 0, y: 0 }, tilted)).toEqual({ x: tilted.x, y: 0 });
+    expect(snapLevel({ x: 0, y: 0 }, { x: -tilted.x, y: tilted.y })).toEqual({
+      x: -tilted.x,
+      y: 0,
+    });
+    // 8° off upright, going up: dead upright.
+    const steep = { x: 100 * Math.sin(0.14), y: -100 * Math.cos(0.14) };
+    expect(snapLevel({ x: 10, y: 10 }, { x: 10 + steep.x, y: 10 + steep.y })).toEqual({
+      x: 10,
+      y: 10 + steep.y,
+    });
+    // A diagonal keeps its angle.
+    expect(snapLevel({ x: 0, y: 0 }, { x: 50, y: 40 })).toEqual({ x: 50, y: 40 });
+  });
+
+  it('straightens to the snapped end, live', () => {
+    const points = line(3); // the anchor is the last, at (20, 0)
+    const straightened = straightenFrom(points, 2, ink(220, 9));
+    expect(straightened.at(-1)).toMatchObject({ x: 220, y: 0 });
   });
 });
 

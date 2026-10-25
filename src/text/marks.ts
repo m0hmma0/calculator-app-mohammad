@@ -1,18 +1,29 @@
 import type { TextMark } from '@/model/element';
 
 /**
- * Bold, italic and underline on part of a text. In the shared document they are
- * formatting on the text itself, so they move with the words as anyone types; in
+ * Formatting on part of a text: bold, italic and underline, which are on or off, and
+ * a colour, a highlight and a link, which carry a value. In the shared document they
+ * are formatting on the text itself, so they move with the words as anyone types; in
  * the app they are a list of ranges, which is what drawing and editing need.
  */
 export type MarkName = 'bold' | 'italic' | 'underline';
 export const MARK_NAMES: readonly MarkName[] = ['bold', 'italic', 'underline'];
 
+export type ValuedMark = 'color' | 'highlight' | 'link';
+export const VALUED_MARKS: readonly ValuedMark[] = ['color', 'highlight', 'link'];
+
 export interface MarkSet {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  color?: string;
+  highlight?: string;
+  link?: string;
 }
+
+/** A change to formatting: B, I and U turned on or off; a value set, or null to clear it. */
+export type MarkFormats = Partial<Record<MarkName, boolean>> &
+  Partial<Record<ValuedMark, string | null>>;
 
 interface DeltaOp {
   insert?: unknown;
@@ -34,6 +45,13 @@ export function marksFromDelta(delta: readonly DeltaOp[]): TextMark[] {
         any = true;
       }
     }
+    for (const name of VALUED_MARKS) {
+      const value = attributes[name];
+      if (typeof value === 'string' && value !== '') {
+        mark[name] = value;
+        any = true;
+      }
+    }
     if (any && length > 0) {
       const last = marks.at(-1);
       // Neighbouring runs with the same formatting are one range.
@@ -46,7 +64,10 @@ export function marksFromDelta(delta: readonly DeltaOp[]): TextMark[] {
 }
 
 export function sameMarks(a: MarkSet, b: MarkSet): boolean {
-  return MARK_NAMES.every((name) => Boolean(a[name]) === Boolean(b[name]));
+  return (
+    MARK_NAMES.every((name) => Boolean(a[name]) === Boolean(b[name])) &&
+    VALUED_MARKS.every((name) => (a[name] ?? null) === (b[name] ?? null))
+  );
 }
 
 export function marksEqual(a: readonly TextMark[] = [], b: readonly TextMark[] = []): boolean {
@@ -82,6 +103,39 @@ export function rangeHas(
   return true;
 }
 
+/** The value every character in [from, to) shares — a colour, say — or undefined. */
+export function rangeValue(
+  marks: readonly TextMark[] | undefined,
+  from: number,
+  to: number,
+  name: ValuedMark,
+): string | undefined {
+  if (to <= from) return undefined;
+  const first = marksAt(marks, from)[name];
+  for (let index = from + 1; index < to; index += 1) {
+    if (marksAt(marks, index)[name] !== first) return undefined;
+  }
+  return first;
+}
+
+/**
+ * The link around a position: the whole run of characters carrying the same address,
+ * found from the character after the caret or, at the end of a link, the one before.
+ */
+export function linkAround(
+  marks: readonly TextMark[] | undefined,
+  index: number,
+): { url: string; from: number; to: number } | null {
+  const url = marksAt(marks, index).link ?? marksAt(marks, index - 1).link;
+  if (!url || !marks) return null;
+  const at = marksAt(marks, index).link === url ? index : index - 1;
+  let from = at;
+  while (from > 0 && marksAt(marks, from - 1).link === url) from -= 1;
+  let to = at + 1;
+  while (marksAt(marks, to).link === url) to += 1;
+  return { url, from, to };
+}
+
 /**
  * Splits [from, to) of the text into runs that share formatting — what is drawn,
  * and measured, one font at a time.
@@ -101,4 +155,42 @@ export function runsOf(
     start = end;
   }
   return runs;
+}
+
+/**
+ * What a typed address becomes as a link: with its scheme, and only if it is a web
+ * page or an email address. Anything else — a `javascript:` address above all — is
+ * refused, because a link on a shared board is clicked by people who did not write it.
+ */
+export function normaliseLink(input: string): string | null {
+  const trimmed = input.trim();
+  if (trimmed === '') return null;
+  const email = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(trimmed);
+  const withScheme = email
+    ? `mailto:${trimmed}`
+    : /^[a-z][a-z0-9+.-]*:/i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    if (!['http:', 'https:', 'mailto:'].includes(url.protocol)) return null;
+    if (url.protocol !== 'mailto:' && !url.hostname.includes('.') && url.hostname !== 'localhost')
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether pasted text is just an address — pasted over words, it links them. */
+export function looksLikeLink(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === '' || /\s/.test(trimmed)) return false;
+  return /^(https?:\/\/|www\.)/i.test(trimmed) && normaliseLink(trimmed) !== null;
+}
+
+/** A link opens in a new tab, cut off from this page. */
+export function openLink(url: string): void {
+  const safe = normaliseLink(url);
+  if (safe) window.open(safe, '_blank', 'noopener,noreferrer');
 }

@@ -10,6 +10,8 @@ import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
 import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
+import { LinkIcon } from './FormatBar';
+import { HIGHLIGHTS, TEXT_COLOURS } from './palettes';
 import styles from './Inspector.module.css';
 
 const FILLS = [
@@ -20,6 +22,18 @@ const FILLS = [
   'var(--shape-5)',
   'var(--shape-6)',
 ];
+
+/** Fills that suit a box of words: paper, a note's yellow, and pale washes. */
+const SOFT_FILLS = [
+  'var(--surface)',
+  'var(--sticky)',
+  'var(--wash-yellow)',
+  'var(--wash-green)',
+  'var(--wash-blue)',
+  'var(--wash-pink)',
+];
+
+const STROKES = [...FILLS, 'var(--text)'];
 
 const DASHES: DashStyle[] = ['solid', 'dashed', 'dotted'];
 
@@ -56,6 +70,7 @@ export function Inspector() {
   const resizeTable = useBoardStore((state) => state.resizeTable);
   const applyDiscrete = useBoardStore((state) => state.applyDiscrete);
   const styleSelection = useBoardStore((state) => state.styleSelection);
+  const formatSelectionText = useBoardStore((state) => state.formatSelectionText);
   const setSelectionOpacity = useBoardStore((state) => state.setSelectionOpacity);
   const alignSelection = useBoardStore((state) => state.alignSelection);
   const arrangeSelection = useBoardStore((state) => state.arrangeSelection);
@@ -282,6 +297,89 @@ export function Inspector() {
                 >
                   <u>U</u>
                 </button>
+                {typingHere ? (
+                  <button
+                    type="button"
+                    className={styles.button}
+                    aria-pressed={Boolean(typing.link)}
+                    aria-label="Link — Ctrl/⌘ K"
+                    title="Link the selected words — Ctrl/⌘ K"
+                    data-testid="text-link"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => useTextSelection.setState({ linkOpen: true })}
+                  >
+                    <LinkIcon />
+                  </button>
+                ) : null}
+              </div>
+              <p className={styles.subLabel}>Colour</p>
+              <div className={styles.swatches}>
+                {TEXT_COLOURS.map(({ value, name }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={styles.swatch}
+                    style={{ background: value }}
+                    aria-pressed={
+                      typingHere
+                        ? typing.active.color === value
+                        : !first.marks?.some((mark) => mark.color) &&
+                          (first.style.textColor ?? 'var(--text)') === value
+                    }
+                    aria-label={`Text colour ${name}`}
+                    title={name}
+                    data-testid={`text-colour-${name.toLowerCase()}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      typingHere
+                        ? typing.format?.({ color: value })
+                        : // The whole box: every word, including any coloured on its own.
+                          formatSelectionText({ color: null }, { textColor: value })
+                    }
+                  />
+                ))}
+              </div>
+              <p className={styles.subLabel}>Highlight</p>
+              <div className={styles.swatches}>
+                {HIGHLIGHTS.map(({ value, name }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={styles.swatch}
+                    style={{ background: value }}
+                    aria-pressed={
+                      typingHere
+                        ? typing.active.highlight === value
+                        : Boolean(first.text) &&
+                          first.marks?.length === 1 &&
+                          first.marks[0]!.from === 0 &&
+                          first.marks[0]!.to === first.text!.length &&
+                          first.marks[0]!.highlight === value
+                    }
+                    aria-label={`Highlight ${name}`}
+                    title={name}
+                    data-testid={`text-highlight-${name.toLowerCase()}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      typingHere
+                        ? typing.format?.({ highlight: value })
+                        : formatSelectionText({ highlight: value })
+                    }
+                  />
+                ))}
+                <button
+                  type="button"
+                  className={`${styles.swatch} ${styles.none}`}
+                  aria-label="No highlight"
+                  title="No highlight"
+                  data-testid="text-highlight-none"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    typingHere
+                      ? typing.format?.({ highlight: null })
+                      : formatSelectionText({ highlight: null })
+                  }
+                />
               </div>
               <div className={styles.buttons}>
                 {ALIGN_OPTIONS.map((option) => (
@@ -351,7 +449,7 @@ export function Inspector() {
           <div className={styles.section}>
             <p className={styles.label}>Fill</p>
             <div className={styles.swatches}>
-              {FILLS.map((fill) => (
+              {[...FILLS, ...SOFT_FILLS].map((fill) => (
                 <button
                   key={fill}
                   type="button"
@@ -359,6 +457,8 @@ export function Inspector() {
                   style={{ background: fill }}
                   aria-pressed={first.style.fill === fill}
                   aria-label={`Fill ${fill}`}
+                  data-testid={`fill-${fill}`}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => styleSelection({ fill })}
                 />
               ))}
@@ -367,6 +467,8 @@ export function Inspector() {
                 className={`${styles.swatch} ${styles.none}`}
                 aria-pressed={first.style.fill === null}
                 aria-label="No fill"
+                data-testid="fill-none"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => styleSelection({ fill: null })}
               />
             </div>
@@ -375,7 +477,7 @@ export function Inspector() {
           <div className={styles.section}>
             <p className={styles.label}>Stroke</p>
             <div className={styles.swatches}>
-              {FILLS.map((stroke) => (
+              {STROKES.map((stroke) => (
                 <button
                   key={stroke}
                   type="button"

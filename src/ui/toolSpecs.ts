@@ -56,6 +56,12 @@ export const TOOL_SPECS: ToolSpec[] = [
     path: 'M3 13.2l.7-2.8L11.1 3a1.7 1.7 0 0 1 2.4 2.4l-7.4 7.4-3.1.8Z',
   },
   {
+    id: 'highlighter',
+    label: 'Highlighter',
+    shortcut: 'I',
+    path: 'M9.4 2.6l4 4-5.6 5.6H4.6l-.8.8-1.6-1.6.8-.8V7.4Zm-5.8 9.6h9.8',
+  },
+  {
     id: 'eraser',
     label: 'Eraser',
     shortcut: 'E',

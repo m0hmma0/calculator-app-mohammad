@@ -10,7 +10,7 @@ import {
   transactLocal,
   REMOTE_ORIGIN,
 } from '@/doc/board';
-import { fromYElement, toYElement } from '@/doc/schema';
+import { formatYText, fromYElement, toYElement } from '@/doc/schema';
 import { createElement, type BoardElement } from '@/model/element';
 
 const shape = (id: string, overrides: Partial<BoardElement> = {}): BoardElement => ({
@@ -303,6 +303,26 @@ describe('formatting on part of a text', () => {
       new Map([['label', { marks: [{ from: 7, to: 11, italic: true as const }] }]]),
     );
     expect(byId(readElements(board), 'label').marks).toEqual([{ from: 7, to: 11, italic: true }]);
+    board.destroy();
+  });
+
+  it('carries colours, highlights and links, and a null clears just that one', () => {
+    const marks = [
+      { from: 0, to: 4, color: '#e03131', link: 'https://example.com/' },
+      { from: 5, to: 9, highlight: '#ffe14d', bold: true as const },
+    ];
+    const element = { ...shape('rich', { type: 'text' }), text: 'Read this page', marks };
+    expect(roundTrip(element).marks).toEqual(marks);
+
+    const board = createBoard();
+    insertElements(board, [element]);
+    const map = board.elements.get('rich')!;
+    transactLocal(board, () => formatYText(map, 0, 4, { link: null }));
+    transactLocal(board, () => formatYText(map, 5, 9, { highlight: '#8ef0a0' }));
+    expect(byId(readElements(board), 'rich').marks).toEqual([
+      { from: 0, to: 4, color: '#e03131' },
+      { from: 5, to: 9, highlight: '#8ef0a0', bold: true },
+    ]);
     board.destroy();
   });
 });

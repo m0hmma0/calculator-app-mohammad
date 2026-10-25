@@ -51,10 +51,29 @@ export function translatePoints(points: readonly InkPoint[], dx: number, dy: num
   return points.map((point) => ({ x: point.x + dx, y: point.y + dy, pressure: point.pressure }));
 }
 
+/** How close to level or upright a straightened line has to be to snap to it. */
+export const LEVEL_SNAP = (12 * Math.PI) / 180;
+
+/**
+ * The end of a straight line from `anchor`, pulled exactly level or exactly upright
+ * when it is within `within` of either — so a straight horizontal or vertical line
+ * needs no steady hand. Anything further off keeps its own angle.
+ */
+export function snapLevel(anchor: Point, cursor: Point, within = LEVEL_SNAP): Point {
+  const dx = cursor.x - anchor.x;
+  const dy = cursor.y - anchor.y;
+  if (dx === 0 && dy === 0) return cursor;
+  const angle = Math.abs(Math.atan2(dy, dx)); // 0 (right) … π (left)
+  if (Math.min(angle, Math.PI - angle) <= within) return { x: cursor.x, y: anchor.y };
+  if (Math.abs(Math.PI / 2 - angle) <= within) return { x: anchor.x, y: cursor.y };
+  return cursor;
+}
+
 /**
  * Holding Shift mid-stroke straightens everything drawn since the key went down,
  * live, without ending the stroke: the kept prefix stays freehand and the rest
- * becomes a line from the point where Shift was pressed to the cursor.
+ * becomes a line from the point where Shift was pressed to the cursor — snapped
+ * level or upright when it is close to either.
  *
  * Releasing Shift resumes freehand from there, which is why this takes the whole
  * stroke and an anchor index rather than replacing the buffer outright.
@@ -63,11 +82,13 @@ export function straightenFrom(
   points: readonly InkPoint[],
   anchorIndex: number,
   cursor: InkPoint,
+  snapWithin = LEVEL_SNAP,
 ): InkPoint[] {
   if (points.length === 0) return [cursor];
   const clamped = Math.max(0, Math.min(anchorIndex, points.length - 1));
   const anchor = points[clamped]!;
-  return [...points.slice(0, clamped + 1), { ...cursor, pressure: anchor.pressure }];
+  const end = snapLevel(anchor, cursor, snapWithin);
+  return [...points.slice(0, clamped + 1), { ...end, pressure: anchor.pressure }];
 }
 
 /**

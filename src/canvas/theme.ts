@@ -8,6 +8,13 @@ export interface CanvasColors {
   guide: string;
   laser: string;
   handleFill: string;
+  /**
+   * How strongly highlights are painted: fully on a light theme, toned down on a dark
+   * one, where light words sit on them. From the `--highlight-mix` token.
+   */
+  highlightMix: number;
+  /** Whether the board is dark, which decides how highlighter ink blends. */
+  dark: boolean;
   /** CSS custom-property name to its resolved value, for `var(--x)` in element styles. */
   byToken: Map<string, string>;
 }
@@ -38,6 +45,10 @@ export function getCanvasColors(host: Element): CanvasColors {
     '--sticky-ink',
     '--laser',
     '--border-strong',
+    '--wash-yellow',
+    '--wash-green',
+    '--wash-blue',
+    '--wash-pink',
   ]) {
     byToken.set(token, read(token, '#888888'));
   }
@@ -52,10 +63,27 @@ export function getCanvasColors(host: Element): CanvasColors {
     laser: read('--laser', '#ff2d55'),
     guide: read('--guide', '#e0397a'),
     handleFill: read('--surface', '#ffffff'),
+    highlightMix: Math.min(
+      1,
+      Math.max(0.1, parseFloat(read('--highlight-mix', '100%')) / 100 || 1),
+    ),
+    dark: isDark(read('--canvas-bg', '#ffffff')),
     byToken,
   };
 
   return cache;
+}
+
+/** A colour's lightness, from a `#rrggbb` value; anything else counts as light. */
+function isDark(colour: string): boolean {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colour.trim());
+  if (!match) return false;
+  const [r, g, b] = match.slice(1).map((part) => parseInt(part, 16) / 255) as [
+    number,
+    number,
+    number,
+  ];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.4;
 }
 
 export function invalidateCanvasColors(): void {

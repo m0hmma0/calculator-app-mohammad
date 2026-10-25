@@ -74,6 +74,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       tool('line', 'Line', 'L'),
       tool('arrow', 'Arrow', 'A'),
       tool('pen', 'Pen', 'P'),
+      tool('highlighter', 'Highlighter', 'I'),
       tool('eraser', 'Eraser', 'E'),
       tool('text', 'Text', 'T'),
       tool('sticky', 'Sticky note', 'N'),

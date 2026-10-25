@@ -36,6 +36,12 @@ export interface TextMark {
   bold?: true;
   italic?: true;
   underline?: true;
+  /** The words' own colour, over the box's. */
+  color?: string;
+  /** A highlighter colour behind the words. */
+  highlight?: string;
+  /** An address the words open. */
+  link?: string;
 }
 
 /** Something from the web: a video that plays in place, or a link's preview card. */
@@ -92,6 +98,8 @@ export interface ElementStyle {
   list: ListStyle;
   /** Text colour; falls back to fill when null. */
   textColor: string | null;
+  /** Ink from the highlighter: wide, even and see-through, so words show through it. */
+  highlighter: boolean;
 }
 
 /** One end of a connector, optionally bound to an element so it re-routes. */
@@ -128,7 +136,7 @@ export interface BoardElement {
 
   /** Text and sticky-note content. */
   text?: string;
-  /** Bold, italic and underline on parts of the text; absent when there are none. */
+  /** Bold, italic, underline, colours and links on parts of the text; absent when none. */
   marks?: TextMark[];
 
   /** Image source: a stored file on an account board, a data URL on the local board. */
@@ -183,6 +191,7 @@ export const DEFAULT_STYLE: ElementStyle = {
   letterSpacing: 0,
   list: 'none',
   textColor: null,
+  highlighter: false,
 };
 
 /** Lines have no interior, so they default to a stroke instead of a fill. */
@@ -265,6 +274,12 @@ export const INK_STYLE: Partial<ElementStyle> = {
   fill: 'var(--shape-1)',
   stroke: null,
   strokeWidth: 6,
+};
+export const HIGHLIGHTER_STYLE: Partial<ElementStyle> = {
+  fill: '#ffe14d',
+  stroke: null,
+  strokeWidth: 20,
+  highlighter: true,
 };
 export const TABLE_STYLE: Partial<ElementStyle> = {
   fill: 'var(--surface)',

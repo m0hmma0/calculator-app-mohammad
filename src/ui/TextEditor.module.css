@@ -81,3 +81,126 @@
 .formatBar .underline {
   text-decoration: underline;
 }
+
+.formatBar {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.formatBar a,
+.formatBar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.barDivider {
+  width: 1px;
+  align-self: stretch;
+  margin: 3px 2px;
+  background: var(--border);
+}
+
+/* A, or the highlighter, over a bar of the colour it applies. */
+.formatBar .colourButton {
+  flex-direction: column;
+  gap: 1px;
+  font: 600 14px/1 var(--font-ui);
+}
+
+.colourButton span {
+  width: 16px;
+  height: 3px;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.linkChip {
+  max-width: 180px;
+  height: 28px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font: 13px/28px var(--font-ui);
+  text-decoration: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.palette,
+.linkField {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+}
+
+.formatBar .paletteSwatch {
+  min-width: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.formatBar .paletteSwatch[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.formatBar .paletteNone {
+  background: linear-gradient(
+    135deg,
+    transparent 45%,
+    var(--danger) 45%,
+    var(--danger) 55%,
+    transparent 55%
+  );
+}
+
+.linkField {
+  flex-wrap: wrap;
+  align-items: center;
+  width: max-content;
+  max-width: min(360px, 90vw);
+}
+
+.linkField input {
+  width: 220px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 13px var(--font-ui);
+}
+
+.linkField input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.formatBar .linkField button {
+  padding: 0 10px;
+  font: 600 13px var(--font-ui);
+}
+
+.linkError {
+  flex-basis: 100%;
+  color: var(--danger);
+  font: 12px var(--font-ui);
+}
+
+/* A link in the text being typed: the link colour, underlined, unless given its own. */
+.rich [data-link] {
+  color: var(--accent);
+  text-decoration: underline;
+}

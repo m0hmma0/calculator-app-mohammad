@@ -83,3 +83,8 @@
   background: var(--accent);
   color: var(--on-accent);
 }
+
+/* A highlighter's width, shown as the flat band it draws. */
+.dot .stripe {
+  border-radius: 2px;
+}

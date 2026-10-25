@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { MarkName } from '@/text/marks';
+import type { MarkFormats } from '@/text/marks';
 import { textHeight } from '@/text/measure';
 import {
   addPage,
@@ -14,7 +14,14 @@ import {
   type BoardDoc,
 } from '@/doc/board';
 import { bindBoard } from '@/doc/binding';
-import { formatYText, pagesOf, readPages, toYElement, type PageInfo } from '@/doc/schema';
+import {
+  formatYText,
+  pagesOf,
+  patchYElement,
+  readPages,
+  toYElement,
+  type PageInfo,
+} from '@/doc/schema';
 import { unionRects, type Rect } from '@/geometry';
 import {
   clampZoom,
@@ -47,7 +54,8 @@ import { generateDemoElements } from '@/scene/demoElements';
 import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
-export type ContentTool = 'pen' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame' | 'stamp';
+export type ContentTool =
+  'pen' | 'highlighter' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame' | 'stamp';
 
 export type Tool = 'select' | 'hand' | ShapeType | ContentTool;
 
@@ -55,6 +63,7 @@ export type EraserMode = 'object' | 'stroke';
 
 export const CONTENT_TOOLS: readonly ContentTool[] = [
   'pen',
+  'highlighter',
   'eraser',
   'laser',
   'text',
@@ -139,6 +148,9 @@ interface BoardState {
   /** Current pen settings, kept between strokes. */
   inkWidth: number;
   inkColor: string;
+  /** The highlighter's own width and colour, kept apart from the pen's. */
+  markerWidth: number;
+  markerColor: string;
   /** Element currently open in the text overlay, if any. */
   editingId: ElementId | null;
 
@@ -204,18 +216,19 @@ interface BoardState {
 
   setEraserMode: (mode: EraserMode) => void;
   setInk: (patch: { width?: number; color?: string }) => void;
+  setMarker: (patch: { width?: number; color?: string }) => void;
   removeElements: (ids: readonly ElementId[]) => void;
   splitStroke: (id: ElementId, runs: readonly (readonly InkPoint[])[]) => void;
   beginEditing: (id: ElementId) => void;
   endEditing: () => void;
   setElementText: (id: ElementId, text: string) => void;
   /** Sets or clears bold, italic or underline on characters [from, to) of a text. */
-  formatText: (
-    id: ElementId,
-    from: number,
-    to: number,
-    formats: Partial<Record<MarkName, boolean>>,
-  ) => void;
+  formatText: (id: ElementId, from: number, to: number, formats: MarkFormats) => void;
+  /**
+   * Formatting for the whole of every selected text at once — a colour for all its
+   * words, say — with any change to the boxes' own style, as one step to undo.
+   */
+  formatSelectionText: (formats: MarkFormats, style?: Partial<ElementStyle>) => void;
 
   /** Puts something new in the middle of the view and selects it. */
   insertAt: (
@@ -358,6 +371,8 @@ export const useBoardStore = create<BoardState>((set, get) => {
     eraserMode: 'object',
     inkWidth: 6,
     inkColor: 'var(--shape-1)',
+    markerWidth: 20,
+    markerColor: '#ffe14d',
     editingId: null,
 
     setViewport: (viewport) => {
@@ -708,6 +723,12 @@ export const useBoardStore = create<BoardState>((set, get) => {
         inkColor: color ?? state.inkColor,
       })),
 
+    setMarker: ({ width, color }) =>
+      set((state) => ({
+        markerWidth: width ?? state.markerWidth,
+        markerColor: color ?? state.markerColor,
+      })),
+
     removeElements: (ids) => {
       if (ids.length === 0) return;
       const doomed = new Set(ids);
@@ -794,6 +815,20 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const map = board.elements.get(id);
       if (!map) return;
       transactLocal(board, () => formatYText(map, from, to, formats));
+    },
+
+    formatSelectionText: (formats, style) => {
+      const chosen = selectedElements().filter((element) => element.text !== undefined);
+      if (chosen.length === 0) return;
+      transactLocal(board, () => {
+        for (const element of chosen) {
+          const map = board.elements.get(element.id);
+          if (!map) continue;
+          if (style) patchYElement(map, { style: { ...element.style, ...style } });
+          formatYText(map, 0, element.text!.length, formats);
+        }
+      });
+      board.undoManager.stopCapturing();
     },
 
     insertAt: (type, size, extra = {}) => {

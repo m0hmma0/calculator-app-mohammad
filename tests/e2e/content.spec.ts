@@ -457,7 +457,7 @@ test.describe('shortcut sheet', () => {
     await page.keyboard.press('Shift+Slash');
     await expect(page.getByTestId('shortcut-sheet')).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
-    await expect(page.getByText('Straighten the stroke')).toBeVisible();
+    await expect(page.getByText('Straight line; snaps level or upright when close')).toBeVisible();
 
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('shortcut-sheet')).toHaveCount(0);

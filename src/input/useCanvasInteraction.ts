@@ -52,8 +52,11 @@ import {
   translatePoints,
   type InkPoint,
 } from '@/ink/stroke';
-import { STICKY_SIZE, shouldLockAspect } from '@/model/element';
+import { HIGHLIGHTER_STYLE, STICKY_SIZE, shouldLockAspect } from '@/model/element';
 import { effectiveTool, isShapeTool, useBoardStore } from '@/state/boardStore';
+import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import { linkAt } from '@/text/links';
+import { openLink } from '@/text/marks';
 
 const PICK_SLOP = 6; // screen px of forgiveness when clicking thin shapes
 const SNAP_DISTANCE = 6; // screen px
@@ -88,6 +91,8 @@ type Drag =
       shiftAnchor: number | null;
       /** Ctrl (⌘) was held: on lifting, a recognisable outline becomes that shape. */
       smart: boolean;
+      /** Drawn with the highlighter rather than the pen. */
+      marker: boolean;
     }
   | { kind: 'erase'; pointerId: number }
   | { kind: 'textbox'; pointerId: number; origin: Point; end: Point }
@@ -274,7 +279,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       return event.pressure > 0 ? event.pressure : 0.5;
     };
 
-    const beginInk = (event: PointerEvent) => {
+    const beginInk = (event: PointerEvent, marker: boolean) => {
       host.setPointerCapture(event.pointerId);
       const start = board(event);
       drag = {
@@ -282,12 +287,14 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         pointerId: event.pointerId,
         points: [{ ...start, pressure: pressureOf(event) }],
         shiftAnchor: null,
-        smart: event.ctrlKey || event.metaKey,
+        // Smart shapes are drawn with the pen; a highlighter stroke stays a highlight.
+        smart: !marker && (event.ctrlKey || event.metaKey),
+        marker,
       };
-      useBoardStore.getState().setDraft(inkDraft(drag.points));
+      useBoardStore.getState().setDraft(inkDraft(drag.points, marker));
     };
 
-    const inkDraft = (points: readonly InkPoint[]): BoardElement => {
+    const inkDraft = (points: readonly InkPoint[], marker: boolean): BoardElement => {
       const store = useBoardStore.getState();
       const bounds = strokeBounds(points);
       const local = translatePoints(points, -bounds.x, -bounds.y);
@@ -296,7 +303,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
           type: 'path',
           box: bounds,
           z: keyBetween(store.elements.at(-1)?.z ?? null, null),
-          style: { strokeWidth: store.inkWidth, fill: store.inkColor },
+          style: marker
+            ? { ...HIGHLIGHTER_STYLE, strokeWidth: store.markerWidth, fill: store.markerColor }
+            : { strokeWidth: store.inkWidth, fill: store.inkColor },
         }),
         points: toFlat(local),
       };
@@ -374,8 +383,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return;
       }
 
-      if (tool === 'pen') {
-        beginInk(event);
+      if (tool === 'pen' || tool === 'highlighter') {
+        beginInk(event, tool === 'highlighter');
         return;
       }
 
@@ -470,6 +479,15 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const target = elementAt(store.elements, point, PICK_SLOP / zoom);
       const targetId = target?.parentId ?? target?.id ?? null;
 
+      // A link in the words: Ctrl/⌘-click follows it, as in a word processor (a plain
+      // click still selects, so linked text can be moved). For someone who can only
+      // look, there is nothing else a click could mean.
+      const link = target ? linkAt(target, point) : null;
+      if (link && (event.ctrlKey || event.metaKey || !selectCanEdit(useBoardAccess.getState()))) {
+        openLink(link);
+        return;
+      }
+
       if (targetId) {
         const alreadySelected = store.selection.includes(targetId);
         if (event.shiftKey) {
@@ -516,11 +534,14 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     const updateHoverCursor = () => {
       const store = useBoardStore.getState();
       const tool = effectiveTool(store);
+      // A link's address shows on hover only while selecting.
+      if (tool !== 'select' && host.title) host.title = '';
 
       if (tool === 'hand') return setCursor('grab');
       if (isShapeTool(tool)) return setCursor('crosshair');
       if (tool === 'stamp') return setCursor('stamp');
       if (tool === 'pen') return setCursor('pen');
+      if (tool === 'highlighter') return setCursor('highlighter');
       if (tool === 'text') return setCursor('text');
       if (!lastClient) return setCursor('default');
 
@@ -536,6 +557,12 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       }
 
       const target = elementAt(store.elements, point, PICK_SLOP / zoom, { includeLocked: true });
+      const link = target ? linkAt(target, point) : null;
+      const hint = link
+        ? `${link}\n${selectCanEdit(useBoardAccess.getState()) ? 'Ctrl/⌘-click to open' : 'Click to open'}`
+        : '';
+      if (host.title !== hint) host.title = hint;
+      if (link) return setCursor('pointer');
       if (!target) return setCursor('default');
       if (target.locked) return setCursor('not-allowed');
       return setCursor('move');
@@ -569,7 +596,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       switch (drag.kind) {
         case 'ink': {
-          if (event.ctrlKey || event.metaKey) drag.smart = true;
+          if (!drag.marker && (event.ctrlKey || event.metaKey)) drag.smart = true;
           const sample: InkPoint = { ...point, pressure: pressureOf(event) };
 
           if (event.shiftKey) {
@@ -591,7 +618,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
             }
           }
 
-          store.setDraft(inkDraft(drag.points));
+          store.setDraft(inkDraft(drag.points, drag.marker));
           break;
         }
 
@@ -827,7 +854,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
           store.addElement(element);
           store.clearSelection();
         } else if (simplified.length >= 2 || drag.points.length >= 2) {
-          const element = inkDraft(simplified.length >= 2 ? simplified : drag.points);
+          const element = inkDraft(simplified.length >= 2 ? simplified : drag.points, drag.marker);
           store.addElement(element);
           // Writing is writing: the stroke is not selected, so the next one starts clean.
           store.clearSelection();
@@ -890,7 +917,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
       event.preventDefault();
       // On a Mac, Ctrl-click is a right-click: drawing a smart shape is not a menu.
-      if (drag.kind === 'ink' || useBoardStore.getState().tool === 'pen') return;
+      const tool = useBoardStore.getState().tool;
+      if (drag.kind === 'ink' || tool === 'pen' || tool === 'highlighter') return;
 
       const store = useBoardStore.getState();
       const point = board(event);

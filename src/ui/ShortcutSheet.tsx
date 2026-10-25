@@ -10,7 +10,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       ['H · Space', 'Pan the board'],
       ['R · O', 'Rectangle · Ellipse'],
       ['L · A', 'Line · Arrow'],
-      ['P', 'Pen'],
+      ['P · I', 'Pen · Highlighter'],
       ['E', 'Eraser'],
       ['T · N', 'Text · Sticky note'],
       ['F', 'Frame'],
@@ -20,7 +20,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
     title: 'Editing',
     rows: [
-      ['⌘Z · ⇧⌘Z', 'Undo · Redo (Phase 4)'],
+      ['⌘Z · ⇧⌘Z', 'Undo · Redo'],
       ['⌘D · Alt-drag', 'Duplicate'],
       ['⌘G · ⇧⌘G', 'Group · Ungroup'],
       ['⇧⌘L · ⇧⌘H', 'Lock · Hide'],
@@ -29,6 +29,14 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       ['⌘A · Esc', 'Select all · Deselect'],
       ['Delete', 'Delete selection'],
       ['Arrows', 'Nudge 1px (10px with Shift)'],
+    ],
+  },
+  {
+    title: 'While typing',
+    rows: [
+      ['⌘B · ⌘I · ⌘U', 'Bold · Italic · Underline'],
+      ['⌘K', 'Link the selected words'],
+      ['⌘-click', 'Open a link'],
     ],
   },
   {
@@ -46,7 +54,8 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     title: 'While dragging',
     rows: [
       ['Shift', 'Square, circle or 15° line'],
-      ['Shift (pen)', 'Straighten the stroke'],
+      ['Shift (pen)', 'Straight line; snaps level or upright when close'],
+      ['⌘ (pen)', 'Turn an outline into a shape'],
       ['Shift (resize)', 'Keep the aspect ratio'],
       ['Shift (image)', 'Free the aspect ratio'],
       ['Alt', 'Resize about the centre'],

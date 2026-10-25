@@ -45,6 +45,19 @@ describe('the rich text box', () => {
     }
   });
 
+  it('colours, highlights and links read back exactly as given', () => {
+    const root = box();
+    const marks = [
+      { from: 0, to: 3, color: '#e03131' },
+      { from: 4, to: 8, highlight: '#ffe14d', link: 'https://example.com/' },
+      { from: 9, to: 14, color: 'var(--shape-2)', bold: true as const },
+    ];
+    renderInto(root, 'red link green', marks);
+    // A browser rewrites `#e03131` as rgb(); the value read back must not change.
+    expect(readBox(root).marks).toEqual(marks);
+    expect(root.querySelector('[data-link]')?.textContent).toBe('link');
+  });
+
   it('reads what a browser leaves behind: its own bold and line blocks', () => {
     const root = box();
     root.innerHTML = 'one <b>two</b><div>three</div>';

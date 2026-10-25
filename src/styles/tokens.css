@@ -45,6 +45,13 @@
   --sticky: #ffd75e;
   --sticky-ink: #4a3a05;
   --laser: #ff2d55;
+  /* How much of a highlighter colour shows behind words. */
+  --highlight-mix: 100%;
+  /* Pale fills for a box of words, deepened on a dark board so its words stay readable. */
+  --wash-yellow: #fff3bf;
+  --wash-green: #d3f9d8;
+  --wash-blue: #d0ebff;
+  --wash-pink: #ffdeeb;
 
   --shadow-1: 0 1px 2px rgb(21 23 31 / 0.06), 0 1px 3px rgb(21 23 31 / 0.08);
   --shadow-2: 0 4px 12px rgb(21 23 31 / 0.08), 0 12px 32px rgb(21 23 31 / 0.08);
@@ -99,6 +106,11 @@
     --sticky: #d8ae2b;
     --sticky-ink: #241c02;
     --laser: #ff4d6d;
+    --highlight-mix: 45%;
+    --wash-yellow: #4a4220;
+    --wash-green: #1f3d2a;
+    --wash-blue: #1d3550;
+    --wash-pink: #4a2336;
 
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
     --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);
@@ -142,6 +154,11 @@
   --sticky: #d8ae2b;
   --sticky-ink: #241c02;
   --laser: #ff4d6d;
+  --highlight-mix: 45%;
+  --wash-yellow: #4a4220;
+  --wash-green: #1f3d2a;
+  --wash-blue: #1d3550;
+  --wash-pink: #4a2336;
 
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
   --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.4);

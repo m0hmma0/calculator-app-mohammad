@@ -8,7 +8,7 @@ import styles from './ToolBar.module.css';
  * The tools used all the time. Everything that puts something new on the board —
  * shapes, notes, text, frames — lives in the Insert menu instead.
  */
-const BAR_TOOLS: Tool[] = ['select', 'hand', 'pen', 'eraser', 'laser'];
+const BAR_TOOLS: Tool[] = ['select', 'hand', 'pen', 'highlighter', 'eraser', 'laser'];
 
 export function ToolBar() {
   const tool = useBoardStore((state) => state.tool);

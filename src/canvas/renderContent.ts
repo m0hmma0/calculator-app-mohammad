@@ -17,22 +17,28 @@ export const TEXT_PADDING = 2;
  * which is the difference between ink and a flat polyline. A stylus reports real
  * pressure; a mouse or finger does not (every sample is 0.5), so there the width
  * follows speed instead — quick strokes thin out the way a pen's do.
+ *
+ * Two kinds of stroke are drawn at an even width instead: a straight line (two
+ * points — speed means nothing between them), and the highlighter, a felt tip with
+ * flat ends.
  */
 export function inkOutline(element: BoardElement): number[][] {
   const points = fromFlat(element.points ?? []);
   if (points.length === 0) return [];
   const pressured = points.some((point) => Math.abs(point.pressure - 0.5) > 0.001);
+  const marker = element.style.highlighter;
+  const even = marker || points.length === 2;
 
   return getStroke(
-    points.map((point) => [point.x, point.y, point.pressure]),
+    points.map((point) => [point.x, point.y, marker ? 0.5 : point.pressure]),
     {
       size: element.style.strokeWidth,
-      thinning: pressured ? 0.62 : 0.5,
+      thinning: marker ? 0 : pressured ? 0.62 : 0.5,
       smoothing: 0.62,
       streamline: 0.5,
-      simulatePressure: !pressured,
-      start: { cap: true, taper: 0 },
-      end: { cap: true, taper: 0 },
+      simulatePressure: !pressured && !even,
+      start: { cap: !marker, taper: 0 },
+      end: { cap: !marker, taper: 0 },
       last: true,
     },
   ) as number[][];
@@ -89,6 +95,14 @@ export function drawInk(
 ): void {
   const colour = resolveColor(element.style.fill ?? element.style.stroke, colors) ?? '#000';
   ctx.save();
+  if (element.style.highlighter) {
+    // On a light board the colour multiplies with what is under it, as a real
+    // highlighter's does: words stay black, white turns yellow. On a dark board that
+    // would vanish, so there it is simply see-through. One fill for the whole stroke,
+    // so where it crosses itself it does not darken.
+    if (colors.dark) ctx.globalAlpha *= 0.45;
+    else ctx.globalCompositeOperation = 'multiply';
+  }
   if (element.style.shadow) {
     const zoom = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -123,16 +137,17 @@ export interface TextRender {
   lineCount: number;
 }
 
-/**
- * Text is measured and drawn with the same context that everything else uses, so
- * wrapping matches exactly what appears. Direction comes from the content, which is
- * what makes Arabic lay out right-to-left without the author setting anything.
- */
-export function drawText(
-  ctx: CanvasRenderingContext2D,
-  element: BoardElement,
-  colors: CanvasColors,
-): TextRender {
+/** Where a text's lines go: what drawing them and finding a word under the pointer share. */
+interface TextBlock {
+  style: ElementStyle;
+  marks: readonly TextMark[] | undefined;
+  fontSize: number;
+  layout: ReturnType<typeof layoutText>;
+  anchorX: number;
+  top: number;
+}
+
+function textBlock(ctx: CanvasRenderingContext2D, element: BoardElement): TextBlock {
   const content = element.text ?? '';
   const sticky = element.type === 'sticky';
   const padding = sticky ? STICKY_PADDING : TEXT_PADDING;
@@ -161,26 +176,6 @@ export function drawText(
   const available = Math.max(1, element.w - padding * 2);
   const layout = layoutText(content, available, { ...style, fontSize }, measureAt(fontSize));
 
-  if (content.length === 0) return { fontSize, lineCount: 0 };
-
-  ctx.save();
-  ctx.font = fontString(style, fontSize);
-  ctx.direction = layout.direction;
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle =
-    resolveColor(style.textColor ?? style.fill, colors) ?? colors.byToken.get('--text') ?? '#000';
-  if (style.letterSpacing) ctx.letterSpacing = `${style.letterSpacing}px`;
-  // A text box has no background to cast a shadow, so the letters do.
-  if (style.shadow && element.type === 'text') {
-    const zoom = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 4 / zoom;
-    ctx.shadowOffsetY = 2 / zoom;
-  }
-
-  // 'start' and 'end' follow the text direction; 'center' is the same either way.
-  ctx.textAlign = style.align;
-
   const anchorX =
     style.align === 'center'
       ? element.x + element.w / 2
@@ -193,29 +188,68 @@ export function drawText(
     ? element.y + Math.max(padding, (element.h - blockHeight) / 2)
     : element.y + padding;
 
+  return { style, marks, fontSize, layout, anchorX, top };
+}
+
+/** How far a wrapped line of a list item is set in, towards the reading direction. */
+function hangOf(line: WrappedLine, block: TextBlock): number {
+  const { style, layout } = block;
+  if (!line.indent || style.align === 'center') return 0;
+  return (style.align === 'start') === (layout.direction === 'ltr') ? line.indent : -line.indent;
+}
+
+/**
+ * Text is measured and drawn with the same context that everything else uses, so
+ * wrapping matches exactly what appears. Direction comes from the content, which is
+ * what makes Arabic lay out right-to-left without the author setting anything.
+ */
+export function drawText(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+): TextRender {
+  const block = textBlock(ctx, element);
+  const { style, marks, fontSize, layout, anchorX, top } = block;
+
+  if ((element.text ?? '').length === 0) return { fontSize, lineCount: 0 };
+
+  ctx.save();
+  ctx.font = fontString(style, fontSize);
+  ctx.direction = layout.direction;
+  ctx.textBaseline = 'middle';
+  const ink =
+    resolveColor(style.textColor ?? style.fill, colors) ?? colors.byToken.get('--text') ?? '#000';
+  ctx.fillStyle = ink;
+  if (style.letterSpacing) ctx.letterSpacing = `${style.letterSpacing}px`;
+  // A text box with no background to cast a shadow: the letters do.
+  if (style.shadow && element.type === 'text' && !style.fill) {
+    const zoom = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 4 / zoom;
+    ctx.shadowOffsetY = 2 / zoom;
+  }
+
+  // 'start' and 'end' follow the text direction; 'center' is the same either way.
+  ctx.textAlign = style.align;
+
   layout.lines.forEach((line, index) => {
     const y = top + index * layout.lineHeight + layout.lineHeight / 2;
     const text = line.marker + line.text;
-    const hang =
-      line.indent && style.align !== 'center'
-        ? (style.align === 'start') === (layout.direction === 'ltr')
-          ? line.indent
-          : -line.indent
-        : 0;
+    const x = anchorX + hangOf(line, block);
     if (marks) {
-      drawMarkedLine(ctx, line, marks, style, fontSize, anchorX + hang, y, layout.direction);
+      drawMarkedLine(ctx, placeMarkedLine(ctx, line, block, x), y, fontSize, ink, colors);
       return;
     }
-    ctx.fillText(text, anchorX + hang, y);
+    ctx.fillText(text, x, y);
 
     if (style.underline && text.trim() !== '') {
       const width = ctx.measureText(text).width;
       const underlineX =
         ctx.textAlign === 'center'
-          ? anchorX - width / 2
+          ? x - width / 2
           : (ctx.textAlign === 'start') === (layout.direction === 'ltr')
-            ? anchorX
-            : anchorX - width;
+            ? x
+            : x - width;
       ctx.fillRect(underlineX, y + fontSize * 0.42, width, Math.max(1, fontSize / 16));
     }
   });
@@ -230,55 +264,111 @@ function markedStyle(style: ElementStyle, marks: MarkSet): ElementStyle {
     ...style,
     fontWeight: marks.bold ? Math.max(700, style.fontWeight) : style.fontWeight,
     italic: style.italic || Boolean(marks.italic),
-    underline: style.underline || Boolean(marks.underline),
+    underline: style.underline || Boolean(marks.underline) || Boolean(marks.link),
   };
 }
 
+interface PlacedPiece {
+  text: string;
+  style: ElementStyle;
+  marks: MarkSet;
+  /** Left edge, in board units. */
+  x: number;
+  width: number;
+}
+
 /**
- * One line with formatting inside it: each run drawn in its own font, laid end to
+ * One line with formatting inside it, laid out: each run in its own font, end to
  * end, the whole line placed by its alignment. A right-to-left line is laid from the
  * right, so its runs stay in reading order.
  */
-function drawMarkedLine(
+function placeMarkedLine(
   ctx: CanvasRenderingContext2D,
   line: WrappedLine,
-  marks: readonly TextMark[],
-  style: ElementStyle,
-  fontSize: number,
+  block: TextBlock,
   anchorX: number,
-  y: number,
-  direction: 'ltr' | 'rtl',
-): void {
-  const pieces = runsOf(marks, line.start, line.start + line.text.length).map((run) => {
+): PlacedPiece[] {
+  const { style, fontSize, layout } = block;
+  const pieces = runsOf(block.marks, line.start, line.start + line.text.length).map((run) => {
     const own = markedStyle(style, run.marks);
     ctx.font = fontString(own, fontSize);
     const text = line.text.slice(run.from - line.start, run.to - line.start);
-    return { text, style: own, width: ctx.measureText(text).width };
+    return { text, style: own, marks: run.marks, width: ctx.measureText(text).width };
   });
   ctx.font = fontString(style, fontSize);
   const marker = line.marker
-    ? { text: line.marker, style, width: ctx.measureText(line.marker).width }
+    ? { text: line.marker, style, marks: {}, width: ctx.measureText(line.marker).width }
     : null;
   const all = marker ? [marker, ...pieces] : pieces;
   const total = all.reduce((sum, piece) => sum + piece.width, 0);
-  const ltr = direction === 'ltr';
+  const ltr = layout.direction === 'ltr';
   const leftAnchored = (style.align === 'start') === ltr;
   const left =
     style.align === 'center' ? anchorX - total / 2 : leftAnchored ? anchorX : anchorX - total;
 
-  ctx.textAlign = 'left';
   let cursor = ltr ? left : left + total;
-  for (const piece of all) {
+  return all.map((piece) => {
     const x = ltr ? cursor : cursor - piece.width;
-    ctx.font = fontString(piece.style, fontSize);
-    ctx.fillText(piece.text, x, y);
-    if (piece.style.underline && piece.text.trim() !== '') {
-      ctx.fillRect(x, y + fontSize * 0.42, piece.width, Math.max(1, fontSize / 16));
-    }
     cursor = ltr ? cursor + piece.width : cursor - piece.width;
+    return { ...piece, x };
+  });
+}
+
+function drawMarkedLine(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly PlacedPiece[],
+  y: number,
+  fontSize: number,
+  ink: string,
+  colors: CanvasColors,
+): void {
+  const align = ctx.textAlign;
+  ctx.textAlign = 'left';
+  // Highlights first, all of them, so no word's tail is painted over by the next one's.
+  for (const piece of pieces) {
+    const highlight = resolveColor(piece.marks.highlight ?? null, colors);
+    if (!highlight || piece.text === '') continue;
+    ctx.save();
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha *= colors.highlightMix;
+    ctx.fillStyle = highlight;
+    ctx.fillRect(piece.x, y - fontSize * 0.62, piece.width, fontSize * 1.24);
+    ctx.restore();
   }
-  ctx.textAlign = style.align;
-  ctx.font = fontString(style, fontSize);
+  for (const piece of pieces) {
+    ctx.font = fontString(piece.style, fontSize);
+    const own = piece.marks.color ?? (piece.marks.link ? 'var(--accent)' : null);
+    ctx.fillStyle = resolveColor(own, colors) ?? ink;
+    ctx.fillText(piece.text, piece.x, y);
+    if (piece.style.underline && piece.text.trim() !== '') {
+      ctx.fillRect(piece.x, y + fontSize * 0.42, piece.width, Math.max(1, fontSize / 16));
+    }
+  }
+  ctx.fillStyle = ink;
+  ctx.textAlign = align;
+}
+
+/**
+ * The link under a point on the board, if the words there carry one. `element` is
+ * the box the words are laid out in (a shape's label box, for a label).
+ */
+export function linkInText(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  point: { x: number; y: number },
+): string | null {
+  if (!element.marks?.some((mark) => mark.link)) return null;
+  const block = textBlock(ctx, element);
+  const { layout, top } = block;
+  const index = Math.floor((point.y - top) / layout.lineHeight);
+  const line = layout.lines[index];
+  if (!line) return null;
+  ctx.save();
+  if (element.style.letterSpacing) ctx.letterSpacing = `${element.style.letterSpacing}px`;
+  const pieces = placeMarkedLine(ctx, line, block, block.anchorX + hangOf(line, block));
+  ctx.restore();
+  const hit = pieces.find((piece) => point.x >= piece.x && point.x <= piece.x + piece.width);
+  return hit?.marks.link ?? null;
 }
 
 export function drawImage(

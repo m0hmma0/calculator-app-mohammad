@@ -139,7 +139,13 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   own: anything that must end on a click elsewhere (typing) is ended there explicitly.
 - **The text editor is `contenteditable`, not a textarea** (except for code), so tests
   read it with `textContent`, not `toHaveValue`. Formatting lives on the Y.Text
-  (`formatYText`); typing after formatted text inherits it, which is Yjs's default.
+  (`formatYText`); typing after formatted text inherits it, which is Yjs's default —
+  except a link, which the editor stops at its end. Colours, highlights and links sit
+  in `data-*` attributes in the box, because a browser rewrites an inline colour
+  (`#e03131` reads back as `rgb(…)`) and the box would then never match the text.
+- **Focus leaving the text box for the formatting bar** (the link field) must not end
+  typing; the editor checks `[data-format-bar]` on blur. A new control there that
+  takes focus needs that attribute on an ancestor.
 - **A folder's name shows twice on the dashboard** (sidebar and card); tests scope
   to `getByRole('complementary')` or the card's test id.
 - **Controlled checkboxes that wait for the server** do not change on click, so

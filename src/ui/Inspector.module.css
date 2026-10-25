@@ -35,6 +35,13 @@
   margin: 0;
 }
 
+/* A smaller heading inside a section: "Colour", "Highlight". */
+.subLabel {
+  margin: 2px 0 -3px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 .swatches {
   display: flex;
   flex-wrap: wrap;
@@ -183,6 +190,8 @@
   color: var(--text-muted);
   font-size: 12px;
   margin: 0;
+  /* Clear of the close button in the corner. */
+  padding-right: 26px;
 }
 
 .geometry {

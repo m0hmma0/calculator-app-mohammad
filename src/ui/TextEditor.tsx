@@ -91,6 +91,9 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   useEffect(() => {
     if (!element) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      // In the formatting bar (the address field), Escape closes that, not the text.
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-format-bar]')) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         endEditing();
@@ -109,6 +112,15 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   const code = element.type === 'code';
   const padding = code ? CODE_PADDING : sticky ? STICKY_PADDING : TEXT_PADDING;
   const topLeft = boardToScreen(viewport, { x: area.x, y: area.y });
+  // The words in their own colour, and the box's own fill showing through (the board
+  // draws it underneath) — so typing looks the way the text will.
+  const { fill, stroke, textColor } = element.style;
+  const own = label || element.type === 'text' || element.type === 'sticky';
+  const ink = !own
+    ? null
+    : label
+      ? (textColor ?? (fill ? '#ffffff' : stroke))
+      : (textColor ?? fill);
   const boxStyle: CSSProperties = {
     left: `${topLeft.x}px`,
     top: `${topLeft.y}px`,
@@ -120,6 +132,8 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
     letterSpacing: `${element.style.letterSpacing * viewport.zoom}px`,
     textAlign: label ? 'center' : element.style.align,
     textDecoration: element.style.underline ? 'underline' : undefined,
+    ...(ink ? { color: ink } : {}),
+    ...(own && fill ? { background: 'transparent' } : {}),
     transform: element.rotation ? `rotate(${element.rotation}rad)` : undefined,
     transformOrigin: 'center',
   };

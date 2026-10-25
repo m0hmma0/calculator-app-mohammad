@@ -154,7 +154,7 @@ every sharing change.
 ## Workshop tools and rich content
 
 The board's top bar holds undo and redo, the everyday tools (select, hand, pen,
-eraser, laser) and two menus. **Insert** (orange) has shapes, lines and arrows, sticky
+highlighter, eraser, laser) and two menus. **Insert** (orange) has shapes, lines and arrows, sticky
 notes, ABC Text, frames, tables, stamps (the emoji becomes the pointer; each click puts
 one down; Escape puts it away), Import (pictures, SVG, PDF), and the workshop: present,
 timer, dot voting, and the minimap (also `M`). **Tools** has version history,
@@ -170,11 +170,20 @@ Writing and drawing:
   of 40px type; they grow as they fill. One click selects, a double click edits.
   Pasted text from anywhere becomes a text box.
 - **Formatting part of a text**: select words and press Ctrl/⌘ B, I or U, or use the
-  B / I / U above the box or in the side panel; with nothing selected, it applies to
-  what is typed next. It is stored as formatting on the shared `Y.Text`
-  (`element.marks` in the app), so it moves with the words as anyone types. Text is
-  edited in a `contenteditable` box (`src/ui/RichTextEditor.tsx`, `src/text/domText.ts`);
-  code blocks keep a plain textarea.
+  bar above the box or the side panel, which also give the words a colour or a
+  highlight; with nothing selected, it applies to what is typed next. Not typing, the
+  panel's colour and highlight apply to the whole box. It is stored as formatting on
+  the shared `Y.Text` (`element.marks` in the app, `src/text/marks.ts`), so it moves
+  with the words as anyone types. Text is edited in a `contenteditable` box
+  (`src/ui/RichTextEditor.tsx`, `src/text/domText.ts`); code blocks keep a plain
+  textarea.
+- **Links on words**: select words and press Ctrl/⌘ K (or the link button) and type
+  an address, or paste an address over them. Only web and email addresses are taken
+  (`normaliseLink`). Typing straight after a link is not linked. On the board a link
+  shows its address on hover and opens with Ctrl/⌘-click (a plain click still selects,
+  so linked text can be moved); for someone who can only view, a click opens it.
+- **A text box's fill** paints a box behind its words; the side panel adds pale fills
+  that deepen on a dark board.
 - **Celebrations** (Insert → Celebrate, or C, D, O, M, Q, U, A while presenting):
   confetti, drum roll, bubbles, mic drop, quiet, curtain call and applause, for
   everyone on the board at once (`src/fun/`). Sounds are synthesised with Web Audio,
@@ -185,6 +194,11 @@ Writing and drawing:
   changed number carries through the items after it (`src/text/lists.ts`).
 - **Ink** follows a stylus's pressure, or a mouse's speed, and is drawn as curves
   rather than segments, from every pointer sample. Pens come in 1.5, 3, 6 and 12.
+  Holding Shift draws a straight line, pulled exactly level or upright when it is
+  within 12° of either (`snapLevel` in `src/ink/stroke.ts`).
+- **The highlighter** (`I`) draws a wide, even, flat-ended band in one of six
+  highlighter colours. On a light board it multiplies with what is under it, so words
+  stay black under it; on a dark board it is simply see-through.
 - **Smart shapes**: hold Ctrl (⌘) while drawing a closed outline and it becomes a
   rectangle, square, triangle, circle, oval, cloud or spike on lifting the pen
   (`src/ink/recognize.ts`); anything else stays ink. Clouds and spikes are in Insert

@@ -5,7 +5,8 @@ import { elementAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
 import { lineEnds, polygonPoints, POLYGONAL } from '@/model/shapePath';
 import { fontStack } from '@/canvas/fonts';
-import { detectDirection, wrapText } from '@/model/textLayout';
+import { detectDirection, wrapText, type WrappedLine } from '@/model/textLayout';
+import { normaliseLink, runsOf } from '@/text/marks';
 
 /** Colour tokens resolved to literal values, since SVG has no access to the page. */
 export type ColorResolver = (value: string | null) => string | null;
@@ -73,7 +74,10 @@ function textElement(element: BoardElement, resolve: ColorResolver): string {
   const rows = lines
     .map((line, index) => {
       const y = element.y + index * lineHeight + style.fontSize * 0.85;
-      return `<tspan x="${round(x)}" y="${round(y)}">${escapeXml(line.marker + line.text)}</tspan>`;
+      const words = element.marks?.length
+        ? escapeXml(line.marker) + markedRuns(element, line, resolve)
+        : escapeXml(line.marker + line.text);
+      return `<tspan x="${round(x)}" y="${round(y)}">${words}</tspan>`;
     })
     .join('');
 
@@ -81,6 +85,30 @@ function textElement(element: BoardElement, resolve: ColorResolver): string {
   const italic = style.italic ? ' font-style="italic"' : '';
 
   return `<text font-family="${escapeXml(fontStack(style.fontFamily))}" font-size="${round(style.fontSize)}" font-weight="${style.fontWeight}"${italic} fill="${colour}" text-anchor="${anchor}" direction="${direction}"${decoration}${transformAttribute(element)}>${rows}</text>`;
+}
+
+/**
+ * A line's words with their own formatting: bold, italic, underline and colour on
+ * each run, and a link around the words that carry one. (A highlight behind words is
+ * not carried over: placing it needs the words measured, which this file cannot do.)
+ */
+function markedRuns(element: BoardElement, line: WrappedLine, resolve: ColorResolver): string {
+  return runsOf(element.marks, line.start, line.start + line.text.length)
+    .map((run) => {
+      const words = escapeXml(line.text.slice(run.from - line.start, run.to - line.start));
+      const { bold, italic, underline, color, link } = run.marks;
+      const colour = resolve(color ?? (link ? 'var(--accent)' : null));
+      const attributes = [
+        bold ? ' font-weight="700"' : '',
+        italic ? ' font-style="italic"' : '',
+        underline || link ? ' text-decoration="underline"' : '',
+        colour ? ` fill="${escapeXml(colour)}"` : '',
+      ].join('');
+      const piece = attributes ? `<tspan${attributes}>${words}</tspan>` : words;
+      const href = link ? normaliseLink(link) : null;
+      return href ? `<a href="${escapeXml(href)}">${piece}</a>` : piece;
+    })
+    .join('');
 }
 
 function shapeElement(element: BoardElement, resolve: ColorResolver): string {
@@ -108,14 +136,17 @@ function shapeElement(element: BoardElement, resolve: ColorResolver): string {
     }
 
     case 'path': {
+      const marker = element.style.highlighter;
       const outline = getStroke(
         fromFlat(element.points ?? []).map((point) => [point.x, point.y, point.pressure]),
         {
           size: element.style.strokeWidth,
-          thinning: 0.55,
+          // The highlighter is even and flat-ended, as on screen.
+          thinning: marker ? 0 : 0.55,
           smoothing: 0.55,
           streamline: 0.4,
           simulatePressure: false,
+          ...(marker ? { start: { cap: false }, end: { cap: false } } : {}),
           last: true,
         },
       ) as number[][];
@@ -127,7 +158,8 @@ function shapeElement(element: BoardElement, resolve: ColorResolver): string {
         )
         .join('');
       const fill = resolve(element.style.fill ?? element.style.stroke) ?? '#000';
-      return `<path d="${d}Z" fill="${fill}"${element.opacity !== 1 ? ` opacity="${round(element.opacity)}"` : ''}${transform}/>`;
+      const blend = marker ? ' style="mix-blend-mode:multiply"' : '';
+      return `<path d="${d}Z" fill="${fill}"${element.opacity !== 1 ? ` opacity="${round(element.opacity)}"` : ''}${blend}${transform}/>`;
     }
 
     case 'image': {
@@ -148,8 +180,12 @@ function shapeElement(element: BoardElement, resolve: ColorResolver): string {
       return element.type === 'sticky' ? box + textElement(element, resolve) : box;
     }
 
-    case 'text':
-      return textElement(element, resolve);
+    case 'text': {
+      // A text box with a fill or an outline has its box under the words.
+      if (!element.style.fill && !element.style.stroke) return textElement(element, resolve);
+      const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
+      return `<rect x="${round(element.x)}" y="${round(element.y)}" width="${round(element.w)}" height="${round(element.h)}" rx="${round(radius)}" ${paint}${transform}/>${textElement(element, resolve)}`;
+    }
 
     default: {
       if (POLYGONAL.has(element.type)) {

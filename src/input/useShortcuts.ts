@@ -22,6 +22,7 @@ const TOOL_KEYS: Record<string, Tool> = {
   KeyL: 'line',
   KeyA: 'arrow',
   KeyP: 'pen',
+  KeyI: 'highlighter',
   KeyE: 'eraser',
   KeyK: 'laser',
   KeyT: 'text',

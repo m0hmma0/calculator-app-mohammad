@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { marksEqual, marksFromDelta, type MarkName, type MarkSet } from '@/text/marks';
+import { marksEqual, marksFromDelta, type MarkFormats, type MarkSet } from '@/text/marks';
 import type { BoardElement, ElementStyle, TableData, TextMark } from '@/model/element';
 import { DEFAULT_STYLE } from '@/model/element';
 
@@ -169,7 +169,19 @@ const attributesOf = (mark: MarkSet) => ({
   bold: mark.bold ? true : null,
   italic: mark.italic ? true : null,
   underline: mark.underline ? true : null,
+  color: mark.color ?? null,
+  highlight: mark.highlight ?? null,
+  link: mark.link ?? null,
 });
+
+const CLEARED = {
+  bold: null,
+  italic: null,
+  underline: null,
+  color: null,
+  highlight: null,
+  link: null,
+};
 
 /** Makes the text's formatting exactly these ranges — touching it only if it differs. */
 function patchMarks(map: YElement, marks: readonly TextMark[]): void {
@@ -177,24 +189,22 @@ function patchMarks(map: YElement, marks: readonly TextMark[]): void {
   if (!(text instanceof Y.Text)) return;
   const current = marksFromDelta(text.toDelta() as Array<{ insert?: unknown }>);
   if (marksEqual(current, marks)) return;
-  text.format(0, text.length, { bold: null, italic: null, underline: null });
+  text.format(0, text.length, CLEARED);
   for (const mark of marks) {
     const to = Math.min(mark.to, text.length);
     if (to > mark.from) text.format(mark.from, to - mark.from, attributesOf(mark));
   }
 }
 
-/** Sets or clears one kind of formatting on [from, to) of an element's text. */
-export function formatYText(
-  map: YElement,
-  from: number,
-  to: number,
-  formats: Partial<Record<MarkName, boolean>>,
-): void {
+/** Sets or clears formatting on [from, to) of an element's text. */
+export function formatYText(map: YElement, from: number, to: number, formats: MarkFormats): void {
   const text = map.get('text');
   if (!(text instanceof Y.Text) || to <= from) return;
-  const attributes: Record<string, true | null> = {};
-  for (const [name, on] of Object.entries(formats)) attributes[name] = on ? true : null;
+  const attributes: Record<string, string | true | null> = {};
+  for (const [name, value] of Object.entries(formats)) {
+    if (value === undefined) continue;
+    attributes[name] = typeof value === 'string' ? value || null : value ? true : null;
+  }
   text.format(from, Math.min(to, text.length) - from, attributes);
 }
 

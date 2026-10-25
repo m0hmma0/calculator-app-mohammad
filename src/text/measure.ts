@@ -14,7 +14,7 @@ const SAMPLE = 'The quick brown fox jumps over the lazy dog';
 let context: CanvasRenderingContext2D | null | undefined;
 
 /** A canvas to measure with — the same one drawing uses, so wrapping agrees. */
-function measuring(): CanvasRenderingContext2D | null {
+export function measuring(): CanvasRenderingContext2D | null {
   if (context === undefined) {
     try {
       context = document.createElement('canvas').getContext('2d');

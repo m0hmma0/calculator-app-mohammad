@@ -1,4 +1,5 @@
 import { useBoardStore } from '@/state/boardStore';
+import { HIGHLIGHTS } from './palettes';
 import styles from './ToolOptions.module.css';
 
 const INK_COLORS = [
@@ -11,6 +12,7 @@ const INK_COLORS = [
 ];
 
 const INK_WIDTHS = [1.5, 3, 6, 12];
+const MARKER_WIDTHS = [12, 20, 32];
 
 /** Settings for the tool in hand — only shown when there is something to set. */
 export function ToolOptions() {
@@ -18,8 +20,52 @@ export function ToolOptions() {
   const inkWidth = useBoardStore((state) => state.inkWidth);
   const inkColor = useBoardStore((state) => state.inkColor);
   const setInk = useBoardStore((state) => state.setInk);
+  const markerWidth = useBoardStore((state) => state.markerWidth);
+  const markerColor = useBoardStore((state) => state.markerColor);
+  const setMarker = useBoardStore((state) => state.setMarker);
   const eraserMode = useBoardStore((state) => state.eraserMode);
   const setEraserMode = useBoardStore((state) => state.setEraserMode);
+
+  if (tool === 'highlighter') {
+    return (
+      <div className={styles.bar} data-hud data-testid="tool-options">
+        <div className={styles.group}>
+          {MARKER_WIDTHS.map((width) => (
+            <button
+              key={width}
+              type="button"
+              className={styles.dot}
+              aria-pressed={markerWidth === width}
+              aria-label={`Highlighter width ${width}`}
+              data-testid={`marker-width-${width}`}
+              onClick={() => setMarker({ width })}
+            >
+              <span
+                className={styles.stripe}
+                style={{ height: Math.round(width / 3), width: 16 }}
+              />
+            </button>
+          ))}
+        </div>
+        <span className={styles.divider} />
+        <div className={styles.group}>
+          {HIGHLIGHTS.map(({ value, name }) => (
+            <button
+              key={value}
+              type="button"
+              className={styles.swatch}
+              style={{ background: value }}
+              aria-pressed={markerColor === value}
+              aria-label={`Highlighter ${name}`}
+              title={name}
+              data-testid={`marker-colour-${name.toLowerCase()}`}
+              onClick={() => setMarker({ color: value })}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (tool !== 'pen' && tool !== 'eraser') return null;
 
