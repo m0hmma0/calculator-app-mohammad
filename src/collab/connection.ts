@@ -47,6 +47,15 @@ const HANDSHAKE_TIMEOUT_MS = 10_000;
 const BACKOFF_MS = [300, 1000, 2000, 4000, 8000, 15_000];
 
 /**
+ * This open page, the same across reconnections. The room replaces a page's earlier
+ * socket with its new one, so a connection that died without a goodbye does not
+ * linger as a second copy of you.
+ */
+const PAGE_ID =
+  globalThis.crypto?.randomUUID?.() ??
+  `page-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+/**
  * One board's live connection. It keeps no state the document does not already
  * have: on every (re)connect the browser and the room exchange state vectors and send
  * each other whatever the other is missing. That single exchange is both "catch up"
@@ -154,6 +163,7 @@ export class RoomConnection {
           token: token ?? '',
           link: shareLink(),
           guest: token ? null : guestIdentity(),
+          tab: PAGE_ID,
         } satisfies ClientMessage),
       );
     };

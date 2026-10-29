@@ -19,6 +19,8 @@ import {
   type MarkSet,
 } from '@/text/marks';
 import { CLOSED_SELECTION, useTextSelection } from '@/text/selection';
+import { showPane } from '@/state/uiPrefs';
+import { KEEP_TYPING } from './LinkField';
 import styles from './TextEditor.module.css';
 
 /**
@@ -370,6 +372,8 @@ export function RichTextEditor({
       aria-label="Text"
       spellCheck={false}
       data-hud
+      // The wheel over the words moves the board, as it does everywhere else.
+      data-wheel-pans
       data-testid="text-editor"
       dir={detectDirection(text)}
       style={{ ...style, textAlign: center ? 'center' : style.textAlign }}
@@ -381,9 +385,11 @@ export function RichTextEditor({
           event.preventDefault();
           toggle(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline');
         } else if (key === 'k') {
-          // A link: the address field opens above the box.
+          // A link: the address field opens in the side panel, opening the panel if
+          // it is shut — asked for, unlike opening it just because typing began.
           event.preventDefault();
           publish();
+          showPane();
           useTextSelection.setState({ linkOpen: true });
         } else if (key === 'z' || key === 'y') {
           // Undo is the board's: it knows what this person typed, and nobody else.
@@ -402,9 +408,9 @@ export function RichTextEditor({
         openLink(url);
       }}
       onBlur={(event) => {
-        // Over to the formatting bar (the address field, say): still typing here.
+        // Over to the side panel's address field: still typing here.
         const next = event.relatedTarget;
-        if (next instanceof Element && next.closest('[data-format-bar]')) return;
+        if (next instanceof Element && next.closest(`[${KEEP_TYPING}]`)) return;
         endEditing();
       }}
     />

@@ -25,6 +25,10 @@ interface Attachment {
   /** Who they are to the access rule — null for a guest — and the link they used. */
   viewer: Viewer | null;
   link: string | null;
+  /** Which open page this is, as the page says: its reconnections replace it. */
+  tab: string | null;
+  /** When the socket opened, for telling a quiet window from a vanished one. */
+  joinedAt: number;
 }
 
 /** Take a full snapshot after this many updates, so loading never replays thousands. */
@@ -34,6 +38,12 @@ const PERSIST_DELAY_MS = 2000;
 /** SQLite rows top out at 2 MB; blobs are split well below that. */
 const BLOB_PART_BYTES = 1024 * 1024;
 const MAX_PRESENCE_BYTES = 16 * 1024;
+/**
+ * A window pings every 10 seconds (a hidden tab's timers may slow to once a minute).
+ * One silent for this long has gone without saying so — a laptop shut, a network
+ * lost — and is dropped, so it stops showing as someone on the board.
+ */
+const STALE_MS = 3 * 60_000;
 
 const BLOB_UPDATE = 0;
 const BLOB_SNAPSHOT = 1;
@@ -54,6 +64,7 @@ export class BoardRoom extends DurableObject<Env> {
   private sinceSnapshot = 0;
   private readonly assemblers = new Map<string, FrameAssembler>();
   private chunkId = 0;
+  private lastSweep = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -338,6 +349,8 @@ export class BoardRoom extends DurableObject<Env> {
       role: null,
       viewer: null,
       link: null,
+      tab: null,
+      joinedAt: Date.now(),
     };
     server.serializeAttachment(attachment);
     return new Response(null, { status: 101, webSocket: client });
@@ -368,7 +381,34 @@ export class BoardRoom extends DurableObject<Env> {
   private others(except: WebSocket | null): WebSocket[] {
     return this.ctx
       .getWebSockets()
-      .filter((ws) => ws !== except && this.attachment(ws).user !== null);
+      .filter(
+        (ws) =>
+          ws !== except &&
+          ws.readyState === WebSocket.READY_STATE_OPEN &&
+          this.attachment(ws).user !== null,
+      );
+  }
+
+  /** How long a window may stay silent before it counts as gone. */
+  private staleAfter(): number {
+    return Number(this.env.PEER_STALE_MS) || STALE_MS;
+  }
+
+  /**
+   * Drops sockets that have stopped pinging. Pings are answered without waking the
+   * room, so this runs when something else does wake it — anyone moving, typing or
+   * arriving — and at most every few seconds.
+   */
+  private sweep(): void {
+    const now = Date.now();
+    const staleAfter = this.staleAfter();
+    if (now - this.lastSweep < Math.min(15_000, staleAfter / 2)) return;
+    this.lastSweep = now;
+    for (const ws of this.ctx.getWebSockets()) {
+      const { joinedAt } = this.attachment(ws);
+      const pinged = this.ctx.getWebSocketAutoResponseTimestamp(ws)?.getTime() ?? 0;
+      if (now - Math.max(joinedAt ?? now, pinged) > staleAfter) this.leave(ws);
+    }
   }
 
   private refuse(
@@ -492,15 +532,29 @@ export class BoardRoom extends DurableObject<Env> {
           picture: null,
           color: colorFor(`guest:${guestId}`),
         };
+    const tab =
+      typeof message.tab === 'string' && /^[\w-]{8,64}$/.test(message.tab) ? message.tab : null;
     const attachment: Attachment = {
       ...this.attachment(ws),
       user,
       role: access.role,
       viewer,
       link,
+      tab,
     };
     ws.serializeAttachment(attachment);
     await this.noteExpiry(access.expiresAt);
+
+    // The same page connecting again — after its network dropped, say — replaces its
+    // earlier socket, which may never have said goodbye. Only this person's own.
+    if (tab) {
+      for (const other of this.others(ws)) {
+        const earlier = this.attachment(other);
+        if (earlier.tab === tab && earlier.user?.uid === user.uid) this.leave(other);
+      }
+    }
+    this.lastSweep = 0;
+    this.sweep();
 
     const peers = this.others(ws).map((other) => {
       const { session, user: peer } = this.attachment(other);
@@ -552,6 +606,7 @@ export class BoardRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const { session, user, role } = this.attachment(ws);
+    this.sweep();
 
     if (typeof message === 'string') {
       let parsed: ClientMessage;

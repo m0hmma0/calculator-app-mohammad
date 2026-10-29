@@ -11,4 +11,6 @@ export interface Env {
   UNFURL_ALLOW_LOCAL?: string;
   /** Overridable only so tests can verify against their own key. */
   FIREBASE_JWKS_URL?: string;
+  /** How long a silent window counts as present; shortened only by the test backend. */
+  PEER_STALE_MS?: string;
 }

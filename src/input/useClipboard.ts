@@ -60,6 +60,35 @@ function placeText(text: string, at: Point) {
 }
 
 /**
+ * Paste without the keyboard — from a menu. The clipboard is read (the browser may ask
+ * first) and handed to the same paste handling as Ctrl/⌘ V, so what lands, and where,
+ * is the same: under the pointer, which for a menu is where it was opened. If the
+ * browser will not read it, this tab's own last copy is used.
+ */
+export async function pasteFromClipboard(): Promise<void> {
+  const transfer = new DataTransfer();
+  try {
+    if (navigator.clipboard?.read) {
+      for (const item of await navigator.clipboard.read()) {
+        for (const type of item.types) {
+          const blob = await item.getType(type);
+          if (type.startsWith('image/')) {
+            transfer.items.add(new File([blob], `pasted.${type.slice(6)}`, { type }));
+          } else if (type === 'text/plain') {
+            transfer.items.add(await blob.text(), type);
+          }
+        }
+      }
+    } else if (navigator.clipboard?.readText) {
+      transfer.items.add(await navigator.clipboard.readText(), 'text/plain');
+    }
+  } catch {
+    // Refused, or nothing there: the empty paste falls back to this tab's copy.
+  }
+  window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }));
+}
+
+/**
  * Copy and paste through the real clipboard, so it works between two tabs of the
  * board — and, because the payload rides along as plain text, into anything else
  * as a readable blob rather than nothing at all.

@@ -66,6 +66,7 @@ useUiPrefs.subscribe((state) => {
 export const toggleMinimap = () => useUiPrefs.setState((state) => ({ minimap: !state.minimap }));
 export const toggleLayers = () => useUiPrefs.setState((state) => ({ layers: !state.layers }));
 export const togglePane = () => useUiPrefs.setState((state) => ({ pane: !state.pane }));
+export const showPane = () => useUiPrefs.setState({ pane: true });
 export const toggleSound = () => useUiPrefs.setState((state) => ({ sound: !state.sound }));
 export const toggleGeometry = () => useUiPrefs.setState((state) => ({ geometry: !state.geometry }));
 export const toggleBottomBar = () =>

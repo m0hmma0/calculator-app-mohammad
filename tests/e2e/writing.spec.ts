@@ -233,7 +233,7 @@ test.describe('formatting part of a text', () => {
       ]);
   });
 
-  test('the side panel and the floating buttons format the selection too', async ({ page }) => {
+  test('the side panel formats the selection too', async ({ page }) => {
     await box(page, 'one two three');
     await selectChars(page, 4, 7);
     // The side panel's B: the typing goes on, the word is bold.
@@ -242,9 +242,9 @@ test.describe('formatting part of a text', () => {
     await expect.poll(async () => (await runs(page))[1]).toMatchObject({ text: 'two', bold: true });
     await expect(page.getByTestId('text-bold')).toHaveAttribute('aria-pressed', 'true');
 
-    // The floating U, just above the box.
+    // The panel's U, on another word.
     await selectChars(page, 8, 13);
-    await page.getByTestId('format-underline').click();
+    await page.getByTestId('text-underline').click();
     await expect(editor(page)).toBeFocused();
     await expect
       .poll(async () => (await runs(page)).at(-1))

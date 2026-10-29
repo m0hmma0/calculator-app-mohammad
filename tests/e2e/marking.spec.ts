@@ -96,11 +96,10 @@ async function colourFraction(
 }
 
 test.describe('colour and highlight on words', () => {
-  test('the floating bar colours and highlights just the selected words', async ({ page }) => {
+  test('the side panel colours and highlights just the selected words', async ({ page }) => {
     await box(page, 'one two three');
     await selectChars(page, 4, 7);
-    await page.getByTestId('format-colour').click();
-    await page.getByTestId('format-color-red').click();
+    await page.getByTestId('text-colour-red').click();
     await expect(editor(page)).toBeFocused();
     await expect
       .poll(() => runs(page))
@@ -111,8 +110,7 @@ test.describe('colour and highlight on words', () => {
       ]);
 
     await selectChars(page, 8, 13);
-    await page.getByTestId('format-highlight').click();
-    await page.getByTestId('format-highlight-yellow').click();
+    await page.getByTestId('text-highlight-yellow').click();
     await expect
       .poll(async () => (await runs(page)).at(-1))
       .toEqual({ text: 'three', color: null, highlight: '#ffe14d', link: null });
@@ -186,7 +184,7 @@ test.describe('links', () => {
     // The caret in the link: the bar offers to open it.
     await page.keyboard.press('Home');
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByTestId('format-open-link')).toHaveText(/example\.com/);
+    await expect(page.getByTestId('text-open-link')).toHaveText(/example\.com/);
 
     // Words typed straight after the link carry on unlinked.
     for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowRight');
@@ -226,7 +224,7 @@ test.describe('links', () => {
   }) => {
     await box(page, 'page one two');
     await selectChars(page, 0, 4);
-    await page.getByTestId('format-link').click();
+    await page.getByTestId('text-link').click();
     await page.getByTestId('link-input').fill('example.com/board');
     await page.getByTestId('link-apply').click();
     await page.keyboard.press('Escape');

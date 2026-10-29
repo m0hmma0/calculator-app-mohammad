@@ -7,7 +7,7 @@ import { detectDirection } from '@/model/textLayout';
 import { canHoldLabel, labelBox } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
 import { autoFormat, onBackspace, onEnter, type TextEdit } from '@/text/lists';
-import { FormatBar } from './FormatBar';
+import { KEEP_TYPING } from './LinkField';
 import { RichTextEditor } from './RichTextEditor';
 import styles from './TextEditor.module.css';
 
@@ -91,9 +91,9 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   useEffect(() => {
     if (!element) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      // In the formatting bar (the address field), Escape closes that, not the text.
+      // In the side panel's address field, Escape closes that, not the text.
       const target = event.target;
-      if (target instanceof Element && target.closest('[data-format-bar]')) return;
+      if (target instanceof Element && target.closest(`[${KEEP_TYPING}]`)) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         endEditing();
@@ -112,8 +112,8 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
   const code = element.type === 'code';
   const padding = code ? CODE_PADDING : sticky ? STICKY_PADDING : TEXT_PADDING;
   const topLeft = boardToScreen(viewport, { x: area.x, y: area.y });
-  // The words in their own colour, and the box's own fill showing through (the board
-  // draws it underneath) — so typing looks the way the text will.
+  // The words in their own colour over the box as the board draws it, with nothing
+  // laid on top — so typing looks the way the text will, and nothing under it fades.
   const { fill, stroke, textColor } = element.style;
   const own = label || element.type === 'text' || element.type === 'sticky';
   const ink = !own
@@ -133,20 +133,14 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
     textAlign: label ? 'center' : element.style.align,
     textDecoration: element.style.underline ? 'underline' : undefined,
     ...(ink ? { color: ink } : {}),
-    ...(own && fill ? { background: 'transparent' } : {}),
     transform: element.rotation ? `rotate(${element.rotation}rad)` : undefined,
     transformOrigin: 'center',
   };
 
-  // Everything but code is typed with formatting: bold, italic and underline on any
-  // part of it, shown as it will be drawn.
+  // Everything but code is typed with formatting, shown as it will be drawn; the
+  // controls for it are in the side panel.
   if (!code) {
-    return (
-      <>
-        <FormatBar left={topLeft.x} top={topLeft.y} />
-        <RichTextEditor key={element.id} element={element} style={boxStyle} center={label} />
-      </>
-    );
+    return <RichTextEditor key={element.id} element={element} style={boxStyle} center={label} />;
   }
 
   return (

@@ -359,6 +359,26 @@ test.describe('pasted links', () => {
     );
   });
 
+  test('a video that was played can still be selected and deleted', async ({ page }) => {
+    await signIn(page, newAccount('video-delete'));
+    await createBoard(page);
+    await pasteText(page, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    const video = page.getByTestId('embed-video');
+    const box = (await video.boundingBox())!;
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+
+    // Playing it hands the keyboard to the player.
+    await page.getByTestId('embed-player').focus();
+    await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe('IFRAME');
+
+    // The strip along its top is the board's: a press there selects it and takes the
+    // keyboard back, so Delete works without reloading.
+    await page.getByTestId('embed-grip').click();
+    await expect(page.getByTestId('embed-title')).toBeVisible();
+    await page.keyboard.press('Delete');
+    await expect(video).toHaveCount(0);
+  });
+
   test('an article link becomes a card with its title and picture', async ({ page }) => {
     await signIn(page, newAccount('card'));
     await createBoard(page);

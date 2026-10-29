@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { useBoardStore } from '@/state/boardStore';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { pasteFromClipboard } from '@/input/useClipboard';
+import { boardDoc, useBoardStore } from '@/state/boardStore';
+import { togglePane, useUiPrefs } from '@/state/uiPrefs';
 import styles from './ContextMenu.module.css';
 
 interface Entry {
@@ -11,12 +13,17 @@ interface Entry {
   separated?: boolean;
 }
 
+/** Kept this far inside the board's edges. */
+const MARGIN = 6;
+
 export function ContextMenu() {
   const menu = useBoardStore((state) => state.contextMenu);
   const close = useBoardStore((state) => state.closeContextMenu);
   const selection = useBoardStore((state) => state.selection);
   const elements = useBoardStore((state) => state.elements);
   const renderVersion = useBoardStore((state) => state.renderVersion);
+  const paneOpen = useUiPrefs((state) => state.pane);
+  const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!menu) return;
@@ -32,13 +39,29 @@ export function ContextMenu() {
     };
   }, [menu, close]);
 
+  // Opened near an edge, the menu goes the other way — left of the pointer, or up —
+  // so none of it is ever off the board.
+  useLayoutEffect(() => {
+    const node = ref.current;
+    const host = node?.offsetParent as HTMLElement | null;
+    if (!node || !host || !menu) return;
+    const { width, height } = node.getBoundingClientRect();
+    const roomX = host.clientWidth - MARGIN;
+    const roomY = host.clientHeight - MARGIN;
+    const left = menu.x + width > roomX ? Math.max(MARGIN, menu.x - width) : menu.x;
+    const top = menu.y + height > roomY ? Math.max(MARGIN, roomY - height) : menu.y;
+    node.style.left = `${Math.min(left, Math.max(MARGIN, roomX - width))}px`;
+    node.style.top = `${top}px`;
+  }, [menu]);
+
   if (!menu) return null;
 
   void renderVersion;
   const store = useBoardStore.getState;
   const ids = new Set(selection);
-  const first = elements.find((element) => ids.has(element.id));
-  const hasSelection = selection.length > 0;
+  const chosen = elements.filter((element) => ids.has(element.id));
+  const hasSelection = chosen.length > 0;
+  const readOnly = boardDoc().readOnly;
 
   const entries: Entry[] = [
     {
@@ -47,6 +70,13 @@ export function ContextMenu() {
       hint: '⌘C',
       disabled: !hasSelection,
       run: () => document.execCommand('copy'),
+    },
+    {
+      id: 'paste',
+      label: 'Paste',
+      hint: '⌘V',
+      disabled: readOnly,
+      run: () => void pasteFromClipboard(),
     },
     {
       id: 'duplicate',
@@ -63,60 +93,44 @@ export function ContextMenu() {
       run: () => store().deleteSelection(),
     },
     {
-      id: 'front',
-      label: 'Bring to front',
-      hint: '⌘]',
-      separated: true,
-      disabled: !hasSelection,
-      run: () => store().reorderSelection('front'),
-    },
-    {
-      id: 'forward',
-      label: 'Bring forward',
-      hint: ']',
-      disabled: !hasSelection,
-      run: () => store().reorderSelection('forward'),
-    },
-    {
-      id: 'backward',
-      label: 'Send backward',
-      hint: '[',
-      disabled: !hasSelection,
-      run: () => store().reorderSelection('backward'),
-    },
-    {
-      id: 'back',
-      label: 'Send to back',
-      hint: '⌘[',
-      disabled: !hasSelection,
-      run: () => store().reorderSelection('back'),
-    },
-    {
       id: 'lock',
-      label: first?.locked ? 'Unlock' : 'Lock',
+      label: 'Lock',
       hint: '⇧⌘L',
       separated: true,
-      disabled: !hasSelection,
-      run: () => store().toggleLockSelection(),
+      disabled: !chosen.some((element) => !element.locked),
+      run: () => store().setSelectionLocked(true),
+    },
+    {
+      id: 'unlock',
+      label: 'Unlock',
+      disabled: !chosen.some((element) => element.locked),
+      run: () => store().setSelectionLocked(false),
     },
     {
       id: 'group',
       label: 'Group',
       hint: '⌘G',
-      disabled: selection.length < 2,
+      disabled: chosen.length < 2,
       run: () => store().groupSelection(),
     },
     {
-      id: 'select-all',
-      label: 'Select all',
-      hint: '⌘A',
+      id: 'ungroup',
+      label: 'Ungroup',
+      hint: '⇧⌘G',
+      disabled: !chosen.some((element) => element.type === 'group'),
+      run: () => store().ungroupSelection(),
+    },
+    {
+      id: 'pane',
+      label: paneOpen ? 'Hide the side panel' : 'Side panel',
       separated: true,
-      run: () => store().selectAll(),
+      run: togglePane,
     },
   ];
 
   return (
     <div
+      ref={ref}
       className={styles.menu}
       data-hud
       data-testid="context-menu"

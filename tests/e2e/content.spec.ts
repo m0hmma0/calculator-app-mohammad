@@ -325,9 +325,29 @@ test.describe('images', () => {
     expect(await layerNames(page)).toEqual(['image']);
     const box = await geo(page);
     expect(box.w / box.h).toBeCloseTo(4 / 3, 1);
-    // As tall as the screen would be at 58% zoom: zoomed out there, it fills it.
+    // Near square: half as tall as the screen would be at 58% zoom.
     const stage = (await page.getByTestId('stage').boundingBox())!;
-    expect(box.h).toBeCloseTo(stage.height / 0.58, -1);
+    expect(box.h).toBeCloseTo(stage.height / 0.58 / 2, -1);
+  });
+
+  test('a wide picture lands smaller than a squarer one, a very wide one smaller still', async ({
+    page,
+  }) => {
+    const stage = (await page.getByTestId('stage').boundingBox())!;
+    const screen = stage.height / 0.58;
+
+    // A screenshot's shape (16:9): a sixth of that height.
+    await pasteImage(page, 1600, 900);
+    const wide = await geo(page);
+    expect(wide.w / wide.h).toBeCloseTo(16 / 9, 1);
+    expect(wide.h).toBeCloseTo(screen / 6, -1);
+
+    // A banner (5:1): a ninth.
+    await page.keyboard.press('Delete');
+    await pasteImage(page, 1000, 200);
+    const banner = await geo(page);
+    expect(banner.w / banner.h).toBeCloseTo(5, 1);
+    expect(banner.h).toBeCloseTo(screen / 9, -1);
   });
 
   test('the eraser passes over a picture and leaves it alone', async ({ page }) => {

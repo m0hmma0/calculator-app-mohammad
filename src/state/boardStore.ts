@@ -192,6 +192,8 @@ interface BoardState {
   groupSelection: () => void;
   ungroupSelection: () => void;
   toggleLockSelection: () => void;
+  /** Locks, or unlocks, everything selected — whatever each was before. */
+  setSelectionLocked: (locked: boolean) => void;
   toggleHiddenSelection: () => void;
   reorderSelection: (command: ReorderCommand) => void;
   alignSelection: (edge: 'left' | 'hcentre' | 'right' | 'top' | 'vcentre' | 'bottom') => void;
@@ -427,7 +429,10 @@ export const useBoardStore = create<BoardState>((set, get) => {
     // Someone who may only view keeps the tools that change nothing.
     setTool: (tool) => {
       if (board.readOnly && !VIEWER_TOOLS.has(tool)) return;
-      bump({ tool });
+      // Picking up another tool puts down what was selected: drawing or erasing is
+      // not done to the selection, and handles left on it only get in the way.
+      const another = tool !== get().tool && tool !== 'select';
+      bump(another ? { tool, selection: [] } : { tool });
     },
     setStamp: (stamp) => {
       if (board.readOnly) return;
@@ -568,6 +573,14 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of chosen) patches.set(element.id, { locked: locking });
       get().applyDiscrete(patches);
+    },
+
+    setSelectionLocked: (locked) => {
+      const patches = new Map<ElementId, Partial<BoardElement>>();
+      for (const element of selectedElements()) {
+        if (element.locked !== locked) patches.set(element.id, { locked });
+      }
+      if (patches.size > 0) get().applyDiscrete(patches);
     },
 
     toggleHiddenSelection: () => {

@@ -45,6 +45,15 @@ export function EmbedLayer() {
             <div key={element.id} className={styles.embed} style={box} data-testid="embed-video">
               {isPlaying ? (
                 <>
+                  {/* The player takes every click, so the board gets this strip: press it
+                      to select the video (and delete it), drag it to move the video. */}
+                  <div
+                    className={styles.grip}
+                    title="Drag to move · click to select"
+                    data-testid="embed-grip"
+                  >
+                    ⠿
+                  </div>
                   <iframe
                     className={styles.frame}
                     src={`https://www.youtube-nocookie.com/embed/${embed.videoId}?autoplay=1&rel=0`}

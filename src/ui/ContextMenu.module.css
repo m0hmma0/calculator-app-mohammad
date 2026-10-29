@@ -11,6 +11,9 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  /* On a short screen it scrolls rather than running off the bottom. */
+  max-height: calc(100% - 12px);
+  overflow-y: auto;
 }
 
 .item {

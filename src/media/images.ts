@@ -195,20 +195,27 @@ export function imageBlobsFrom(transfer: DataTransfer | null): Blob[] {
   return blobs;
 }
 
-/** The zoom at which a newly placed picture exactly fills the screen's height. */
+/** Pictures are sized against the screen's height as it is at this zoom. */
 export const PICTURE_FIT_ZOOM = 0.58;
+/** Up to this many times as wide as tall, a picture counts as near square. */
+export const NEAR_SQUARE = 1.5;
+/** Beyond this many times as wide as tall, it counts as very wide. */
+export const VERY_WIDE = 3;
 
 /**
- * The size a pasted, dropped or imported picture starts at: as tall as the screen
- * would be at 58% zoom, keeping its shape. Zoomed out to 58%, it fills the screen
- * top to bottom.
+ * The size a pasted, dropped or imported picture starts at, by its shape, so a mix
+ * of photos, screenshots and banners lands at sizes that sit together. Against the
+ * screen's height at 58% zoom: a near-square picture (or a tall one) is half that
+ * height, a clearly wide one a sixth, a very wide one a ninth. Its shape is kept.
  */
-export function screenFitImageBox(
+export function pictureBox(
   image: { naturalWidth: number; naturalHeight: number },
   stageHeight: number,
 ): { w: number; h: number } {
-  const h = Math.max(1, Math.round(stageHeight / PICTURE_FIT_ZOOM));
+  const screen = stageHeight / PICTURE_FIT_ZOOM;
   const ratio = image.naturalWidth / (image.naturalHeight || 1);
+  const share = ratio > VERY_WIDE ? 1 / 9 : ratio > NEAR_SQUARE ? 1 / 6 : 1 / 2;
+  const h = Math.max(1, Math.round(screen * share));
   return { w: Math.max(1, Math.round(h * ratio)), h };
 }
 

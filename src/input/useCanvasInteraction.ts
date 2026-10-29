@@ -213,7 +213,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     /* ----------------------------- wheel ----------------------------- */
 
     const onWheel = (event: WheelEvent) => {
-      if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      const hud = (event.target as HTMLElement | null)?.closest('[data-hud]');
+      if (hud && !hud.hasAttribute('data-wheel-pans')) return;
       event.preventDefault();
       const store = useBoardStore.getState();
       const { dx, dy } = wheelDeltaToPixels(event, host.clientHeight);
@@ -344,6 +345,10 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     const onPointerDown = (event: PointerEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      // A video that was played keeps the keyboard until something takes it back, and
+      // the default is prevented below, so nothing would: Delete and every shortcut
+      // would go to the player. A press on the board takes it back.
+      if (document.activeElement instanceof HTMLIFrameElement) document.activeElement.blur();
       // Clicking the board ends any typing. The default is prevented below, so the
       // text box would never lose focus on its own — and would stay open, and keep
       // taking clicks meant for selecting.

@@ -10,20 +10,31 @@ for Google sign-in.
 
 Built in phases. Each phase ends with a working, checkable deliverable.
 
-| Phase | What it adds                                 | State       |
-| ----- | -------------------------------------------- | ----------- |
-| **0** | Teardown, tooling, test harness, app shell   | ✅ done     |
-| **1** | Infinite canvas — pan, zoom, minimap         | ✅ done     |
-| **2** | Shapes, selection, transform handles         | ✅ done     |
-| **3** | Freehand, text, images, laser pointer        | ✅ done     |
-| **4** | Yjs document, per-user undo, offline, export | ✅ done     |
-| **5** | Google sign-in, folders, boards (D1)         | ✅ done     |
-| **6** | Image storage (R2)                           | built       |
-| **7** | Real-time collaboration (Durable Objects)    | ✅ done     |
-| **8** | Sharing, permissions, comments               | built       |
-| **9** | Presentation mode, workshop tools, embeds    | built       |
-| 10    | Accessibility, Arabic and RTL, polish        | not started |
-| 11    | Hardening, load testing, launch              | not started |
+| Phase  | What it adds                                 | State       |
+| ------ | -------------------------------------------- | ----------- |
+| **0**  | Teardown, tooling, test harness, app shell   | ✅ done     |
+| **1**  | Infinite canvas — pan, zoom, minimap         | ✅ done     |
+| **2**  | Shapes, selection, transform handles         | ✅ done     |
+| **3**  | Freehand, text, images, laser pointer        | ✅ done     |
+| **4**  | Yjs document, per-user undo, offline, export | ✅ done     |
+| **5**  | Google sign-in, folders, boards (D1)         | ✅ done     |
+| **6**  | Image storage (R2)                           | built       |
+| **7**  | Real-time collaboration (Durable Objects)    | ✅ done     |
+| **8**  | Sharing, permissions, comments               | built       |
+| **9**  | Presentation mode, workshop tools, embeds    | built       |
+| **10** | Quick fixes and the text box                 | built       |
+| 11     | One control pane, and who sees what          | not started |
+| 12     | Settings and shortcuts                       | not started |
+| 13     | Presenting, frames, celebrations and media   | not started |
+| 14     | Classroom: placeholders, Answer role, locks  | not started |
+| 15     | Undo across people and sessions              | not started |
+| 16     | Dashboard organisation                       | not started |
+| 17     | Accessibility, Arabic and RTL, polish        | not started |
+| 18     | Hardening, load testing, launch              | not started |
+
+Phases 10–16 were added from a list of requests after Phase 9; the original Phases 10
+and 11 are now 17 and 18, and come last so that they cover the finished layout and
+roles.
 
 ## Getting started
 
@@ -118,7 +129,7 @@ Two things deliberately stay **out** of the shared document:
 
 Boards persist to IndexedDB, so the app keeps working with the network down. It has no
 service worker yet, so a _reload_ while offline will not load the app itself; that
-arrives with the rest of the offline work in Phase 11.
+arrives with the rest of the offline work in Phase 18.
 
 ## Collaboration
 
@@ -133,6 +144,12 @@ Presence — pointers, selections, the laser, cursor chat, who is presenting —
 through the same socket but is never stored. Version history is read straight from the
 room's log; restoring is a new change, so nothing after it is lost. Sockets use the
 hibernation API, so an idle board costs nothing and wakes on the next message.
+
+A window that loses its connection without saying goodbye would otherwise linger as a
+second copy of its person. Each page sends an id of its own with its handshake, and a
+page that connects again replaces its earlier socket. A socket that has not pinged for
+three minutes (a closed laptop, a lost network) is dropped the next time anyone on the
+board does anything.
 
 `/` opens cursor chat; clicking someone's avatar follows their view.
 
@@ -170,20 +187,33 @@ Writing and drawing:
   of 40px type; they grow as they fill. One click selects, a double click edits.
   Pasted text from anywhere becomes a text box.
 - **Formatting part of a text**: select words and press Ctrl/⌘ B, I or U, or use the
-  bar above the box or the side panel, which also give the words a colour or a
-  highlight; with nothing selected, it applies to what is typed next. Not typing, the
-  panel's colour and highlight apply to the whole box. It is stored as formatting on
+  side panel, which also gives the words a colour or a highlight; with nothing
+  selected, it applies to what is typed next. Not typing, the panel's colour and
+  highlight apply to the whole box. Nothing floats over the box being typed in, and
+  nothing is laid over the board under it; the mouse wheel over it moves the board. It is stored as formatting on
   the shared `Y.Text` (`element.marks` in the app, `src/text/marks.ts`), so it moves
   with the words as anyone types. Text is edited in a `contenteditable` box
   (`src/ui/RichTextEditor.tsx`, `src/text/domText.ts`); code blocks keep a plain
   textarea.
-- **Links on words**: select words and press Ctrl/⌘ K (or the link button) and type
-  an address, or paste an address over them. Only web and email addresses are taken
+- **Links on words**: select words and press Ctrl/⌘ K (or the panel's link button) and
+  type an address in the panel — Ctrl/⌘ K opens the panel if it is shut — or paste an
+  address over them. Only web and email addresses are taken
   (`normaliseLink`). Typing straight after a link is not linked. On the board a link
   shows its address on hover and opens with Ctrl/⌘-click (a plain click still selects,
   so linked text can be moved); for someone who can only view, a click opens it.
 - **A text box's fill** paints a box behind its words; the side panel adds pale fills
   that deepen on a dark board.
+- **Pictures** pasted, dropped or imported are sized by their shape against the
+  screen's height at 58% zoom: near square (up to 1.5 times as wide as tall) or tall,
+  half that height; clearly wide (up to 3 times), a sixth; wider still, a ninth
+  (`pictureBox` in `src/media/images.ts`).
+- **Picking up another tool** puts the selection down.
+- **The right-click menu** has copy, paste (which reads the clipboard, and may ask
+  first), duplicate, delete, lock, unlock, group, ungroup and the side panel, and
+  turns left or up near an edge so none of it is off the board.
+- **A video that was played** has a strip along its top that the board answers to:
+  press it to select the video, drag it to move. A press anywhere on the board takes
+  the keyboard back from the player, so Delete works again.
 - **Celebrations** (Insert → Celebrate, or C, D, O, M, Q, U, A while presenting):
   confetti, drum roll, bubbles, mic drop, quiet, curtain call and applause, for
   everyone on the board at once (`src/fun/`). Sounds are synthesised with Web Audio,

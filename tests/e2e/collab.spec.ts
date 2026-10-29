@@ -679,3 +679,104 @@ test.describe('the room', () => {
     );
   });
 });
+
+/**
+ * Windows that went without saying goodbye. A's socket runs through a stand-in for
+ * the network that can be cut silently, and that never passes on a close — the room
+ * keeps the far end open, exactly as it does when a laptop loses its wifi or is shut.
+ */
+test.describe('who is on the board', () => {
+  async function ghostlyContext(browser: Browser) {
+    const lines: Array<{ cut: boolean }> = [];
+    // Once the network is gone for good, nothing new gets through either.
+    const network = { gone: false };
+    const context = await browser.newContext();
+    await context.routeWebSocket(/\/room$/, (socket) => {
+      if (network.gone) {
+        socket.close();
+        return;
+      }
+      const line = { cut: false };
+      lines.push(line);
+      const server = socket.connectToServer();
+      socket.onMessage((message) => {
+        if (!line.cut) server.send(message);
+      });
+      server.onMessage((message) => {
+        if (!line.cut) socket.send(message);
+      });
+      // The goodbye is lost: the room's end stays open.
+      socket.onClose(() => {});
+    });
+    return { context, lines, network };
+  }
+
+  const avatars = (page: Page) => page.getByTestId('peer-avatar');
+
+  test('a window whose connection died and came back shows once, not twice', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000);
+    const account = newAccount('ghost');
+    const { context: contextA, lines } = await ghostlyContext(browser);
+    const contextB = await browser.newContext();
+    const [a, b] = [await contextA.newPage(), await contextB.newPage()];
+    await signIn(a, account);
+    const boardId = await createBoard(a);
+    await signIn(b, account);
+    await b.goto(`/b/${boardId}`);
+    await expect(avatars(b)).toHaveCount(1);
+
+    // A's line goes dead. A notices (its pings go unanswered) and connects again.
+    for (const line of lines) line.cut = true;
+    const cut = lines.length;
+    await expect.poll(() => lines.length, { timeout: 40_000 }).toBeGreaterThan(cut);
+    await expect(a.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+
+    // B sees A once: the new connection took the dead one's place straight away.
+    await expect(avatars(b)).toHaveCount(1, { timeout: 4000 });
+    await contextA.close();
+    await contextB.close();
+  });
+
+  test('a window that vanished is dropped once it has been silent a while', async ({ browser }) => {
+    test.setTimeout(150_000);
+    const account = newAccount('vanish');
+    const { context: contextA, lines, network } = await ghostlyContext(browser);
+    const contextB = await browser.newContext();
+    const contextC = await browser.newContext();
+    const [a, b, c] = [
+      await contextA.newPage(),
+      await contextB.newPage(),
+      await contextC.newPage(),
+    ];
+    await signIn(a, account);
+    const boardId = await createBoard(a);
+    for (const page of [b, c]) {
+      await signIn(page, account);
+      await page.goto(`/b/${boardId}`);
+    }
+    await expect(avatars(b)).toHaveCount(2);
+
+    // A's network goes and does not come back: the room still holds its socket open.
+    network.gone = true;
+    for (const line of lines) line.cut = true;
+    await expect(avatars(b)).toHaveCount(2);
+
+    // Once A has been silent past the limit (45 seconds on the test server), the next
+    // thing anyone does on the board clears it — and C, still pinging, stays.
+    await expect
+      .poll(
+        async () => {
+          await b.mouse.move(300 + Math.random() * 200, 300);
+          return avatars(b).count();
+        },
+        { timeout: 90_000, intervals: [2000] },
+      )
+      .toBe(1);
+    await expect(avatars(c)).toHaveCount(1);
+    await contextA.close();
+    await contextB.close();
+    await contextC.close();
+  });
+});

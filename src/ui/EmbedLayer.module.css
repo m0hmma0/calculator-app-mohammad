@@ -23,10 +23,27 @@
 
 .frame {
   width: 100%;
-  height: 100%;
+  height: calc(100% - 22px);
+  margin-top: 22px;
   border: 0;
   display: block;
   pointer-events: auto;
+}
+
+/* Above a playing video: the part of it the board still answers to. */
+.grip {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  background: #23232a;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 13px;
+  line-height: 1;
+  cursor: move;
+  pointer-events: auto;
+  user-select: none;
 }
 
 .play {
@@ -52,14 +69,14 @@
 
 .stop {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 0;
+  right: 4px;
   pointer-events: auto;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border: 0;
   border-radius: 50%;
-  background: rgb(0 0 0 / 0.65);
+  background: transparent;
   color: #fff;
   font-size: 16px;
   cursor: pointer;

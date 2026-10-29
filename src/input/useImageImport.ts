@@ -3,7 +3,7 @@ import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
 import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
-import { imageBlobsFrom, screenFitImageBox } from '@/media/images';
+import { imageBlobsFrom, pictureBox } from '@/media/images';
 import { storeImage } from '@/media/storeImage';
 import { importFile, isPdfFile, startImportBatch } from '@/importers/importFile';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
@@ -46,7 +46,7 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
         try {
           const imported = await storeImage(blob);
           const current = useBoardStore.getState();
-          const box = screenFitImageBox(imported, current.stageSize.height);
+          const box = pictureBox(imported, current.stageSize.height);
           const at: Point = next ?? { x: centre.x - box.w / 2, y: centre.y - box.h / 2 };
 
           const element = createElement({

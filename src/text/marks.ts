@@ -189,6 +189,16 @@ export function looksLikeLink(text: string): boolean {
   return /^(https?:\/\/|www\.)/i.test(trimmed) && normaliseLink(trimmed) !== null;
 }
 
+/** Where a link goes, short: its site, or the address for an email. */
+export function linkLabel(href: string): string {
+  try {
+    const url = new URL(href);
+    return url.protocol === 'mailto:' ? url.pathname : url.hostname.replace(/^www\./, '');
+  } catch {
+    return href;
+  }
+}
+
 /** A link opens in a new tab, cut off from this page. */
 export function openLink(url: string): void {
   const safe = normaliseLink(url);

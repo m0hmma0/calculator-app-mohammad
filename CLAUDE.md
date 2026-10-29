@@ -8,10 +8,18 @@ with something the user checks themselves against a written checklist.
 ## Where things stand
 
 Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
-back on. **Phase 8 (sharing, permissions, comments)** and **Phase 9 (workshop tools and
-rich content)** are built, tested and deployed at <https://sabboura.mh-hamad.workers.dev>
-(migrations 0001–0004 applied remotely) but not yet checked by the user. The next phase
-is **10 (accessibility, Arabic and RTL, polish)**.
+back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools and
+rich content)** and **Phase 10 (quick fixes and the text box)** are built, tested and
+deployed at <https://sabboura.mh-hamad.workers.dev> (migrations 0001–0004 applied
+remotely) but not yet checked by the user.
+
+The plan was renumbered after Phase 9: the user's list of requests became Phases
+10–16 — 11 one control pane and role-based controls, 12 settings and shortcuts, 13
+presenting/frames/celebrations/media, 14 placeholders and the "Answer" role and owner
+locks, 15 undo across people and sessions, 16 dashboard organisation — and the
+original 10 (accessibility, Arabic and RTL) and 11 (hardening) are now **17** and
+**18**. The next phase is **11**. Parked by the user: student picture uploads,
+read4more.com, "see the stroke before it ends", Chrome zoom.
 
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
 stored per page), presentation (`src/workshop/presentation.ts`, followers fit the
@@ -130,8 +138,10 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   only answers once the board is on screen.
 - **Pen strokes are not selected when drawn**; a test that needs a stroke's size picks
   it from the object list first.
-- **Pasted pictures are as tall as the screen at 58% zoom**, so at 100% they run off
-  screen; a test that grabs a picture's handles zooms to the selection first.
+- **Pasted pictures are sized by shape** against the screen's height at 58% zoom (near
+  square half of it, wide a sixth, very wide a ninth), so a near-square one is still
+  taller than the screen at 100%; a test that grabs a picture's handles zooms to the
+  selection first.
 - **Text tool defaults are big** (40px type, 55 characters by 8 lines when clicked);
   a test that needs a small box drags one out. Typed text grows a box's height
   (`setElementText` measures it), so heights in tests are lower bounds.
@@ -143,9 +153,20 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   except a link, which the editor stops at its end. Colours, highlights and links sit
   in `data-*` attributes in the box, because a browser rewrites an inline colour
   (`#e03131` reads back as `rgb(…)`) and the box would then never match the text.
-- **Focus leaving the text box for the formatting bar** (the link field) must not end
-  typing; the editor checks `[data-format-bar]` on blur. A new control there that
-  takes focus needs that attribute on an ancestor.
+- **Focus leaving the text box for the side panel's link field** must not end typing;
+  the editor checks `[data-keep-typing]` on blur. A new control that takes focus while
+  typing needs that attribute on an ancestor. Every other panel control presses
+  `preventDefault` on mouse-down, so the box keeps the focus.
+- **The wheel is ignored over anything `data-hud`** unless it is also
+  `data-wheel-pans` (the text box being typed in).
+- **A played video holds the keyboard** (the iframe has focus); a press on the board
+  blurs it. Tests focus `embed-player` to reproduce that.
+- **Ghost windows**: the room drops a socket that has not pinged for `PEER_STALE_MS`
+  (3 minutes; 45 seconds on the test backend), and a page's reconnection replaces its
+  own earlier socket (`tab` in the handshake). The tests route the WebSocket through
+  a stand-in that can be cut and never passes on a close.
+- **Picking up another tool clears the selection** (`setTool`), so a test that draws
+  a shape and then switches tool finds nothing selected.
 - **A folder's name shows twice on the dashboard** (sidebar and card); tests scope
   to `getByRole('complementary')` or the card's test id.
 - **Controlled checkboxes that wait for the server** do not change on click, so

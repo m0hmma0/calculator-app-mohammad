@@ -134,6 +134,9 @@ const worker = spawn(
     // The link-preview test page is served by the key server, on localhost.
     '--var',
     'UNFURL_ALLOW_LOCAL:1',
+    // A window that vanished is dropped after 45 seconds here, not 3 minutes.
+    '--var',
+    'PEER_STALE_MS:45000',
     '--assets',
     ASSETS,
   ],

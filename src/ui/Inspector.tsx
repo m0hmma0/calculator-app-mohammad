@@ -10,7 +10,8 @@ import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
 import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
-import { LinkIcon } from './FormatBar';
+import { linkLabel, normaliseLink } from '@/text/marks';
+import { LinkField, LinkIcon } from './LinkField';
 import { HIGHLIGHTS, TEXT_COLOURS } from './palettes';
 import styles from './Inspector.module.css';
 
@@ -217,7 +218,7 @@ export function Inspector() {
             </div>
           ) : null}
 
-          {isTextual(first) || (canHoldLabel(first) && first.text) ? (
+          {isTextual(first) || (canHoldLabel(first) && (first.text || typingHere)) ? (
             <div className={styles.section} data-testid="text-controls">
               <p className={styles.label}>Text</p>
               <div className={styles.buttons}>
@@ -306,12 +307,28 @@ export function Inspector() {
                     title="Link the selected words — Ctrl/⌘ K"
                     data-testid="text-link"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => useTextSelection.setState({ linkOpen: true })}
+                    onClick={() => useTextSelection.setState({ linkOpen: !typing.linkOpen })}
                   >
                     <LinkIcon />
                   </button>
                 ) : null}
               </div>
+              {typingHere && typing.linkOpen ? (
+                <LinkField key={typing.link?.url ?? ''} current={typing.link?.url ?? null} />
+              ) : null}
+              {typingHere && typing.link && normaliseLink(typing.link.url) ? (
+                <a
+                  className={styles.linkChip}
+                  href={normaliseLink(typing.link.url)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={typing.link.url}
+                  data-testid="text-open-link"
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  Open {linkLabel(normaliseLink(typing.link.url)!)} ↗
+                </a>
+              ) : null}
               <p className={styles.subLabel}>Colour</p>
               <div className={styles.swatches}>
                 {TEXT_COLOURS.map(({ value, name }) => (

@@ -135,7 +135,14 @@ export type ClientMessage =
    * The handshake. `token` is a Firebase ID token, or empty for a guest; `link` is
    * the share link they came in by, if any; `guest` is the name a guest gave.
    */
-  | { t: 'auth'; token: string; link?: string | null; guest?: { id: string; name: string } | null }
+  | {
+      t: 'auth';
+      token: string;
+      link?: string | null;
+      guest?: { id: string; name: string } | null;
+      /** This open page, the same on every reconnection, so the room can replace it. */
+      tab?: string;
+    }
   | { t: 'presence'; state: PresenceState }
   | { t: 'history' }
   | { t: 'history-state'; seq: number; req: number }
