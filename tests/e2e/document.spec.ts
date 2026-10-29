@@ -98,18 +98,23 @@ test.describe('undo and redo', () => {
 
 test.describe('saving', () => {
   // Checklist item 3 — the gate.
-  test('survives a reload, with the camera where it was left', async ({ page }) => {
+  test('survives a reload, and opens showing everything on it', async ({ page }) => {
     await draw(page, 'KeyR', [300, 250], [420, 350]);
     await draw(page, 'KeyO', [500, 250], [600, 350]);
     await page.keyboard.press('Equal');
     await page.keyboard.press('Equal');
-    const zoom = await page.getByTestId('zoom-readout').innerText();
+    const zoomedIn = await page.getByTestId('zoom-readout').innerText();
 
     await page.reload();
     await expect(page.getByTestId('board-canvas')).toBeVisible();
 
     await expect.poll(() => layerCount(page)).toBe(2);
-    await expect(page.getByTestId('zoom-readout')).toHaveText(zoom);
+    // Not where it was left: a board always opens fitted to what is on it, which is
+    // exactly the view Shift+1 gives.
+    await expect(page.getByTestId('zoom-readout')).not.toHaveText(zoomedIn);
+    const opened = await page.getByTestId('zoom-readout').innerText();
+    await page.keyboard.press('Shift+Digit1');
+    await expect(page.getByTestId('zoom-readout')).toHaveText(opened);
   });
 
   test('a shape drawn just before a reload is still there, even on a slow machine', async ({

@@ -19,10 +19,10 @@ import { useUiPrefs } from '@/state/uiPrefs';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
+import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { CommentPins } from './CommentPins';
 import { DevPanel } from './DevPanel';
 import { EmbedLayer } from './EmbedLayer';
-import { BottomBar } from './BottomBar';
 import { TableCellEditor } from './TableCellEditor';
 import { PeersLayer } from './PeersLayer';
 import { Inspector } from './Inspector';
@@ -52,6 +52,8 @@ export function CanvasStage() {
   const isEmpty = useBoardStore((state) => state.elements.length === 0);
   const stamp = useBoardStore((state) => state.stamp);
   const minimap = useUiPrefs((state) => state.minimap);
+  // The minimap is the owner's: on someone else's board it stays away.
+  const owner = useBoardAccess(selectIsOwner);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, frame: CanvasFrame) => {
     const host = ctx.canvas.parentElement;
@@ -262,10 +264,11 @@ export function CanvasStage() {
         </div>
       ) : null}
 
-      <div className={styles.hud} data-hud>
-        {minimap ? <Minimap /> : null}
-        <BottomBar />
-      </div>
+      {minimap && owner ? (
+        <div className={styles.hud} data-hud>
+          <Minimap />
+        </div>
+      ) : null}
 
       <EmbedLayer />
       <PeersLayer hostRef={hostRef} />

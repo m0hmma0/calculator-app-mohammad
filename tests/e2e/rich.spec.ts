@@ -281,20 +281,6 @@ test('the pen is the pointer while writing', async ({ page }) => {
   await expect(page.getByTestId('stage')).toHaveAttribute('data-cursor', 'pen');
 });
 
-test('the bottom bar folds down to one button and back', async ({ page }) => {
-  const bar = page.getByTestId('bottom-bar');
-  await expect(bar.getByTestId('zoom-readout')).toBeVisible();
-  await expect(bar.getByTestId('page-tab-0')).toBeVisible();
-  await page.getByTestId('bottom-bar-toggle').click();
-  await expect(page.getByTestId('zoom-readout')).toHaveCount(0);
-  await expect(page.getByTestId('page-bar')).toHaveCount(0);
-  // Remembered.
-  await page.reload();
-  await expect(page.getByTestId('zoom-readout')).toHaveCount(0);
-  await page.getByTestId('bottom-bar-toggle').click();
-  await expect(page.getByTestId('zoom-readout')).toBeVisible();
-});
-
 test('Insert is orange, and so is its ABC Text', async ({ page }) => {
   const insert = page.getByTestId('insert-menu');
   const background = await insert.evaluate((node) => getComputedStyle(node).backgroundColor);
@@ -325,7 +311,7 @@ test.describe('a fresh browser', () => {
     await expect(page.getByTestId('layers')).toHaveCount(0);
     await expect(page.getByTestId('minimap')).toHaveCount(0);
 
-    // The panel opens from the bottom bar and closes with its own ×.
+    // The panel opens from the controls and closes with its own ×.
     await page.getByTestId('toggle-pane').click();
     await expect(page.getByTestId('inspector')).toBeVisible();
     await page.getByTestId('close-pane').click();

@@ -22,4 +22,6 @@ export const useBoardAccess = create<BoardAccessStore>(() => ({
 }));
 
 export const selectCanEdit = (state: BoardAccessStore) => canEdit(state.role);
+/** The board's owner — the only one who presents, and who has the minimap. */
+export const selectIsOwner = (state: BoardAccessStore) => state.role === 'owner';
 export const selectCanComment = (state: BoardAccessStore) => canComment(state.role);

@@ -377,24 +377,27 @@ test.describe('images', () => {
     const zoom = Math.min((origin.width - 128) / start.w, (origin.height - 128) / start.h);
     const centre = { x: origin.x + origin.width / 2, y: origin.y + origin.height / 2 };
     const topLeft = { x: centre.x - (start.w * zoom) / 2, y: centre.y - (start.h * zoom) / 2 };
-    const corner = { x: topLeft.x + start.w * zoom, y: topLeft.y + start.h * zoom };
+    const right = topLeft.x + start.w * zoom;
+    // The bottom-left handle: the right-hand side of the board is under the side panel.
+    const corner = { x: topLeft.x, y: topLeft.y + start.h * zoom };
 
     // No modifier: the ratio holds even though the drag is mostly horizontal.
     await page.mouse.move(corner.x, corner.y);
     await page.mouse.down();
-    await page.mouse.move(corner.x + 60, corner.y + 4, { steps: 8 });
+    await page.mouse.move(corner.x - 60, corner.y + 4, { steps: 8 });
     await page.mouse.up();
 
     const locked = await geo(page);
     expect(locked.w).toBeGreaterThan(start.w);
     expect(locked.w / locked.h).toBeCloseTo(ratio, 1);
 
-    // With Shift the ratio is released — the reverse of how shapes behave.
-    const nextCorner = { x: topLeft.x + locked.w * zoom, y: topLeft.y + locked.h * zoom };
+    // With Shift the ratio is released — the reverse of how shapes behave. The top
+    // right corner stayed put, so the handle is now this far from it.
+    const nextCorner = { x: right - locked.w * zoom, y: topLeft.y + locked.h * zoom };
     await page.keyboard.down('Shift');
     await page.mouse.move(nextCorner.x, nextCorner.y);
     await page.mouse.down();
-    await page.mouse.move(nextCorner.x + 240, nextCorner.y + 2, { steps: 8 });
+    await page.mouse.move(nextCorner.x - 240, nextCorner.y + 2, { steps: 8 });
     await page.mouse.up();
     await page.keyboard.up('Shift');
 

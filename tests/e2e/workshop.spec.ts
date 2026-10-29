@@ -493,7 +493,7 @@ test('a PDF comes in as one stored picture per page', async ({ page }) => {
   await expect(layerItems(page)).toHaveText(['image', 'image', 'image'], { timeout: 20_000 });
   await expect(page.getByTestId('import-status')).toBeHidden();
   // Each page's picture is the page: the first page's red square is on the board.
-  await page.getByTestId('zoom-fit').click();
+  await page.keyboard.press('Shift+Digit1');
   const stage = (await page.getByTestId('stage').boundingBox())!;
   const all = { x: stage.x, y: stage.y, w: stage.width - 250, h: stage.height };
   await expect.poll(() => colourFraction(page, '#e61a1a', all)).toBeGreaterThan(0.002);
@@ -502,7 +502,7 @@ test('a PDF comes in as one stored picture per page', async ({ page }) => {
   // And the pictures are stored, not just drawn: they survive a reload.
   await page.reload();
   await expect(layerItems(page)).toHaveCount(3);
-  await page.getByTestId('zoom-fit').click();
+  await page.keyboard.press('Shift+Digit1');
   await expect.poll(() => colourFraction(page, '#1a33cc', all)).toBeGreaterThan(0.002);
 });
 

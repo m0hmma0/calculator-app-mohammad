@@ -23,7 +23,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **8**  | Sharing, permissions, comments               | built       |
 | **9**  | Presentation mode, workshop tools, embeds    | built       |
 | **10** | Quick fixes and the text box                 | built       |
-| 11     | One control pane, and who sees what          | not started |
+| **11** | One control pane, and who sees what          | built       |
 | 12     | Settings and shortcuts                       | not started |
 | 13     | Presenting, frames, celebrations and media   | not started |
 | 14     | Classroom: placeholders, Answer role, locks  | not started |
@@ -170,16 +170,32 @@ every sharing change.
 
 ## Workshop tools and rich content
 
-The board's top bar holds undo and redo, the everyday tools (select, hand, pen,
-highlighter, eraser, laser) and two menus. **Insert** (orange) has shapes, lines and arrows, sticky
-notes, ABC Text, frames, tables, stamps (the emoji becomes the pointer; each click puts
-one down; Escape puts it away), Import (pictures, SVG, PDF), and the workshop: present,
-timer, dot voting, and the minimap (also `M`). **Tools** has version history,
-comments, the library and the object list. One bar at the bottom holds pages, the side
-panel, the minimap and zoom, and folds down to a single button. The side panel opens
-only from that bar and closes with its ×. All of these choices are remembered per
-browser in `sabboura:ui`. On a phone the tools take their own row and menus open as
-sheets above the bottom bar.
+Every control for the board is in one place (`src/ui/BoardControls.tsx`): a pane down
+the right-hand side on a wide, landscape screen — `(min-width: 900px) and
+(orientation: landscape)`, the one query the layout's stylesheets share — and a bar
+along the top otherwise. Nothing sits at the bottom of the board. On a phone the bar
+is two rows at most: groups give way so items wrap one by one, and only if two rows
+still cannot hold them do the buttons shrink, a step at a time. It holds the way back
+and the board's name, undo and redo, the everyday tools (select, hand, pen,
+highlighter, eraser, laser), two menus, who is here, Share, pages, the side panel, the
+minimap, full screen and zoom. On a wide screen menus and cards open to the pane's
+left; the pen's options stand at the board's right edge (left of the side panel when
+it is open), and top centre on a tall screen. **Insert** (orange) has shapes, lines and
+arrows, sticky notes, ABC Text, frames, tables, stamps (the emoji becomes the pointer;
+each click puts one down; Escape puts it away), Import (pictures, SVG, PDF), and the
+workshop: present, timer, dot voting, and the minimap (also `M`). **Tools** has
+version history, comments, the library and the object list. The side panel opens only
+when asked for and closes with its ×. These choices are remembered per browser in
+`sabboura:ui`. On a phone menus and panels open as sheets over the bottom of the board.
+
+Every board opens zoomed out to show everything on it (`fitOnOpen`): once when this
+browser's copy has loaded and again when the room's arrives, unless the person has
+moved the view in between. Zoom to fit has no button; Shift 1 still does it.
+
+What each role sees: the owner has everything. An editor has everything but Present
+and the minimap. A viewer has the hand, the laser and zoom — no Insert, Tools, select,
+Present or minimap — and a click on a link in the words opens it. A commenter is a
+viewer whose right-click menu offers Comment, pinned where it was opened.
 
 Writing and drawing:
 

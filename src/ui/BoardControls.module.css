@@ -1,0 +1,253 @@
+/* The controls first, then the board: above it, or (on a wide screen) to its right. */
+.shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * The board's controls. A bar along the top by default — a tablet held upright, a
+ * narrow window, a phone — and a pane down the right-hand side on a wide, landscape
+ * screen (the second half of this file). The query is the same everywhere the
+ * layout depends on it: (min-width: 900px) and (orientation: landscape).
+ */
+.controls {
+  /* Every button in the controls is this size; a phone squeezes it to fit. */
+  --btn: 30px;
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: var(--topbar-h);
+  padding: 8px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+/* Each group keeps to one row; the bar wraps between groups. */
+.head,
+.menus,
+.people,
+.view,
+.viewButtons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* The name and the way back on the left, everything else on the right. */
+.head {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.name {
+  min-width: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+}
+
+button.name {
+  cursor: pointer;
+}
+
+button.name:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.badge {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+
+.button {
+  appearance: none;
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  width: var(--btn);
+  height: var(--btn);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.view {
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.viewButtons {
+  gap: 2px;
+}
+
+.notice {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/*
+ * A phone: two rows at most. The groups wrap first; only if two rows still cannot
+ * hold them do the buttons shrink, a step at a time (data-squeeze, set by script).
+ */
+@media (max-width: 640px) {
+  .controls {
+    --btn: 38px;
+    justify-content: center;
+    gap: 6px 8px;
+    padding: 6px 8px;
+  }
+
+  .head {
+    margin-right: 0;
+  }
+
+  /* Groups give way, so the two rows fill item by item before anything shrinks. */
+  .menus,
+  .view {
+    display: contents;
+  }
+
+  /* The board's name is in the browser tab; the room is for controls. */
+  .name,
+  .badge,
+  .notice {
+    display: none;
+  }
+
+  .controls[data-squeeze='1'] {
+    --btn: 34px;
+  }
+
+  .controls[data-squeeze='2'] {
+    --btn: 30px;
+    gap: 4px 6px;
+  }
+
+  .controls[data-squeeze='3'] {
+    --btn: 26px;
+    gap: 4px;
+    padding: 4px 6px;
+  }
+}
+
+/* ---- A wide, landscape screen: a pane down the right-hand side ---- */
+@media (min-width: 900px) and (orientation: landscape) {
+  .shell {
+    flex-direction: row-reverse;
+  }
+
+  .controls {
+    --btn: 34px;
+    width: var(--pane-w);
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 10px;
+    min-height: 0;
+    padding: 10px 8px;
+    border-bottom: 0;
+    border-left: 1px solid var(--border);
+    box-shadow: -1px 0 3px rgb(21 23 31 / 0.04);
+  }
+
+  .head,
+  .menus,
+  .people,
+  .view {
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+  }
+
+  .head {
+    gap: 4px;
+  }
+
+  .name {
+    max-width: none;
+    padding: 2px 4px;
+    font-size: 12px;
+    line-height: 1.3;
+    white-space: normal;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .badge {
+    align-self: flex-start;
+    padding: 1px 7px;
+    font-size: 10px;
+  }
+
+  .view {
+    gap: 6px;
+    padding: 4px 2px;
+  }
+
+  .viewButtons {
+    justify-content: space-between;
+  }
+
+  .viewButtons .button {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+
+  .notice {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+}
+
+/* A short landscape screen: smaller buttons, so the pane still fits. */
+@media (min-width: 900px) and (orientation: landscape) and (max-height: 700px) {
+  .controls {
+    --btn: 28px;
+    gap: 6px;
+    padding: 6px;
+  }
+}

@@ -249,7 +249,8 @@ interface BoardState {
 const ZOOM_STEP = 1.25;
 
 /** What a viewer may still pick up: looking around, and pointing. */
-export const VIEWER_TOOLS: ReadonlySet<Tool> = new Set<Tool>(['select', 'hand', 'laser']);
+/** Someone who can only look moves around the board and points: nothing to select. */
+export const VIEWER_TOOLS: ReadonlySet<Tool> = new Set<Tool>(['hand', 'laser']);
 
 /**
  * The board document is the source of truth from here on. The array in this store is
@@ -386,6 +387,8 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const current = get().stageSize;
       if (current.width === stageSize.width && current.height === stageSize.height) return;
       set({ stageSize });
+      // A board that loaded before the screen was measured is fitted now.
+      if (openFit.waitingForSize) fitOnOpen();
     },
 
     panBy: (dx, dy) => set({ viewport: panByScreen(get().viewport, dx, dy) }),
@@ -958,9 +961,14 @@ export function setBoardReadOnly(readOnly: boolean): void {
   if (readOnly) {
     state.endEditing();
     useBoardStore.setState({
-      tool: VIEWER_TOOLS.has(state.tool) ? state.tool : 'select',
+      tool: VIEWER_TOOLS.has(state.tool) ? state.tool : 'hand',
       draft: null,
+      selection: [],
     });
+  } else if (state.tool === 'hand') {
+    // Able to edit after all (a board opens read-only until its role is known): back
+    // to selecting, which is where an editor starts.
+    useBoardStore.setState({ tool: 'select' });
   }
   useBoardStore.setState((current) => ({ renderVersion: current.renderVersion + 1 }));
 }
@@ -1016,10 +1024,45 @@ function attachDocument(doc: BoardDoc): void {
   for (const listener of attachListeners) listener(doc);
 
   useBoardStore.setState({ hydrated: false });
-  void doc.whenReady.then(() => useBoardStore.setState({ hydrated: true }));
+  void doc.whenReady.then(() => {
+    useBoardStore.setState({ hydrated: true });
+    if (doc === board) fitOnOpen();
+  });
+}
+
+/**
+ * A board opens showing everything on it — from the dashboard, from a link, or on a
+ * reload. What this browser has stored arrives first, and on a board with a room
+ * the room's copy a moment later, so the view is fitted to each in turn — unless the
+ * person has already moved it themselves, or is following someone.
+ */
+const openFit: { from: Viewport | null; waitingForSize: boolean } = {
+  from: null,
+  waitingForSize: false,
+};
+
+/** Called when a board opens: the camera it opened with is not yet the person's own. */
+function expectFitOnOpen(): void {
+  openFit.from = useBoardStore.getState().viewport;
+  openFit.waitingForSize = false;
+}
+
+/** Fits the view to everything on the board, if it has anything and nobody has moved. */
+export function fitOnOpen(): void {
+  const state = useBoardStore.getState();
+  if (openFit.from === null || state.viewport !== openFit.from) return;
+  if (state.elements.length === 0) return;
+  if (state.stageSize.width < 2 || state.stageSize.height < 2) {
+    openFit.waitingForSize = true;
+    return;
+  }
+  openFit.waitingForSize = false;
+  state.zoomToFit();
+  openFit.from = useBoardStore.getState().viewport;
 }
 
 attachDocument(board);
+expectFitOnOpen();
 
 /**
  * Swaps in the document for a different board. The previous one is detached and
@@ -1041,6 +1084,7 @@ export function openBoardDocument(boardId: string | null): BoardDoc {
     page: FIRST_PAGE,
     viewport: loadViewport(),
   });
+  expectFitOnOpen();
 
   previous.destroy();
   return board;

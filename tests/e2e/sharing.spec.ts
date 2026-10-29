@@ -134,8 +134,10 @@ test.describe('a link anyone can view', () => {
     // The owner sees who that is.
     await expect(owner.page.getByTestId('peer-avatar')).toHaveAttribute('title', /Gina \(guest\)/);
 
-    // 2. The tools to change anything are not offered…
-    await expect(visitor.page.locator('[role="toolbar"] button')).toHaveCount(3);
+    // 2. The tools to change anything are not offered — a viewer has the hand and
+    // the laser, and nothing to select…
+    await expect(visitor.page.locator('[role="toolbar"] button')).toHaveCount(2);
+    await expect(visitor.page.getByTestId('tool-hand')).toHaveAttribute('aria-pressed', 'true');
     await expect(visitor.page.getByTestId('inspector')).toHaveCount(0);
     // …and the keys do nothing either.
     await drawRect(visitor.page, [600, 450], [700, 520]);
@@ -174,6 +176,119 @@ test.describe('a link anyone can view', () => {
     expect(await savedElementIds(owner.account, owner.boardId)).not.toContain('smuggled');
 
     await close(owner.context, visitor.context);
+  });
+});
+
+test.describe('links in the words', () => {
+  test('someone who can only look opens a link with a click, hand and all', async ({ browser }) => {
+    const owner = await person(browser, 'linkwords');
+    await createBoard(owner.page);
+    await owner.page.keyboard.press('KeyT');
+    await owner.page.mouse.move(300, 200);
+    await owner.page.mouse.down();
+    await owner.page.mouse.move(800, 250, { steps: 4 });
+    await owner.page.mouse.up();
+    await owner.page.keyboard.type('page');
+    await owner.page.keyboard.press('Shift+Home');
+    await owner.page.keyboard.press('ControlOrMeta+KeyK');
+    await owner.page.getByTestId('link-input').fill('example.com/for-guests');
+    await owner.page.keyboard.press('Enter');
+    await owner.page.keyboard.press('Escape');
+    await openShare(owner.page);
+    const url = await enableLink(owner.page);
+    await closeShare(owner.page);
+
+    const visitor = await guest(browser);
+    await visitor.context.route('https://example.com/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<title>example</title>' }),
+    );
+    await followAsGuest(visitor.page, url, 'Lin');
+    await expect(visitor.page.getByTestId('tool-hand')).toHaveAttribute('aria-pressed', 'true');
+
+    // The board opens fitted to the one line of words: find the link along it, as a
+    // person would — the hand turns into a pointer over it.
+    const stage = (await visitor.page.getByTestId('stage').boundingBox())!;
+    const y = stage.y + stage.height / 2;
+    let found: number | null = null;
+    for (let x = stage.x + 10; x < stage.x + stage.width; x += 15) {
+      await visitor.page.mouse.move(x, y);
+      if ((await visitor.page.getByTestId('stage').getAttribute('data-cursor')) === 'pointer') {
+        found = x;
+        break;
+      }
+    }
+    expect(found).not.toBeNull();
+    const opened = visitor.context.waitForEvent('page');
+    await visitor.page.mouse.click(found!, y);
+    await (await opened).waitForURL('https://example.com/for-guests');
+
+    await close(owner.context, visitor.context);
+  });
+});
+
+test.describe('what each role sees', () => {
+  test('a viewer: the hand, the laser and zoom; no Present, Tools, Insert, select or minimap', async ({
+    browser,
+  }) => {
+    const owner = await ownerWithBoard(browser, 'seeowner');
+    const viewer = await person(browser, 'seeviewer');
+    const editor = await person(browser, 'seeeditor');
+    await openShare(owner.page);
+    for (const [index, [who, role]] of [
+      [viewer, 'viewer'],
+      [editor, 'editor'],
+    ].entries() as IterableIterator<[number, [typeof viewer, string]]>) {
+      await owner.page.getByTestId('person-email').fill(emailOf(who.account));
+      await owner.page.getByTestId('person-role').selectOption(role);
+      await owner.page.getByTestId('add-person').click();
+      // Each is saved before the next is added.
+      await expect(owner.page.getByTestId('person-row')).toHaveCount(index + 1);
+    }
+    await closeShare(owner.page);
+
+    // The owner has everything.
+    for (const id of ['tool-select', 'insert-menu', 'tools-menu', 'spotlight', 'view-minimap']) {
+      await expect(owner.page.getByTestId(id)).toBeVisible();
+    }
+
+    await viewer.page.goto(`/b/${owner.boardId}`);
+    await expect(viewer.page.getByTestId('connection-status')).toHaveAttribute(
+      'data-status',
+      'connected',
+    );
+    for (const id of ['tool-hand', 'tool-laser', 'zoom-readout']) {
+      await expect(viewer.page.getByTestId(id)).toBeVisible();
+    }
+    for (const id of ['tool-select', 'insert-menu', 'tools-menu', 'spotlight', 'view-minimap']) {
+      await expect(viewer.page.getByTestId(id)).toHaveCount(0);
+    }
+    // M does not bring the minimap, and a right-click offers nothing.
+    await viewer.page.mouse.move(600, 500);
+    await viewer.page.keyboard.press('KeyM');
+    await expect(viewer.page.getByTestId('minimap')).toHaveCount(0);
+    await viewer.page.mouse.click(600, 500, { button: 'right' });
+    await expect(viewer.page.getByTestId('context-menu')).toHaveCount(0);
+
+    // An editor has Insert and Tools, but presenting and the minimap stay the owner's.
+    await editor.page.goto(`/b/${owner.boardId}`);
+    await expect(editor.page.getByTestId('connection-status')).toHaveAttribute(
+      'data-status',
+      'connected',
+    );
+    for (const id of ['tool-select', 'insert-menu', 'tools-menu']) {
+      await expect(editor.page.getByTestId(id)).toBeVisible();
+    }
+    // The board opened read-only until the role was known; an editor then selects.
+    await expect(editor.page.getByTestId('tool-select')).toHaveAttribute('aria-pressed', 'true');
+    for (const id of ['spotlight', 'view-minimap']) {
+      await expect(editor.page.getByTestId(id)).toHaveCount(0);
+    }
+    await editor.page.getByTestId('insert-menu').click();
+    await expect(editor.page.getByTestId('insert-tool-text')).toBeVisible();
+    await expect(editor.page.getByTestId('present-start')).toHaveCount(0);
+    await expect(editor.page.getByTestId('toggle-minimap')).toHaveCount(0);
+
+    await close(owner.context, viewer.context, editor.context);
   });
 });
 
@@ -372,11 +487,12 @@ test.describe('comments', () => {
     await drawRect(bob.page, [600, 450], [700, 520]);
     await expect(layers(owner.page)).toHaveCount(1);
 
-    // …but can comment, pinned where they click, mentioning the owner.
-    await bob.page.getByTestId('tools-menu').click();
-    await bob.page.getByTestId('open-comments').click();
-    await bob.page.getByTestId('new-comment').click();
-    await bob.page.getByTestId('comment-place').click({ position: { x: 300, y: 200 } });
+    // …nor open the Tools menu — but the right-click menu offers Comment, pinned
+    // where it was opened, and the comment can mention the owner.
+    await expect(bob.page.getByTestId('tools-menu')).toHaveCount(0);
+    await bob.page.mouse.click(400, 300, { button: 'right' });
+    await expect(bob.page.getByTestId('context-menu').getByRole('menuitem')).toHaveCount(1);
+    await bob.page.getByTestId('menu-comment').click();
     await bob.page.getByTestId('comment-input').fill('What about this, @');
     await bob.page.getByTestId('mention-option').first().click();
     await expect(bob.page.getByTestId('comment-input')).toHaveValue(/@Person commentowner /);

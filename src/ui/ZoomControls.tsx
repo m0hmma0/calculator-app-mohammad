@@ -2,13 +2,16 @@ import { formatZoom } from '@/canvas/viewport';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './ZoomControls.module.css';
 
-/** `embedded`: part of the bottom bar, without a frame of its own. */
+/**
+ * Out, the zoom (which resets to 100%), and in. Zooming to fit everything has no
+ * button of its own — Shift 1 does it, and every board opens that way.
+ * `embedded`: part of the board's controls, without a frame of its own.
+ */
 export function ZoomControls({ embedded = false }: { embedded?: boolean }) {
   // Selecting the number, not the viewport object: panning must not re-render this.
   const zoom = useBoardStore((state) => state.viewport.zoom);
   const zoomStep = useBoardStore((state) => state.zoomStep);
   const zoomTo100 = useBoardStore((state) => state.zoomTo100);
-  const zoomToFit = useBoardStore((state) => state.zoomToFit);
 
   return (
     <div
@@ -44,27 +47,6 @@ export function ZoomControls({ embedded = false }: { embedded?: boolean }) {
         aria-label="Zoom in"
       >
         +
-      </button>
-
-      <span className={styles.separator} aria-hidden="true" />
-
-      <button
-        type="button"
-        className={styles.button}
-        onClick={zoomToFit}
-        title="Zoom to fit (Shift 1)"
-        aria-label="Zoom to fit"
-        data-testid="zoom-fit"
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
       </button>
     </div>
   );

@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { InsertMenu } from '@/ui/InsertMenu';
-import { ToolsMenu } from '@/ui/ToolsMenu';
 import { applyHistoryMessage, applyHistoryState, attachHistory } from '@/collab/history';
 import { applyServerMessage, resetPresence, usePresence } from '@/collab/presence';
 import { startPresence, type PresenceHandle } from '@/collab/publish';
@@ -9,15 +7,14 @@ import { Link } from '@/router/router';
 import { useBoardAccess } from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
 import { ROLE_LABEL, canEdit, type Role } from '@shared/sharing';
-import { openBoardDocument, setBoardReadOnly, useBoardStore } from '@/state/boardStore';
+import { fitOnOpen, openBoardDocument, setBoardReadOnly, useBoardStore } from '@/state/boardStore';
 import { useWorkspace } from '@/state/workspaceStore';
+import { BoardControls, BoardShell } from '@/ui/BoardControls';
 import { CanvasStage } from '@/ui/CanvasStage';
-import { ToolBar } from '@/ui/ToolBar';
 import { CommentsPanel } from '@/ui/CommentsPanel';
 import { HistoryPanel } from '@/ui/HistoryPanel';
 import { ShareDialog } from '@/ui/ShareDialog';
 import { PeerBar } from '@/ui/PeerBar';
-import { TopBar } from '@/ui/TopBar';
 import styles from './BoardPage.module.css';
 
 /**
@@ -92,7 +89,11 @@ function BoardView({ boardId }: { boardId: string }) {
               if (message.t === 'join' || message.t === 'ready') presence?.publishNow();
             },
             history: applyHistoryState,
-            synced: () => usePresence.setState({ synced: true }),
+            synced: () => {
+              usePresence.setState({ synced: true });
+              // The room's copy is in: the view shows all of it.
+              fitOnOpen();
+            },
           },
         });
         if (cancelled) {
@@ -169,39 +170,40 @@ function BoardView({ boardId }: { boardId: string }) {
 
   return (
     <>
-      <TopBar
-        boardName={record?.title ?? sharedTitle ?? 'Board'}
-        badge={role && role !== 'owner' ? ROLE_LABEL[role] : undefined}
-        onRenameBoard={owner ? rename : undefined}
-        leading={
-          back ? (
-            <Link
-              to={back}
-              className={styles.back}
-              aria-label="Back to boards"
-              data-testid="back-to-boards"
-            >
-              ← <span className={styles.backLabel}>Boards</span>
-            </Link>
-          ) : null
-        }
-      >
-        <ToolBar />
-        <InsertMenu />
-        <ToolsMenu />
-        <PeerBar />
-        {owner ? (
-          <button
-            type="button"
-            className={styles.share}
-            data-testid="open-share"
-            onClick={() => setSharing(true)}
-          >
-            Share
-          </button>
-        ) : null}
-      </TopBar>
-      <CanvasStage />
+      <BoardShell>
+        <BoardControls
+          boardName={record?.title ?? sharedTitle ?? 'Board'}
+          badge={role && role !== 'owner' ? ROLE_LABEL[role] : undefined}
+          onRenameBoard={owner ? rename : undefined}
+          leading={
+            back ? (
+              <Link
+                to={back}
+                className={styles.back}
+                aria-label="Back to boards"
+                title="Back to boards"
+                data-testid="back-to-boards"
+              >
+                ← <span className={styles.backLabel}>Boards</span>
+              </Link>
+            ) : null
+          }
+          people={<PeerBar />}
+          share={
+            owner ? (
+              <button
+                type="button"
+                className={styles.share}
+                data-testid="open-share"
+                onClick={() => setSharing(true)}
+              >
+                Share
+              </button>
+            ) : null
+          }
+        />
+        <CanvasStage />
+      </BoardShell>
       <HistoryPanel />
       <CommentsPanel boardId={boardId} />
       {sharing ? (

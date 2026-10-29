@@ -101,6 +101,38 @@ test.describe('managing folders', () => {
   });
 });
 
+test.describe('opening a board', () => {
+  test('it opens showing everything on it, wherever the view was left', async ({ page }) => {
+    await signIn(page, newAccount('fitopen'));
+    await createBoard(page);
+    for (const [x, y] of [
+      [150, 150],
+      [900, 600],
+    ] as const) {
+      await page.keyboard.press('KeyR');
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 80, y + 60, { steps: 4 });
+      await page.mouse.up();
+    }
+    await expect(page.getByTestId('layers').locator('li')).toHaveCount(2);
+    // Zoomed right in on one corner.
+    for (let step = 0; step < 4; step += 1) await page.keyboard.press('Equal');
+    const zoomedIn = await page.getByTestId('zoom-readout').innerText();
+
+    await page.getByTestId('back-to-boards').click();
+    await boardCards(page).first().getByRole('link').first().click();
+    await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    await expect(page.getByTestId('layers').locator('li')).toHaveCount(2);
+
+    // Fitted to both shapes — exactly the view Shift+1 gives — not where it was left.
+    await expect(page.getByTestId('zoom-readout')).not.toHaveText(zoomedIn);
+    const opened = await page.getByTestId('zoom-readout').innerText();
+    await page.keyboard.press('Shift+Digit1');
+    await expect(page.getByTestId('zoom-readout')).toHaveText(opened);
+  });
+});
+
 test.describe('folders and boards', () => {
   // Checklist item 2.
   test('nests folders and shows the path', async ({ page }) => {

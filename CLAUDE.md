@@ -9,16 +9,17 @@ with something the user checks themselves against a written checklist.
 
 Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
 back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools and
-rich content)** and **Phase 10 (quick fixes and the text box)** are built, tested and
-deployed at <https://sabboura.mh-hamad.workers.dev> (migrations 0001–0004 applied
-remotely) but not yet checked by the user.
+rich content)**, **Phase 10 (quick fixes and the text box)** and **Phase 11 (one
+control pane, and who sees what)** are built, tested and deployed at
+<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0004 applied remotely) but not
+yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
 10–16 — 11 one control pane and role-based controls, 12 settings and shortcuts, 13
 presenting/frames/celebrations/media, 14 placeholders and the "Answer" role and owner
 locks, 15 undo across people and sessions, 16 dashboard organisation — and the
 original 10 (accessibility, Arabic and RTL) and 11 (hardening) are now **17** and
-**18**. The next phase is **11**. Parked by the user: student picture uploads,
+**18**. The next phase is **12**. Parked by the user: student picture uploads,
 read4more.com, "see the stroke before it ends", Chrome zoom.
 
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
@@ -173,6 +174,17 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   a stand-in that can be cut and never passes on a close.
 - **Picking up another tool clears the selection** (`setTool`), so a test that draws
   a shape and then switches tool finds nothing selected.
+- **The controls are a pane on the right at Playwright's default 1280×720** (wide and
+  landscape), 112 px wide, so the board ends at x = 1168 and starts at y = 0. A test
+  of the bar along the top sets a tall viewport. The layout is decided by one media
+  query, `(min-width: 900px) and (orientation: landscape)`, repeated in each
+  stylesheet that depends on it; `--pane-w` (global.css) is the pane's width there.
+- **A board opens fitted to its contents** (`fitOnOpen`), not where its camera was
+  left — but only if it has contents, so a test drawing on a fresh board in two
+  windows still sees the same coordinates in both.
+- **A viewer's tools are the hand and the laser** (`VIEWER_TOOLS`); boards open
+  read-only until the role is known, so an editor's tool starts as the hand and goes
+  back to select when the role arrives.
 - **A folder's name shows twice on the dashboard** (sidebar and card); tests scope
   to `getByRole('complementary')` or the card's test id.
 - **Controlled checkboxes that wait for the server** do not change on click, so

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { insertTable } from '@/input/insertions';
 import { toggleLayers, toggleMinimap } from '@/state/uiPrefs';
-import { useBoardAccess } from '@/sharing/boardAccess';
+import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { exportBlob, downloadBlob, type ExportFormat } from '@/export/exporters';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 import styles from './CommandPalette.module.css';
@@ -41,6 +41,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   const [active, setActive] = useState(0);
 
   const canExport = useBoardAccess((state) => state.canExport);
+  const owner = useBoardAccess(selectIsOwner);
   const commands = useMemo<Command[]>(() => {
     const store = useBoardStore.getState;
 
@@ -106,7 +107,10 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
         hint: '?',
         run: () => store().toggleShortcuts(),
       },
-      { id: 'minimap', label: 'Show or hide the minimap', hint: 'M', run: toggleMinimap },
+      // The minimap is the owner's.
+      ...(owner
+        ? [{ id: 'minimap', label: 'Show or hide the minimap', hint: 'M', run: toggleMinimap }]
+        : []),
       { id: 'layers', label: 'Show or hide the object list', run: toggleLayers },
       {
         id: 'dev-panel',
@@ -115,7 +119,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       },
       { id: 'clear', label: 'Clear the board', run: () => store().clearBoard() },
     ];
-  }, [canExport]);
+  }, [canExport, owner]);
 
   const results = useMemo(
     () => commands.filter((command) => matches(query, command.label)),

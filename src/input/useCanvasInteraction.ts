@@ -375,6 +375,21 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const store = useBoardStore.getState();
       const tool = effectiveTool(store);
 
+      // Someone who can only look moves the board with the hand, and a click on a
+      // link in the words opens it.
+      if (event.button === 0 && !selectCanEdit(useBoardAccess.getState())) {
+        const point = board(event);
+        const under = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
+          includeLocked: true,
+        });
+        const link = under ? linkAt(under, point) : null;
+        if (link) {
+          event.preventDefault();
+          openLink(link);
+          return;
+        }
+      }
+
       if (event.button === 1 || tool === 'hand') {
         event.preventDefault();
         beginPan(event);
@@ -539,10 +554,25 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     const updateHoverCursor = () => {
       const store = useBoardStore.getState();
       const tool = effectiveTool(store);
-      // A link's address shows on hover only while selecting.
-      if (tool !== 'select' && host.title) host.title = '';
+      // A link's address shows on hover only while selecting (or, for a viewer, panning).
+      if (tool !== 'select' && tool !== 'hand' && host.title) host.title = '';
 
-      if (tool === 'hand') return setCursor('grab');
+      if (tool === 'hand') {
+        // A viewer's links show as links under the hand.
+        if (lastClient && !selectCanEdit(useBoardAccess.getState())) {
+          const point = board(lastClient);
+          const under = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
+            includeLocked: true,
+          });
+          const link = under ? linkAt(under, point) : null;
+          const hint = link ? `${link}\nClick to open` : '';
+          if (host.title !== hint) host.title = hint;
+          if (link) return setCursor('pointer');
+        } else if (host.title) {
+          host.title = '';
+        }
+        return setCursor('grab');
+      }
       if (isShapeTool(tool)) return setCursor('crosshair');
       if (tool === 'stamp') return setCursor('stamp');
       if (tool === 'pen') return setCursor('pen');
@@ -921,6 +951,15 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
     const onContextMenu = (event: MouseEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
       event.preventDefault();
+      // Someone who can only look or comment gets the menu (with Comment, if they may)
+      // but selects nothing: there is nothing they could do to it.
+      if (!selectCanEdit(useBoardAccess.getState())) {
+        const rect = host.getBoundingClientRect();
+        useBoardStore
+          .getState()
+          .openContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+        return;
+      }
       // On a Mac, Ctrl-click is a right-click: drawing a smart shape is not a menu.
       const tool = useBoardStore.getState().tool;
       if (drag.kind === 'ink' || tool === 'pen' || tool === 'highlighter') return;

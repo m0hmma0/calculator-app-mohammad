@@ -31,6 +31,22 @@ body {
   overflow: hidden;
 }
 
+/*
+ * How wide the board's control pane is: nothing while the controls are a bar along
+ * the top, and the pane's width on a wide, landscape screen, where they stand down
+ * the right-hand side. Panels that float over the board keep clear of it.
+ */
+:root {
+  --pane-w: 0px;
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  :root {
+    --pane-w: 112px;
+    --topbar-h: 0px;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

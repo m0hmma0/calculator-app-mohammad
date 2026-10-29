@@ -88,3 +88,29 @@
 .dot .stripe {
   border-radius: 2px;
 }
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .bar {
+    top: 12px;
+    left: auto;
+    right: 12px;
+    transform: none;
+    flex-direction: column;
+    padding: 10px 6px;
+    border-radius: 18px;
+  }
+
+  /* The side panel is open at the right: the options stand just left of it. */
+  .bar[data-beside-panel] {
+    right: 250px;
+  }
+
+  .group {
+    flex-direction: column;
+  }
+
+  .divider {
+    width: 18px;
+    height: 1px;
+  }
+}

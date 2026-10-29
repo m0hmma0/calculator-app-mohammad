@@ -56,3 +56,33 @@
   border: 0;
   box-shadow: none;
 }
+
+.embedded .button {
+  height: var(--btn, 28px);
+  min-width: var(--btn, 28px);
+}
+
+/* In the pane down the right: out, the zoom and in, across its width. */
+@media (min-width: 900px) and (orientation: landscape) {
+  .embedded {
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .embedded .button {
+    min-width: 24px;
+    padding: 0 2px;
+  }
+
+  .embedded .readout {
+    min-width: 0;
+    flex: 1;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 640px) {
+  .embedded .readout {
+    min-width: 44px;
+  }
+}

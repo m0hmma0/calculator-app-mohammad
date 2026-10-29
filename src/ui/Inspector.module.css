@@ -254,13 +254,13 @@
   color: var(--text);
 }
 
-/* On a phone the panel is a sheet above the bottom bar, not a column beside the board. */
+/* On a phone the panel is a sheet over the bottom of the board, not a column beside it. */
 @media (max-width: 640px) {
   .panel {
     top: auto;
     left: 8px;
     right: 8px;
-    bottom: 64px;
+    bottom: 8px;
     width: auto;
     max-height: 46dvh;
     overflow-y: auto;

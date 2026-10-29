@@ -284,7 +284,7 @@
     top: auto;
     left: 8px;
     right: 8px;
-    bottom: 64px;
+    bottom: 8px;
     width: auto;
     max-height: 68dvh;
     padding: 8px;
@@ -305,7 +305,8 @@
   }
 
   .trigger {
-    padding: 7px 12px;
+    height: var(--btn, 34px);
+    padding: 0 10px;
     font-size: 13px;
   }
 
@@ -313,6 +314,31 @@
     position: fixed;
     top: auto;
     right: 8px;
-    bottom: 64px;
+    bottom: 8px;
+  }
+}
+
+/*
+ * In the pane down the right: the button spans the pane, and its menu opens to the
+ * left of the pane, from the top of the screen, so it is never cut off below.
+ */
+@media (min-width: 900px) and (orientation: landscape) {
+  .trigger {
+    width: 100%;
+    justify-content: center;
+    min-height: var(--btn, 34px);
+  }
+
+  .menu {
+    position: fixed;
+    top: 12px;
+    right: calc(var(--pane-w) + 10px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .status {
+    position: fixed;
+    top: 12px;
+    right: calc(var(--pane-w) + 10px);
   }
 }

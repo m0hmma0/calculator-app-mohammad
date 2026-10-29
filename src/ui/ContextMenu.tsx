@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { screenToBoard } from '@/canvas/viewport';
+import { usePresence } from '@/collab/presence';
 import { pasteFromClipboard } from '@/input/useClipboard';
+import { selectCanComment, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import { useComments } from '@/sharing/comments';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 import { togglePane, useUiPrefs } from '@/state/uiPrefs';
 import styles from './ContextMenu.module.css';
@@ -23,6 +27,10 @@ export function ContextMenu() {
   const elements = useBoardStore((state) => state.elements);
   const renderVersion = useBoardStore((state) => state.renderVersion);
   const paneOpen = useUiPrefs((state) => state.pane);
+  const editable = useBoardAccess(selectCanEdit);
+  const canComment = useBoardAccess(selectCanComment);
+  // Comments live on a board with a room; the signed-out board has none.
+  const onBoard = usePresence((state) => state.status !== null);
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -63,70 +71,90 @@ export function ContextMenu() {
   const hasSelection = chosen.length > 0;
   const readOnly = boardDoc().readOnly;
 
-  const entries: Entry[] = [
-    {
-      id: 'copy',
-      label: 'Copy',
-      hint: '⌘C',
-      disabled: !hasSelection,
-      run: () => document.execCommand('copy'),
+  const comment: Entry = {
+    id: 'comment',
+    label: 'Comment here',
+    run: () => {
+      const at = screenToBoard(useBoardStore.getState().viewport, menu);
+      useComments.setState({
+        visible: true,
+        placing: false,
+        openThread: null,
+        draftAt: { x: at.x, y: at.y },
+      });
     },
-    {
-      id: 'paste',
-      label: 'Paste',
-      hint: '⌘V',
-      disabled: readOnly,
-      run: () => void pasteFromClipboard(),
-    },
-    {
-      id: 'duplicate',
-      label: 'Duplicate',
-      hint: '⌘D',
-      disabled: !hasSelection,
-      run: () => store().duplicateSelection(),
-    },
-    {
-      id: 'delete',
-      label: 'Delete',
-      hint: 'Del',
-      disabled: !hasSelection,
-      run: () => store().deleteSelection(),
-    },
-    {
-      id: 'lock',
-      label: 'Lock',
-      hint: '⇧⌘L',
-      separated: true,
-      disabled: !chosen.some((element) => !element.locked),
-      run: () => store().setSelectionLocked(true),
-    },
-    {
-      id: 'unlock',
-      label: 'Unlock',
-      disabled: !chosen.some((element) => element.locked),
-      run: () => store().setSelectionLocked(false),
-    },
-    {
-      id: 'group',
-      label: 'Group',
-      hint: '⌘G',
-      disabled: chosen.length < 2,
-      run: () => store().groupSelection(),
-    },
-    {
-      id: 'ungroup',
-      label: 'Ungroup',
-      hint: '⇧⌘G',
-      disabled: !chosen.some((element) => element.type === 'group'),
-      run: () => store().ungroupSelection(),
-    },
-    {
-      id: 'pane',
-      label: paneOpen ? 'Hide the side panel' : 'Side panel',
-      separated: true,
-      run: togglePane,
-    },
-  ];
+  };
+  const commenting = onBoard && canComment ? [comment] : [];
+
+  // Someone who can only comment has one thing to do here.
+  const entries: Entry[] = !editable
+    ? commenting
+    : [
+        {
+          id: 'copy',
+          label: 'Copy',
+          hint: '⌘C',
+          disabled: !hasSelection,
+          run: () => document.execCommand('copy'),
+        },
+        {
+          id: 'paste',
+          label: 'Paste',
+          hint: '⌘V',
+          disabled: readOnly,
+          run: () => void pasteFromClipboard(),
+        },
+        {
+          id: 'duplicate',
+          label: 'Duplicate',
+          hint: '⌘D',
+          disabled: !hasSelection,
+          run: () => store().duplicateSelection(),
+        },
+        {
+          id: 'delete',
+          label: 'Delete',
+          hint: 'Del',
+          disabled: !hasSelection,
+          run: () => store().deleteSelection(),
+        },
+        {
+          id: 'lock',
+          label: 'Lock',
+          hint: '⇧⌘L',
+          separated: true,
+          disabled: !chosen.some((element) => !element.locked),
+          run: () => store().setSelectionLocked(true),
+        },
+        {
+          id: 'unlock',
+          label: 'Unlock',
+          disabled: !chosen.some((element) => element.locked),
+          run: () => store().setSelectionLocked(false),
+        },
+        {
+          id: 'group',
+          label: 'Group',
+          hint: '⌘G',
+          disabled: chosen.length < 2,
+          run: () => store().groupSelection(),
+        },
+        {
+          id: 'ungroup',
+          label: 'Ungroup',
+          hint: '⇧⌘G',
+          disabled: !chosen.some((element) => element.type === 'group'),
+          run: () => store().ungroupSelection(),
+        },
+        ...commenting.map((entry) => ({ ...entry, separated: true })),
+        {
+          id: 'pane',
+          label: paneOpen ? 'Hide the side panel' : 'Side panel',
+          separated: true,
+          run: togglePane,
+        },
+      ];
+  if (entries.length === 0) return null;
 
   return (
     <div

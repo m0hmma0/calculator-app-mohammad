@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { importFile, IMPORT_ACCEPT, startImportBatch, useImport } from '@/importers/importFile';
 import { insertTable, STAMPS } from '@/input/insertions';
-import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import { selectCanEdit, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 import {
   formatDuration,
@@ -49,6 +49,8 @@ const MAX_TIMER_SECONDS = 99 * 60 + 59;
  */
 export function InsertMenu() {
   const editable = useBoardAccess(selectCanEdit);
+  // Presenting and the minimap are the owner's.
+  const owner = useBoardAccess(selectIsOwner);
   const tool = useBoardStore((state) => state.tool);
   const stamp = useBoardStore((state) => state.stamp);
   const setTool = useBoardStore((state) => state.setTool);
@@ -253,19 +255,21 @@ export function InsertMenu() {
           ) : null}
 
           <p className={styles.label}>Workshop</p>
-          <button
-            type="button"
-            role="menuitem"
-            className={styles.item}
-            data-testid="present-start"
-            onClick={() => {
-              if (startPresentation()) setOpen(false);
-              else setNotice('Add a frame first — each frame is one slide.');
-            }}
-          >
-            <PresentIcon />
-            <span>Present frames</span>
-          </button>
+          {owner ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              data-testid="present-start"
+              onClick={() => {
+                if (startPresentation()) setOpen(false);
+                else setNotice('Add a frame first — each frame is one slide.');
+              }}
+            >
+              <PresentIcon />
+              <span>Present frames</span>
+            </button>
+          ) : null}
           {notice ? <p className={styles.hint}>{notice}</p> : null}
 
           {editable ? (
@@ -402,19 +406,23 @@ export function InsertMenu() {
             </>
           ) : null}
 
-          <p className={styles.label}>View</p>
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            aria-checked={minimap}
-            className={styles.item}
-            data-testid="toggle-minimap"
-            onClick={run(toggleMinimap)}
-          >
-            <MinimapIcon />
-            <span>{minimap ? 'Hide the minimap' : 'Show the minimap'}</span>
-            <kbd>M</kbd>
-          </button>
+          {owner ? (
+            <>
+              <p className={styles.label}>View</p>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={minimap}
+                className={styles.item}
+                data-testid="toggle-minimap"
+                onClick={run(toggleMinimap)}
+              >
+                <MinimapIcon />
+                <span>{minimap ? 'Hide the minimap' : 'Show the minimap'}</span>
+                <kbd>M</kbd>
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

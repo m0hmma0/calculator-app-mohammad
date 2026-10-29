@@ -1,3 +1,4 @@
+import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { useEffect, useRef, useState } from 'react';
 import {
   followsMe,
@@ -63,6 +64,7 @@ export function PeerBar() {
   const following = usePresence((state) => state.following);
   const spotlight = usePresence((state) => state.spotlight);
   const dismissed = usePresence((state) => state.dismissedSpotlight);
+  const owner = useBoardAccess(selectIsOwner);
   const [card, setCard] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -153,22 +155,25 @@ export function PeerBar() {
         />
       ) : null}
 
-      <button
-        type="button"
-        className={styles.action}
-        aria-pressed={spotlight}
-        disabled={status !== 'connected'}
-        title="Everyone on the board follows your view"
-        data-testid="spotlight"
-        onClick={() => usePresence.setState({ spotlight: !spotlight })}
-      >
-        {spotlight ? 'Stop presenting' : 'Present'}
-        {spotlight && list.length > 0 ? (
-          <span className={styles.followers} data-testid="follower-count">
-            {followers}/{list.length} following
-          </span>
-        ) : null}
-      </button>
+      {/* Presenting is the owner's. */}
+      {owner ? (
+        <button
+          type="button"
+          className={styles.action}
+          aria-pressed={spotlight}
+          disabled={status !== 'connected'}
+          title="Everyone on the board follows your view"
+          data-testid="spotlight"
+          onClick={() => usePresence.setState({ spotlight: !spotlight })}
+        >
+          {spotlight ? 'Stop presenting' : 'Present'}
+          {spotlight && list.length > 0 ? (
+            <span className={styles.followers} data-testid="follower-count">
+              {followers}/{list.length} following
+            </span>
+          ) : null}
+        </button>
+      ) : null}
     </div>
   );
 }

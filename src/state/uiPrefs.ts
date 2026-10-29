@@ -12,8 +12,6 @@ interface UiPrefs {
   pane: boolean;
   /** The selection's position and size, folded away at the foot of the side panel. */
   geometry: boolean;
-  /** The bottom bar showing all its buttons, rather than folded to one. */
-  bottomBar: boolean;
   /** Celebrations make sound. */
   sound: boolean;
   /** Timer lengths used most recently, newest first, in seconds. */
@@ -29,7 +27,6 @@ function load(): UiPrefs {
     layers: false,
     pane: false,
     geometry: false,
-    bottomBar: true,
     sound: true,
     recentTimers: [],
   };
@@ -41,7 +38,6 @@ function load(): UiPrefs {
       pane: stored.pane === true,
       geometry: stored.geometry === true,
       sound: stored.sound !== false,
-      bottomBar: stored.bottomBar !== false,
       recentTimers: Array.isArray(stored.recentTimers)
         ? stored.recentTimers
             .filter((seconds) => Number.isFinite(seconds) && seconds > 0)
@@ -69,8 +65,6 @@ export const togglePane = () => useUiPrefs.setState((state) => ({ pane: !state.p
 export const showPane = () => useUiPrefs.setState({ pane: true });
 export const toggleSound = () => useUiPrefs.setState((state) => ({ sound: !state.sound }));
 export const toggleGeometry = () => useUiPrefs.setState((state) => ({ geometry: !state.geometry }));
-export const toggleBottomBar = () =>
-  useUiPrefs.setState((state) => ({ bottomBar: !state.bottomBar }));
 
 /** Remembers a timer length, so the next one can be started with one click. */
 export function rememberTimer(seconds: number): void {

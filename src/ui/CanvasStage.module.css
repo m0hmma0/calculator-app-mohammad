@@ -2,6 +2,7 @@
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   background: var(--canvas-bg);
   overflow: hidden;
   touch-action: none;

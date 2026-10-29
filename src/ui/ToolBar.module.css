@@ -1,10 +1,15 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: none;
+}
+
 .tools {
   display: flex;
   align-items: center;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex: none;
   gap: 2px;
   padding: 2px;
   background: var(--surface-2);
@@ -18,8 +23,8 @@
   background: transparent;
   color: var(--text-2);
   border-radius: var(--radius-sm);
-  width: 30px;
-  height: 26px;
+  width: var(--btn, 30px);
+  height: calc(var(--btn, 30px) - 4px);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -36,28 +41,34 @@
   color: var(--on-accent);
 }
 
-.wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
 .tool:disabled {
   opacity: 0.35;
   cursor: default;
   background: transparent;
 }
 
+/* On a phone undo/redo and the tools are separate items, so the bar can wrap between them. */
 @media (max-width: 640px) {
   .wrap {
-    order: 99;
-    flex: 1 0 100%;
-    justify-content: center;
+    display: contents;
+  }
+}
+
+/* In the pane down the right: undo and redo side by side, the tools two by two. */
+@media (min-width: 900px) and (orientation: landscape) {
+  .wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    justify-items: center;
   }
 
   .tool {
-    width: 42px;
-    height: 36px;
+    width: 100%;
+    height: var(--btn, 34px);
   }
 }

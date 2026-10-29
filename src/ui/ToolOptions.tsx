@@ -1,4 +1,6 @@
+import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore } from '@/state/boardStore';
+import { useUiPrefs } from '@/state/uiPrefs';
 import { HIGHLIGHTS } from './palettes';
 import styles from './ToolOptions.module.css';
 
@@ -14,7 +16,10 @@ const INK_COLORS = [
 const INK_WIDTHS = [1.5, 3, 6, 12];
 const MARKER_WIDTHS = [12, 20, 32];
 
-/** Settings for the tool in hand — only shown when there is something to set. */
+/**
+ * Settings for the tool in hand — only shown when there is something to set. Top
+ * centre on a tall screen; down the board's right edge on a wide one.
+ */
 export function ToolOptions() {
   const tool = useBoardStore((state) => state.tool);
   const inkWidth = useBoardStore((state) => state.inkWidth);
@@ -25,10 +30,20 @@ export function ToolOptions() {
   const setMarker = useBoardStore((state) => state.setMarker);
   const eraserMode = useBoardStore((state) => state.eraserMode);
   const setEraserMode = useBoardStore((state) => state.setEraserMode);
+  // On a wide screen the options stand at the board's right edge, by the controls —
+  // or just left of the side panel, when it is open there.
+  const paneOpen = useUiPrefs((state) => state.pane);
+  const editable = useBoardAccess(selectCanEdit);
+  const besidePanel = paneOpen && editable;
 
   if (tool === 'highlighter') {
     return (
-      <div className={styles.bar} data-hud data-testid="tool-options">
+      <div
+        className={styles.bar}
+        data-hud
+        data-beside-panel={besidePanel || undefined}
+        data-testid="tool-options"
+      >
         <div className={styles.group}>
           {MARKER_WIDTHS.map((width) => (
             <button
@@ -70,7 +85,12 @@ export function ToolOptions() {
   if (tool !== 'pen' && tool !== 'eraser') return null;
 
   return (
-    <div className={styles.bar} data-hud data-testid="tool-options">
+    <div
+      className={styles.bar}
+      data-hud
+      data-beside-panel={besidePanel || undefined}
+      data-testid="tool-options"
+    >
       {tool === 'pen' ? (
         <>
           <div className={styles.group}>

@@ -62,3 +62,19 @@
     display: none;
   }
 }
+
+/* In the pane down the right: the way back and Share span the pane. */
+@media (min-width: 900px) and (orientation: landscape) {
+  .back {
+    text-align: center;
+    padding: 4px 6px;
+  }
+
+  .backLabel {
+    display: inline;
+  }
+
+  .share {
+    padding: 6px 4px;
+  }
+}

@@ -3,6 +3,7 @@ import { closeHistory, useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 import { toggleMinimap } from '@/state/uiPrefs';
+import { useBoardAccess } from '@/sharing/boardAccess';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -187,7 +188,8 @@ export function useShortcuts(): void {
           store.zoomToSelection();
           return;
         case 'KeyM':
-          if (event.shiftKey) return;
+          // The minimap is the owner's.
+          if (event.shiftKey || useBoardAccess.getState().role !== 'owner') return;
           event.preventDefault();
           toggleMinimap();
           return;
