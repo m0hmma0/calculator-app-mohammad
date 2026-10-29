@@ -13,6 +13,16 @@ import { createBoard, insertElements, readElements, applyPatches } from '@/doc/b
 import { textSplice } from '@/doc/schema';
 import { createElement } from '@/model/element';
 
+/**
+ * Byte for byte, quickly: toEqual walks a megabyte one element at a time through its
+ * deep equality, which takes seconds on a slow machine.
+ */
+function sameBytes(a: Uint8Array | null, b: Uint8Array): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+  return true;
+}
+
 describe('frames too large to send whole', () => {
   it('pass through untouched when small', () => {
     const small = frame(FRAME.UPDATE, new Uint8Array([1, 2, 3]));
@@ -31,7 +41,7 @@ describe('frames too large to send whole', () => {
     const assembler = new FrameAssembler();
     expect(assembler.accept(parts[2]!)).toBeNull();
     expect(assembler.accept(parts[0]!)).toBeNull();
-    expect(assembler.accept(parts[1]!)).toEqual(big);
+    expect(sameBytes(assembler.accept(parts[1]!), big)).toBe(true);
   });
 
   it('keeps two split frames apart', () => {
@@ -42,8 +52,8 @@ describe('frames too large to send whole', () => {
     const assembler = new FrameAssembler();
     expect(assembler.accept(a1!)).toBeNull();
     expect(assembler.accept(b1!)).toBeNull();
-    expect(assembler.accept(b2!)).toEqual(two);
-    expect(assembler.accept(a2!)).toEqual(one);
+    expect(sameBytes(assembler.accept(b2!), two)).toBe(true);
+    expect(sameBytes(assembler.accept(a2!), one)).toBe(true);
   });
 });
 
