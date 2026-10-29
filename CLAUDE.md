@@ -116,6 +116,12 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **Generated output must be in `.gitignore`, `.prettierignore` _and_ `eslint.config.js`.**
   Missing the last one produced 2,094 lint errors from a build directory.
 - Test builds live in `dist-test/`; the Worker serves them via `wrangler dev --assets`.
+- **IndexedDB saves a change a moment after it is made**, so a reload inside that
+  moment lost the last edit — on a slow CI runner, every time. `guardUnsaved` in
+  `src/doc/board.ts` keeps unconfirmed changes and writes them to localStorage on
+  `pagehide`. To reproduce timing bugs like this, throttle the CPU through CDP
+  (`Emulation.setCPUThrottlingRate`); this container's Chromium is fast enough to
+  hide them, and `/opt/pw-browsers/chromium_headless_shell-1194` is closer to CI's.
 - **The local D1/R2 outlive a test run, and images are deduplicated across accounts.**
   A test picture identical to one from an earlier run is legitimately "still in use",
   so storage tests stamp each picture with a per-test nonce.

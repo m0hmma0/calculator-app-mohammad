@@ -112,6 +112,21 @@ test.describe('saving', () => {
     await expect(page.getByTestId('zoom-readout')).toHaveText(zoom);
   });
 
+  test('a shape drawn just before a reload is still there, even on a slow machine', async ({
+    page,
+  }) => {
+    // A slow computer (or a busy test runner) is where IndexedDB is still writing the
+    // last stroke when the page goes; it must not be lost for that.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+    for (let round = 1; round <= 3; round += 1) {
+      await draw(page, 'KeyR', [200 + round * 150, 250], [300 + round * 150, 330]);
+      await page.reload();
+      await expect(page.getByTestId('board-canvas')).toBeVisible();
+      await expect.poll(() => layerCount(page), { timeout: 15_000 }).toBe(round);
+    }
+  });
+
   // Checklist item 4.
   test('survives the tab being closed part-way through', async ({ page, context }) => {
     await draw(page, 'KeyR', [300, 250], [420, 350]);

@@ -66,9 +66,11 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
 
   let persistence: IndexeddbPersistence | null = null;
   let whenReady = Promise.resolve();
+  let stopGuarding = () => {};
 
   if (options.persistenceKey) {
     persistence = new IndexeddbPersistence(options.persistenceKey, doc);
+    stopGuarding = guardUnsaved(doc, persistence, options.persistenceKey);
     whenReady = persistence.whenSynced.then(() => undefined);
   }
 
@@ -80,11 +82,108 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
     readOnly: false,
     currentPage: FIRST_PAGE,
     destroy: () => {
+      stopGuarding();
       undoManager.destroy();
       persistence?.destroy();
       doc.destroy();
     },
   };
+}
+
+/**
+ * IndexedDB saves each change a moment after it is made, and a page that is reloaded
+ * or closed inside that moment can lose it — the last stroke drawn before a refresh.
+ * So every change is also held here until IndexedDB has it, and whatever is still held
+ * when the page goes away is written to localStorage, which saves at once. The next
+ * time the board opens, that is applied on top of what IndexedDB had. Applying a
+ * change twice does nothing, so nothing is ever doubled.
+ */
+function guardUnsaved(doc: Y.Doc, persistence: IndexeddbPersistence, key: string): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const backupKey = `sabboura:unsaved:${key}`;
+  /** Changes not yet known to be in IndexedDB, by the order they were made. */
+  const unsaved = new Map<number, Uint8Array>();
+  let made = 0;
+  let checking = false;
+
+  // IndexedDB runs transactions on one store in order, so a read begun after a write
+  // finishes only once that write has. When it does, everything made before is saved.
+  const confirm = () => {
+    checking = false;
+    const db = persistence.db;
+    if (!db) return;
+    const upTo = made;
+    try {
+      db.transaction('updates', 'readonly').oncomplete = () => {
+        for (const order of unsaved.keys()) if (order <= upTo) unsaved.delete(order);
+      };
+    } catch {
+      // The database closed (the board was switched); its writes are its own now.
+    }
+  };
+  const onUpdate = (update: Uint8Array, origin: unknown) => {
+    if (origin === persistence) return;
+    made += 1;
+    unsaved.set(made, update);
+    // If IndexedDB never answers, what is held stays one compact change, not thousands.
+    if (unsaved.size > 500) {
+      const merged = Y.mergeUpdates([...unsaved.values()]);
+      unsaved.clear();
+      unsaved.set(made, merged);
+    }
+    if (!checking) {
+      checking = true;
+      setTimeout(confirm, 0);
+    }
+  };
+  doc.on('update', onUpdate);
+
+  const keep = () => {
+    if (unsaved.size === 0) return;
+    try {
+      localStorage.setItem(backupKey, toBase64(Y.mergeUpdates([...unsaved.values()])));
+    } catch {
+      // Full or refused: IndexedDB is still the main copy.
+    }
+  };
+  // A phone may close a page it has hidden without telling it, so hiding counts too.
+  const onHidden = () => {
+    if (document.visibilityState === 'hidden') keep();
+  };
+  window.addEventListener('pagehide', keep);
+  document.addEventListener('visibilitychange', onHidden);
+
+  // Opening: anything kept from last time goes in, then the note is thrown away.
+  void persistence.whenSynced.then(() => {
+    try {
+      const kept = localStorage.getItem(backupKey);
+      if (kept) Y.applyUpdate(doc, fromBase64(kept), SYSTEM_ORIGIN);
+      localStorage.removeItem(backupKey);
+    } catch {
+      // Unreadable: leave it; IndexedDB has the rest.
+    }
+  });
+
+  return () => {
+    doc.off('update', onUpdate);
+    window.removeEventListener('pagehide', keep);
+    document.removeEventListener('visibilitychange', onHidden);
+  };
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function fromBase64(text: string): Uint8Array {
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }
 
 /** Every local mutation goes through here so it carries the right origin. */

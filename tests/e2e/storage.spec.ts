@@ -116,7 +116,10 @@ test.describe('storing images', () => {
     // Item 1: it is on the board straight away — blurred, with progress showing.
     await expect(page.getByTestId('status-uploading')).toBeVisible();
     await expect(layers(page)).toHaveCount(1);
-    expect(await colourFraction(page, GREEN)).toBeGreaterThan(0.005);
+    // The blurred preview is decoded, then drawn on the next frame: a moment, well
+    // inside the upload's second and a half.
+    await expect.poll(() => colourFraction(page, GREEN), { timeout: 1000 }).toBeGreaterThan(0.005);
+    await expect(page.getByTestId('status-uploading')).toBeVisible();
 
     await waitForUploads(page);
     expect(uploads).toBe(1);
