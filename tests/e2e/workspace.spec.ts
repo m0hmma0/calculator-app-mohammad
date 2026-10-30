@@ -274,6 +274,45 @@ test.describe('board content', () => {
     await expectThumbnailLoaded(page, copy);
   });
 
+  test('a board left at once keeps its new thumbnail on the dashboard', async ({ page }) => {
+    await signIn(page, newAccount('leaving'));
+    const id = await createBoard(page);
+    await drawRectangle(page, [360, 300], [540, 430]);
+
+    // The worst order, made certain: leaving uploads the thumbnail while the dashboard
+    // asks for its boards, and the list is read before the picture lands but arrives
+    // after it.
+    let listRead!: () => void;
+    const read = new Promise<void>((resolve) => (listRead = resolve));
+    let pictureSaved!: () => void;
+    const saved = new Promise<void>((resolve) => (pictureSaved = resolve));
+    let listDelivered!: () => void;
+    const delivered = new Promise<void>((resolve) => (listDelivered = resolve));
+    let held = false;
+    await page.route('**/api/workspace', async (route) => {
+      if (held) return route.continue();
+      held = true;
+      const response = await route.fetch();
+      listRead();
+      await saved;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.fulfill({ response });
+      listDelivered();
+    });
+    await page.route(`**/api/boards/${id}/thumbnail`, async (route) => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      await read;
+      const response = await route.fetch();
+      await route.fulfill({ response });
+      pictureSaved();
+    });
+
+    await page.getByTestId('back-to-boards').click();
+    await delivered;
+    await expectThumbnailLoaded(page, id);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
   // Checklist item 4 — the gate. A second browser is a second device.
   test('the same account finds its boards from somewhere else', async ({ page, browser }) => {
     const account = newAccount('device');

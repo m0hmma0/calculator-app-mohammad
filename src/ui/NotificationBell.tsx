@@ -4,7 +4,10 @@ import { api } from '@/api/client';
 import { Link } from '@/router/router';
 import styles from './NotificationBell.module.css';
 
-/** Checked this often while the dashboard is open, so a mention arrives without a reload. */
+/**
+ * Checked this often while the dashboard is open and in view, so a mention arrives
+ * without a reload; a tab in the background is checked again when it comes back.
+ */
 const POLL_MS = 30_000;
 
 function when(at: number): string {
@@ -34,10 +37,17 @@ export function NotificationBell() {
         // Quietly: a missed check is caught by the next one.
         .catch(() => undefined);
     void load();
-    const timer = setInterval(() => void load(), POLL_MS);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, POLL_MS);
+    const onShown = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onShown);
     return () => {
       live = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', onShown);
     };
   }, []);
 

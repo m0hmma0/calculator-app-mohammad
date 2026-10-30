@@ -262,6 +262,17 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   script: the file is emptied before it is read. It wiped a source file once; restore
   with `git checkout --` and re-apply.
 
+- **The account is on Cloudflare's free plan, and its daily caps are the budget.** On
+  30 October 2026 D1 reached 76% of its 100,000 rows written: each room save deleted
+  and re-inserted the board's whole picture list (2 rows per picture, every 2 seconds of
+  editing). Saves now write only what changed (`boardFilesUpdate`). The rooms took about
+  94,000 requests that day, nearly all live-connection messages; presence now goes only
+  while someone else is on the board, and changes are batched for 400 ms when nobody is
+  (40 ms when someone is). Before adding anything that writes per change or sends per
+  frame, work out its daily cost; `npx wrangler d1 insights sabboura --sort-by writes`
+  and Cloudflare's GraphQL analytics (`durableObjectsInvocationsAdaptiveGroups`,
+  `durableObjectsPeriodicGroups`) show where it goes.
+
 ## Design decisions worth not relitigating
 
 - **Web only.** React Native was dropped deliberately — it made Arabic text, clipboard

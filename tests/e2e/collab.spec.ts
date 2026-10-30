@@ -780,3 +780,83 @@ test.describe('who is on the board', () => {
     await contextC.close();
   });
 });
+
+/** What a page sends to the room, as it sends it: presence, and changes to the board. */
+function wire(page: Page) {
+  const sent: Array<string | Buffer> = [];
+  page.on('websocket', (socket) => {
+    socket.on('framesent', (frame) => sent.push(frame.payload));
+  });
+  return {
+    mark: () => sent.length,
+    presenceSince: (mark: number) =>
+      sent.slice(mark).filter((each) => typeof each === 'string' && each.includes('"presence"'))
+        .length,
+    changesSince: (mark: number) =>
+      sent.slice(mark).filter((each) => typeof each !== 'string').length,
+  };
+}
+
+/** A slow drag of whatever is at `from`, the way a hand moves: about a second long. */
+async function slowDrag(page: Page, from: [number, number], by: [number, number]) {
+  await page.keyboard.press('KeyV');
+  await page.mouse.move(from[0], from[1]);
+  await page.mouse.down();
+  for (let step = 1; step <= 25; step += 1) {
+    await page.mouse.move(from[0] + (by[0] * step) / 25, from[1] + (by[1] * step) / 25);
+    await page.waitForTimeout(40);
+  }
+  await page.mouse.up();
+}
+
+test.describe('what goes to the room', () => {
+  // Every message is a request the account is billed for, and every change rows the
+  // room stores: alone on a board, nobody needs either live.
+  test('alone, a page sends no presence, and a drag goes as a few messages', async ({ page }) => {
+    const sent = wire(page);
+    await signIn(page, newAccount('alone'));
+    await createBoard(page);
+    await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    await drawRect(page, [300, 300], [420, 390]);
+    await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
+
+    const moving = sent.mark();
+    for (let step = 0; step < 20; step += 1) {
+      await page.mouse.move(500 + step * 10, 200 + step * 5);
+      await page.waitForTimeout(50);
+    }
+    expect(sent.presenceSince(moving)).toBe(0);
+
+    const dragging = sent.mark();
+    const x = await page.getByTestId('geo-x').innerText();
+    await slowDrag(page, [360, 345], [200, 100]);
+    await expect(page.getByTestId('geo-x')).not.toHaveText(x);
+    await page.waitForTimeout(800);
+    // About a second of dragging: a handful of messages, not one every few frames.
+    expect(sent.changesSince(dragging)).toBeGreaterThan(0);
+    expect(sent.changesSince(dragging)).toBeLessThanOrEqual(6);
+  });
+
+  test('with someone else there, presence and a drag go live', async ({ browser }) => {
+    const { a, b, close } = await twoWindows(browser, 'company');
+    const sent = wire(a);
+    // The listener sees sockets opened after it: open the board again.
+    await a.reload();
+    await expect(a.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    await expect(a.getByTestId('peer-avatar').first()).toBeVisible();
+    await drawRect(a, [300, 300], [420, 390]);
+    await expect(b.getByTestId('layers').locator('li')).toHaveCount(1);
+
+    const moving = sent.mark();
+    for (let step = 0; step < 20; step += 1) {
+      await a.mouse.move(500 + step * 10, 200 + step * 5);
+      await a.waitForTimeout(50);
+    }
+    expect(sent.presenceSince(moving)).toBeGreaterThan(5);
+
+    const dragging = sent.mark();
+    await slowDrag(a, [360, 345], [200, 100]);
+    expect(sent.changesSince(dragging)).toBeGreaterThan(10);
+    await close();
+  });
+});

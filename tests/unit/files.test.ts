@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { fileIdsInUpdate, fileUrl, isFileId } from '@shared/files';
+import { fileIdsInUpdate, fileListChanges, fileUrl, isFileId } from '@shared/files';
 import { createBoard, deleteElements, insertElements } from '@/doc/board';
 import { createElement, type BoardElement } from '@/model/element';
 
@@ -63,5 +63,21 @@ describe('file ids', () => {
     expect(isFileId(HASH_B.slice(1))).toBe(false);
     expect(isFileId(`${HASH_B.slice(1)}/`)).toBe(false);
     expect(isFileId(undefined)).toBe(false);
+  });
+});
+
+describe('what changes in a board’s list of files', () => {
+  it('is nothing when the board uses the same files', () => {
+    expect(fileListChanges([HASH_A, HASH_B], [HASH_B, HASH_A])).toEqual({ add: [], remove: [] });
+  });
+
+  it('adds what is new and takes off what is gone, and nothing else', () => {
+    const third = 'c'.repeat(64);
+    expect(fileListChanges([HASH_A, HASH_B], [HASH_B, third])).toEqual({
+      add: [third],
+      remove: [HASH_A],
+    });
+    expect(fileListChanges([], [HASH_A, HASH_A])).toEqual({ add: [HASH_A], remove: [] });
+    expect(fileListChanges([HASH_A], [])).toEqual({ add: [], remove: [HASH_A] });
   });
 });

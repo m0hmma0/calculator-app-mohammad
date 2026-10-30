@@ -15,6 +15,7 @@ import { isOnlyAnswers } from '@shared/answers';
 import { fileIdsInDoc, searchTextInDoc } from '@shared/files';
 import { atLeast, boardAccess, type Role, type Viewer } from './access';
 import { AuthError, verifyIdToken } from './auth';
+import { boardFilesUpdate } from './db';
 import type { Env } from './env';
 
 /** What survives hibernation for each socket. Kept small: the limit is 2 KB. */
@@ -232,7 +233,8 @@ export class BoardRoom extends DurableObject<Env> {
     this.putBlob(BLOB_UPDATE, seq, effective);
     this.sinceSnapshot += 1;
     if (this.sinceSnapshot >= SNAPSHOT_EVERY) this.takeSnapshot(null);
-    this.setMeta('dirty', '1');
+    // Read before written: a drag sends dozens of changes, and each write is billed.
+    if (!this.meta('dirty')) this.setMeta('dirty', '1');
     void this.scheduleAlarm(Date.now() + PERSIST_DELAY_MS);
     return effective;
   }
@@ -293,17 +295,11 @@ export class BoardRoom extends DurableObject<Env> {
     const key = `boards/${boardId}/snapshot.bin`;
     await this.env.FILES.put(key, Y.encodeStateAsUpdate(this.doc));
 
-    const fileIds = fileIdsInDoc(this.doc);
     await this.env.DB.batch([
       this.env.DB.prepare(
         'UPDATE boards SET snapshot_key = ?1, search_text = ?2, updated_at = ?3 WHERE id = ?4',
       ).bind(key, searchTextInDoc(this.doc), Date.now(), boardId),
-      this.env.DB.prepare('DELETE FROM board_files WHERE board_id = ?1').bind(boardId),
-      ...fileIds.map((fileId) =>
-        this.env.DB.prepare(
-          'INSERT OR IGNORE INTO board_files (board_id, hash) VALUES (?1, ?2)',
-        ).bind(boardId, fileId),
-      ),
+      ...(await boardFilesUpdate(this.env, boardId, fileIdsInDoc(this.doc))),
     ]);
   }
 

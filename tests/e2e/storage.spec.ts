@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import * as Y from 'yjs';
@@ -546,3 +547,68 @@ async function pasteLink(page: Page, url: string, at: [number, number]) {
     window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }));
   }, url);
 }
+
+/**
+ * The test backend's database, read directly. What a save writes cannot be seen from
+ * the app — the records come out the same either way — and it is what the account is
+ * billed for, so this one test looks underneath.
+ */
+function localRows<T>(sql: string): T[] {
+  const out = execFileSync(
+    'npx',
+    ['wrangler', 'd1', 'execute', 'sabboura', '--local', '--json', '--command', sql],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  return (JSON.parse(out) as Array<{ results: T[] }>)[0]!.results;
+}
+
+test.describe('what a save writes', () => {
+  test('an edit that leaves the pictures alone leaves their records alone', async ({ page }) => {
+    test.slow();
+    await signIn(page, newAccount('records'));
+    const records = (boardId: string) =>
+      localRows<{ rowid: number; hash: string }>(
+        `SELECT rowid, hash FROM board_files WHERE board_id = '${boardId}' ORDER BY hash`,
+      );
+    const poll = { timeout: 30_000, intervals: [1000] };
+
+    const boardId = await createBoard(page);
+    const fileId = await pasteImage(page, { width: 300, height: 200, seed: 11 });
+    await waitForUploads(page);
+    await expect.poll(() => records(boardId).map((row) => row.hash), poll).toEqual([fileId]);
+
+    // Another board's picture recorded after it, so a rewrite of this board's record
+    // could not land back on the same row by chance.
+    await page.getByTestId('back-to-boards').click();
+    const other = await createBoard(page);
+    const otherFile = await pasteImage(page, { width: 300, height: 200, seed: 12 });
+    await waitForUploads(page);
+    await expect.poll(() => records(other).map((row) => row.hash), poll).toEqual([otherFile]);
+
+    await page.goto(`/b/${boardId}`);
+    await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    const before = records(boardId);
+
+    // Words, not a picture: the room saves them, and the picture's record stays as it was.
+    await page.keyboard.press('KeyT');
+    await page.mouse.click(200, 160);
+    await page.keyboard.type('zebra crossing');
+    await page.keyboard.press('Escape');
+    await expect
+      .poll(
+        () =>
+          localRows<{ search_text: string }>(
+            `SELECT search_text FROM boards WHERE id = '${boardId}'`,
+          )[0]?.search_text ?? '',
+        poll,
+      )
+      .toContain('zebra crossing');
+    expect(records(boardId)).toEqual(before);
+
+    // The picture taken off the board: its record goes.
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    await page.keyboard.press('Delete');
+    await expect(layers(page)).toHaveCount(0);
+    await expect.poll(() => records(boardId).length, poll).toBe(0);
+  });
+});

@@ -61,6 +61,22 @@ export const isFileId = (value: unknown): value is string =>
 export const fileUrl = (fileId: string): string => `${FILE_ROUTE}${fileId}`;
 
 /**
+ * What to change to turn the list of files a board is recorded as using into the list
+ * it uses now: the files to add and the ones to take off. Nothing, when nothing changed.
+ */
+export function fileListChanges(
+  recorded: Iterable<string>,
+  wanted: Iterable<string>,
+): { add: string[]; remove: string[] } {
+  const before = new Set(recorded);
+  const after = new Set(wanted);
+  return {
+    add: [...after].filter((fileId) => !before.has(fileId)),
+    remove: [...before].filter((fileId) => !after.has(fileId)),
+  };
+}
+
+/**
  * Which stored files — images, videos, sounds — a board uses, read from its own Yjs
  * document. The Worker reads this from the document itself rather than trusting a
  * list from the browser, so the record of what is in use cannot drift from what is

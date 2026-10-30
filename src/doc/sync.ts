@@ -9,7 +9,12 @@ import type { BoardElement, EmbedData, ImageRef } from '@/model/element';
 import { REMOTE_ORIGIN, SYSTEM_ORIGIN, type BoardDoc } from './board';
 import { patchYElement } from './schema';
 
-const THUMBNAIL_DELAY_MS = 2500;
+/**
+ * The dashboard's picture of a board is drawn after this long without a change, and
+ * when the board is left or its tab hidden — not after every pause in editing: each
+ * upload is a request, a stored object and a database write.
+ */
+const THUMBNAIL_DELAY_MS = 15_000;
 const THUMBNAIL_WIDTH = 480;
 
 /**
@@ -152,6 +157,15 @@ export async function startBoardSync(
   };
   doc.doc.on('update', onUpdate);
 
+  // A tab switched away from or closed: the picture is due now, while the page can
+  // still send it.
+  const onHidden = () => {
+    if (document.visibilityState !== 'hidden' || thumbnailTimer === null) return;
+    clearTimeout(thumbnailTimer);
+    void writeThumbnail();
+  };
+  document.addEventListener('visibilitychange', onHidden);
+
   // Housekeeping on the board's images waits until this browser has the whole board:
   // its local copy (which may hold uploads an earlier visit did not finish) and the
   // room's (which, on a device that never opened it, is all of it). Neither should
@@ -188,6 +202,7 @@ export async function startBoardSync(
       stopped = true;
       if (thumbnailTimer !== null) clearTimeout(thumbnailTimer);
       doc.doc.off('update', onUpdate);
+      document.removeEventListener('visibilitychange', onHidden);
       room.stop();
     },
   };

@@ -43,6 +43,21 @@ const replace = <T extends { id: string }>(list: T[], next: T): T[] =>
     ? list.map((item) => (item.id === next.id ? next : item))
     : [...list, next];
 
+/**
+ * Thumbnails this tab has saved, by board. Leaving a board uploads its picture while
+ * the dashboard is already asking for the list of boards; a list read before the upload
+ * landed must not take the new picture away, nor a cached older one stand in for it.
+ */
+const savedThumbnails = new Map<string, { url: string; at: number }>();
+
+const withSavedThumbnails = (boards: BoardRecord[]): BoardRecord[] =>
+  boards.map((board) => {
+    const saved = savedThumbnails.get(board.id);
+    return saved
+      ? { ...board, thumbnailUrl: saved.url, updatedAt: Math.max(board.updatedAt, saved.at) }
+      : board;
+  });
+
 export const useWorkspace = create<WorkspaceState>((set, get) => {
   /** Reloads from the server; every mutation ends here so the view cannot drift. */
   const refresh = async () => {
@@ -52,7 +67,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       error: null,
       account: data.account,
       folders: data.folders,
-      boards: data.boards,
+      boards: withSavedThumbnails(data.boards),
     });
   };
 
@@ -169,20 +184,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         await refresh();
       }),
 
-    markBoardSaved: (id) =>
-      set((current) => ({
-        boards: current.boards.map((board) =>
-          board.id === id
-            ? {
-                ...board,
-                updatedAt: Date.now(),
-                // The thumbnail is written alongside the snapshot, so the endpoint
-                // has something to serve from the moment the save lands.
-                thumbnailUrl: `/api/boards/${id}/thumbnail?v=${Date.now()}`,
-              }
-            : board,
-        ),
-      })),
+    markBoardSaved: (id) => {
+      // The thumbnail has landed, so the endpoint has something to serve; the version
+      // keeps the browser from showing the one it fetched before.
+      const at = Date.now();
+      savedThumbnails.set(id, { url: `/api/boards/${id}/thumbnail?v=${at}`, at });
+      set((current) => ({ boards: withSavedThumbnails(current.boards) }));
+    },
 
     trashBoard: (id) =>
       guard(async () => {

@@ -1,4 +1,5 @@
 import type { BoardRecord, FolderRecord } from '@shared/api';
+import { fileListChanges } from '@shared/files';
 import type { Account } from './auth';
 import type { Env } from './env';
 
@@ -60,6 +61,40 @@ export const BOARD_COLUMNS = `boards.*, (
   WHERE board_files.board_id = boards.id
 ) AS storage_bytes`;
 
+/**
+ * The statements that bring a board's recorded files in line with the ones it uses:
+ * only what differs. Rewriting the whole list on every save cost two rows written per
+ * picture, every two seconds of editing — nearly all of the account's daily D1
+ * allowance on a board with a few dozen pictures.
+ */
+export async function boardFilesUpdate(
+  env: Env,
+  boardId: string,
+  fileIds: Iterable<string>,
+): Promise<D1PreparedStatement[]> {
+  const { results } = await env.DB.prepare('SELECT hash FROM board_files WHERE board_id = ?1')
+    .bind(boardId)
+    .all<{ hash: string }>();
+  const { add, remove } = fileListChanges(
+    results.map((row) => row.hash),
+    fileIds,
+  );
+  return [
+    ...remove.map((hash) =>
+      env.DB.prepare('DELETE FROM board_files WHERE board_id = ?1 AND hash = ?2').bind(
+        boardId,
+        hash,
+      ),
+    ),
+    ...add.map((hash) =>
+      env.DB.prepare('INSERT OR IGNORE INTO board_files (board_id, hash) VALUES (?1, ?2)').bind(
+        boardId,
+        hash,
+      ),
+    ),
+  ];
+}
+
 export async function upsertUser(env: Env, account: Account, now: number): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO users (id, email, name, picture, created_at, last_seen_at)
@@ -68,7 +103,13 @@ export async function upsertUser(env: Env, account: Account, now: number): Promi
        email = excluded.email,
        name = excluded.name,
        picture = excluded.picture,
-       last_seen_at = excluded.last_seen_at`,
+       last_seen_at = excluded.last_seen_at
+     -- Called on every change a person sends; written only when something is new, or
+     -- an hour after it was last noted that they were here.
+     WHERE users.email IS NOT excluded.email
+        OR users.name IS NOT excluded.name
+        OR users.picture IS NOT excluded.picture
+        OR users.last_seen_at < excluded.last_seen_at - 3600000`,
   )
     .bind(account.uid, account.email, account.name, account.picture, now)
     .run();

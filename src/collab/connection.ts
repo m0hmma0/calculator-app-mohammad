@@ -33,8 +33,13 @@ export interface RoomEvents {
   synced: () => void;
 }
 
-/** Local edits are gathered for this long and sent as one update. */
-const BATCH_MS = 30;
+/**
+ * Local edits are gathered for this long and sent as one update: briefly while someone
+ * else is on the board, so they see a drag as it happens; longer when nobody is, since
+ * every message is a request the room is billed for and every change a row it stores.
+ */
+const BATCH_MS = 40;
+const BATCH_ALONE_MS = 400;
 /**
  * How often the room is asked "still there?", and how long an answer may take. A
  * socket whose network has quietly gone — wifi off with no "offline" event from the
@@ -78,6 +83,8 @@ export class RoomConnection {
   private settled: Array<() => void> = [];
   private assembler = new FrameAssembler();
   private chunkId = 0;
+  /** Everyone else connected to the room, by session, as the room last said. */
+  private others = new Set<string>();
 
   constructor(
     private readonly doc: BoardDoc,
@@ -91,6 +98,7 @@ export class RoomConnection {
     window.addEventListener('offline', this.onOffline);
     window.addEventListener('focus', this.onReturn);
     document.addEventListener('visibilitychange', this.onReturn);
+    window.addEventListener('pagehide', this.onLeave);
     this.connect();
   }
 
@@ -101,6 +109,7 @@ export class RoomConnection {
     window.removeEventListener('offline', this.onOffline);
     window.removeEventListener('focus', this.onReturn);
     document.removeEventListener('visibilitychange', this.onReturn);
+    window.removeEventListener('pagehide', this.onLeave);
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.batchTimer) clearTimeout(this.batchTimer);
     this.stopPing();
@@ -113,7 +122,18 @@ export class RoomConnection {
     if (this.ready && this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message));
   }
 
+  /** Whether anyone else is connected to the room. */
+  get alone(): boolean {
+    return this.others.size === 0;
+  }
+
+  /**
+   * Where this person is and what they are doing — only while someone else is here to
+   * see it. Each one is a request to the room; the page sends presence afresh when
+   * someone joins.
+   */
   sendPresence(state: PresenceState): void {
+    if (this.alone) return;
     this.send({ t: 'presence', state });
   }
 
@@ -187,9 +207,16 @@ export class RoomConnection {
         this.everConnected = true;
         this.attempts = 0;
         this.unacked = 0;
+        this.others = new Set(message.peers.map((peer) => peer.session));
         this.startPing();
         // Ask for what the room has that this browser does not.
         this.sendBinary(frame(FRAME.SYNC_STEP1, Y.encodeStateVector(this.doc.doc)));
+      } else if (message.t === 'join') {
+        this.others.add(message.session);
+        // Someone new watches from now on: what was gathered goes now.
+        this.sendBatch();
+      } else if (message.t === 'leave') {
+        this.others.delete(message.session);
       } else if (message.t === 'ack') {
         this.unacked = Math.max(0, this.unacked - 1);
         if (this.unacked === 0) this.resolveSettled();
@@ -309,7 +336,11 @@ export class RoomConnection {
   /** Coming back to the tab — or the laptop waking — is when a stale socket shows. */
   private readonly onReturn = () => {
     if (document.visibilityState === 'visible') this.probe();
+    // Hidden, perhaps to be closed: what is gathered goes now, not with the batch.
+    else this.sendBatch();
   };
+
+  private readonly onLeave = () => this.sendBatch();
 
   /**
    * The browser knows before the socket does. Closing now means the status says so
@@ -335,7 +366,7 @@ export class RoomConnection {
     // While disconnected nothing is queued: the next sync exchange carries it all.
     if (!this.ready) return;
     this.batch.push(update);
-    this.batchTimer ??= setTimeout(() => this.sendBatch(), BATCH_MS);
+    this.batchTimer ??= setTimeout(() => this.sendBatch(), this.alone ? BATCH_ALONE_MS : BATCH_MS);
   };
 
   private sendBatch(): void {

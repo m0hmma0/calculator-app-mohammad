@@ -2,7 +2,7 @@ import type { CreateBoardBody, SnapshotMeta, UpdateBoardBody } from '@shared/api
 import type { Account } from '../auth';
 import { fileIdsInUpdate } from '@shared/files';
 import { atLeast, boardAccess } from '../access';
-import { BOARD_COLUMNS, getBoard, getFolder, toBoard } from '../db';
+import { BOARD_COLUMNS, boardFilesUpdate, getBoard, getFolder, toBoard } from '../db';
 import type { Env } from '../env';
 import { cleanName, fail, json, newId } from '../http';
 import { tellRooms, viewerOf } from './sharing';
@@ -152,7 +152,12 @@ export async function putThumbnail(
   }
   const key = thumbnailKey(id);
   await env.FILES.put(key, bytes, { httpMetadata: { contentType: 'image/png' } });
-  await env.DB.prepare('UPDATE boards SET thumbnail_key = ?1 WHERE id = ?2').bind(key, id).run();
+  // The key is the same every time; only a board's first thumbnail changes the row.
+  await env.DB.prepare(
+    'UPDATE boards SET thumbnail_key = ?1 WHERE id = ?2 AND thumbnail_key IS NOT ?1',
+  )
+    .bind(key, id)
+    .run();
   return json({ ok: true });
 }
 
@@ -232,13 +237,7 @@ export async function putSnapshot(request: Request, env: Env, account: Account, 
       id,
       account.uid,
     ),
-    env.DB.prepare('DELETE FROM board_files WHERE board_id = ?1').bind(id),
-    ...fileIds.map((fileId) =>
-      env.DB.prepare('INSERT OR IGNORE INTO board_files (board_id, hash) VALUES (?1, ?2)').bind(
-        id,
-        fileId,
-      ),
-    ),
+    ...(await boardFilesUpdate(env, id, fileIds)),
   ]);
 
   return json({ ok: true });

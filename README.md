@@ -211,6 +211,12 @@ board does anything.
 
 `/` opens cursor chat; clicking someone's avatar follows their view.
 
+Each message to a room is a request Cloudflare counts, and each stored change rows it
+writes, so a page sends presence only while someone else is on the board, and gathers
+its changes for 400 ms when nobody is there to watch them live (40 ms when someone is).
+Saves rewrite only the records that changed, and a board's thumbnail is uploaded after
+15 seconds without a change, or when the board is left or its tab hidden.
+
 ## Sharing
 
 A board or folder is private until its owner shares it. The share dialog offers a link —
