@@ -3,7 +3,12 @@ import { screenToBoard } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import { keyLabel, shortcutLabel } from '@/input/shortcuts';
 import { pasteFromClipboard } from '@/input/useClipboard';
-import { selectCanComment, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import {
+  selectCanComment,
+  selectCanEdit,
+  selectIsOwner,
+  useBoardAccess,
+} from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
 import { useSettings } from '@/settings/settings';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
@@ -30,6 +35,7 @@ export function ContextMenu() {
   const renderVersion = useBoardStore((state) => state.renderVersion);
   const paneOpen = useUiPrefs((state) => state.pane);
   const editable = useBoardAccess(selectCanEdit);
+  const owner = useBoardAccess(selectIsOwner);
   const canComment = useBoardAccess(selectCanComment);
   // Comments live on a board with a room; the signed-out board has none.
   const onBoard = usePresence((state) => state.status !== null);
@@ -122,17 +128,23 @@ export function ContextMenu() {
           disabled: !hasSelection,
           run: () => store().deleteSelection(),
         },
-        {
-          id: 'lock',
-          label: 'Lock',
-          hint: key('lock'),
-          separated: true,
-          disabled: !chosen.some((element) => !element.locked),
-          run: () => store().setSelectionLocked(true),
-        },
+        // Only the owner locks — for everyone else; anyone who edits may unlock.
+        ...(owner
+          ? [
+              {
+                id: 'lock',
+                label: 'Lock',
+                hint: key('lock'),
+                separated: true,
+                disabled: !chosen.some((element) => !element.locked),
+                run: () => store().setSelectionLocked(true),
+              },
+            ]
+          : []),
         {
           id: 'unlock',
           label: 'Unlock',
+          separated: !owner,
           disabled: !chosen.some((element) => element.locked),
           run: () => store().setSelectionLocked(false),
         },

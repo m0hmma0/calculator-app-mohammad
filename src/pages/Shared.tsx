@@ -8,7 +8,12 @@ import { Thumbnail } from './Dashboard';
 import { SignIn } from './SignIn';
 import styles from './Shared.module.css';
 
-const INVITE_VERB = { viewer: 'view', commenter: 'comment on', editor: 'edit' } as const;
+const INVITE_VERB = {
+  viewer: 'view',
+  commenter: 'comment on',
+  answer: 'answer on',
+  editor: 'edit',
+} as const;
 
 function Message({ title, body, testId }: { title: string; body: string; testId: string }) {
   const signedIn = useWorkspace((state) => state.account !== null);

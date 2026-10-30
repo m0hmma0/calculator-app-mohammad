@@ -3,7 +3,7 @@ import type { Env } from './env';
 
 export type { Role };
 
-const RANK: Record<Role, number> = { viewer: 1, commenter: 2, editor: 3, owner: 4 };
+const RANK: Record<Role, number> = { viewer: 1, commenter: 2, answer: 3, editor: 4, owner: 5 };
 
 export const atLeast = (role: Role | null, wanted: Role): boolean =>
   role !== null && RANK[role] >= RANK[wanted];

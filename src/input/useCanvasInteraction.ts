@@ -21,10 +21,10 @@ import { elementAABB, rotateAround } from '@/model/bounds';
 import {
   canHoldLabel,
   createElement,
-  isInteractive,
   MIN_SIZE,
   type BoardElement,
   type ElementId,
+  isPlaceholder,
 } from '@/model/element';
 import { frameCentre, handlePoint, selectionFrame, type SelectionFrame } from '@/model/handles';
 import { elementAt, elementsInMarquee, hitTestElement } from '@/model/hitTest';
@@ -55,7 +55,7 @@ import {
 } from '@/ink/stroke';
 import { HIGHLIGHTER_STYLE, STICKY_SIZE, shouldLockAspect } from '@/model/element';
 import { effectiveTool, isShapeTool, useBoardStore } from '@/state/boardStore';
-import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
+import { canTypeInto, lockedForMe, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { linkAt } from '@/text/links';
 import { openLink } from '@/text/marks';
 
@@ -76,6 +76,8 @@ type Drag =
       origin: Point;
       start: Map<ElementId, Point>;
       moved: boolean;
+      /** A placeholder pressed: if the press does not move, it was a click into it. */
+      typeInto?: ElementId;
     }
   | {
       kind: 'resize';
@@ -146,7 +148,8 @@ function transformTargets(): BoardElement[] {
 
   return elements.filter(
     (element) =>
-      isInteractive(element) &&
+      !element.hidden &&
+      !lockedForMe(element) &&
       element.type !== 'group' &&
       (ids.has(element.id) ||
         captured.has(element.id) ||
@@ -321,14 +324,19 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const erasable = store.elements.filter((element) => element.type !== 'image');
 
       if (store.eraserMode === 'object') {
-        const target = elementAt(erasable, point, radius);
+        const target = elementAt(
+          erasable.filter((element) => !lockedForMe(element)),
+          point,
+          radius,
+          { includeLocked: true },
+        );
         if (target) store.removeElements([target.parentId ?? target.id]);
         return;
       }
 
       // Stroke mode cuts ink where the eraser passes and keeps what survives.
       for (const element of erasable) {
-        if (element.locked || element.hidden) continue;
+        if (lockedForMe(element) || element.hidden) continue;
 
         if (element.type !== 'path') {
           if (hitTestElement(element, point, radius)) store.removeElements([element.id]);
@@ -388,6 +396,23 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
           event.preventDefault();
           openLink(link);
           return;
+        }
+      }
+
+      // A placeholder takes one click to type into, whatever the tool held. With the
+      // select tool a drag still moves it; anything else, the press is the click.
+      if (event.button === 0) {
+        const point = board(event);
+        const under = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
+          includeLocked: true,
+        });
+        if (under && isPlaceholder(under) && canTypeInto()) {
+          const editor = selectCanEdit(useBoardAccess.getState());
+          if (!(editor && tool === 'select' && !lockedForMe(under))) {
+            event.preventDefault();
+            store.beginEditing(under.id);
+            return;
+          }
         }
       }
 
@@ -459,7 +484,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const zoom = store.viewport.zoom;
       const selected = store.elements.filter((element) => store.selection.includes(element.id));
       const frame = selectionFrame(selected);
-      const anyLocked = selected.some((element) => element.locked);
+      const anyLocked = selected.some(lockedForMe);
 
       // 1. Transform handles win over everything beneath them.
       if (frame && !anyLocked) {
@@ -496,8 +521,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         }
       }
 
-      // 2. Then whatever element is under the pointer.
-      const target = elementAt(store.elements, point, PICK_SLOP / zoom);
+      // 2. Then whatever element is under the pointer — locked ones too: selected, they
+      // can be unlocked; they just do not move.
+      const target = elementAt(store.elements, point, PICK_SLOP / zoom, { includeLocked: true });
       const targetId = target?.parentId ?? target?.id ?? null;
 
       // A link in the words: Ctrl/⌘-click follows it, as in a word processor (a plain
@@ -521,6 +547,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         // Alt-drag leaves the original behind and moves a copy.
         if (event.altKey) useBoardStore.getState().duplicateSelection(0);
         beginMove(event);
+        if (drag.kind === 'move' && target && isPlaceholder(target) && !event.altKey) {
+          drag.typeInto = target.id;
+        }
         return;
       }
 
@@ -558,6 +587,15 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       // A link's address shows on hover only while selecting (or, for a viewer, panning).
       if (tool !== 'select' && tool !== 'hand' && host.title) host.title = '';
 
+      // Over a placeholder, the pointer says "type here", whatever the tool.
+      if (lastClient && canTypeInto()) {
+        const point = board(lastClient);
+        const under = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
+          includeLocked: true,
+        });
+        if (under && isPlaceholder(under)) return setCursor('text');
+      }
+
       if (tool === 'hand') {
         // A viewer's links show as links under the hand.
         if (lastClient && !selectCanEdit(useBoardAccess.getState())) {
@@ -586,7 +624,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const selected = store.elements.filter((element) => store.selection.includes(element.id));
       const frame = selectionFrame(selected);
 
-      if (frame && !selected.some((element) => element.locked)) {
+      if (frame && !selected.some(lockedForMe)) {
         const hit = hitHandle(frame, point, zoom);
         if (hit?.rotate) return setCursor('rotate');
         if (hit) return setCursor(cursorForHandle(hit.handle, frame.rotation));
@@ -600,7 +638,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (host.title !== hint) host.title = hint;
       if (link) return setCursor('pointer');
       if (!target) return setCursor('default');
-      if (target.locked) return setCursor('not-allowed');
+      if (lockedForMe(target)) return setCursor('not-allowed');
       return setCursor('move');
     };
 
@@ -913,6 +951,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       if (drag.kind === 'pan') store.setPanning(false);
       if (drag.kind === 'move') store.setSnapFeedback([], []);
+      // A placeholder pressed and let go where it was: a click into it, to type.
+      if (drag.kind === 'move' && !drag.moved && drag.typeInto) store.beginEditing(drag.typeInto);
       if (drag.kind === 'rotate') store.setRotationReadout(null);
 
       // A whole gesture is one undo step; the next one starts fresh.
@@ -990,7 +1030,10 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
       const store = useBoardStore.getState();
       const point = board(event);
-      const target = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom);
+      const found = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
+        includeLocked: true,
+      });
+      const target = found && !lockedForMe(found) ? found : null;
       if (!target) return;
       if (
         target.type === 'text' ||

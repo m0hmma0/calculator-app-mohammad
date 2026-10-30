@@ -26,7 +26,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **11** | One control pane, and who sees what          | built       |
 | **12** | Settings and shortcuts                       | built       |
 | **13** | Presenting, frames, celebrations and media   | built       |
-| 14     | Classroom: placeholders, Answer role, locks  | not started |
+| **14** | Classroom: placeholders, Answer role, locks  | built       |
 | 15     | Undo across people and sessions              | not started |
 | 16     | Dashboard organisation                       | not started |
 | 17     | Accessibility, Arabic and RTL, polish        | not started |
@@ -149,6 +149,28 @@ signed-out board they stay in this browser's IndexedDB. Links to media files, to
 SoundCloud and Spotify, and to YouTube play in place; a link whose name does not say
 what it is becomes a player when the server finds a video or sound behind it.
 
+## Placeholders, the Answer role and locks
+
+A placeholder is a text box with a hint (`element.placeholder`; Insert → Placeholder, or
+the side panel's "Placeholder" switch on any text box). Its hint is drawn faint and
+italic while it is empty and comes back when it is emptied, and the box survives being
+emptied. One click types into it whatever tool is held — with the select tool, a drag
+still moves it.
+
+**Can answer** is a role between commenter and editor, for links and for people. Such a
+person has the hand and the laser, may comment, and may type in placeholders and do
+nothing else. The room enforces it: every change they send is read without being
+applied (`shared/answers.ts`, `isOnlyAnswers`) and refused unless each new piece lands
+in a placeholder's words — text and formatting — or is the box's new height, and each
+deletion removes something from a placeholder's words. A placeholder turned back into a
+plain box stops taking answers at once. Migration 0006 rebuilds `shares` to allow the
+role.
+
+Locks bind everyone but the board's owner. Only the owner locks; anyone who may edit
+can unlock, on purpose — a locked item still selects (by a click or a drag box, which
+takes in locked items with the rest) and shows a padlock, but cannot be moved, resized,
+nudged, erased or deleted until it is unlocked. Several locked items unlock together.
+
 ## The document
 
 Board content lives in a [Yjs](https://yjs.dev) document rather than in component
@@ -192,8 +214,8 @@ board does anything.
 ## Sharing
 
 A board or folder is private until its owner shares it. The share dialog offers a link —
-for anyone who has it, anyone signed in, or anyone at one email domain; to view, comment
-or edit; optionally expiring — and named Google accounts by email. Sharing a folder
+for anyone who has it, anyone signed in, or anyone at one email domain; to view, comment,
+answer or edit; optionally expiring — and named Google accounts by email. Sharing a folder
 covers every board inside it, including ones added later, and a board can override what
 it inherits. One rule decides access everywhere (`worker/access.ts`), and the board's
 room enforces it: a viewer's edits are refused by the server, not just hidden in the

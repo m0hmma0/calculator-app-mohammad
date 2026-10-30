@@ -10,9 +10,10 @@ with something the user checks themselves against a written checklist.
 Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
 back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools and
 rich content)**, **Phase 10 (quick fixes and the text box)**, **Phase 11 (one
-control pane, and who sees what)**, **Phase 12 (settings and shortcuts)** and **Phase 13
-(presenting, frames, celebrations and media)** are built, tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0005 applied remotely) but not
+control pane, and who sees what)**, **Phase 12 (settings and shortcuts)**, **Phase 13
+(presenting, frames, celebrations and media)** and **Phase 14 (placeholders, the Answer
+role and locks)** are built, tested and deployed at
+<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0006 applied remotely) but not
 yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
@@ -20,7 +21,7 @@ The plan was renumbered after Phase 9: the user's list of requests became Phases
 presenting/frames/celebrations/media, 14 placeholders and the "Answer" role and owner
 locks, 15 undo across people and sessions, 16 dashboard organisation — and the
 original 10 (accessibility, Arabic and RTL) and 11 (hardening) are now **17** and
-**18**. The next phase is **14**. Parked by the user: student picture uploads,
+**18**. The next phase is **15**. Parked by the user: student picture uploads,
 read4more.com, "see the stroke before it ends", Chrome zoom.
 
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
@@ -53,6 +54,18 @@ screen. Celebrations carry `level` and `variant` (`src/fun/effects.ts`); several
 once. Media is an embed of kind `media` (a file: `fileId` when stored, `local-media:`
 on the signed-out board) or `player` (Vimeo, SoundCloud, Spotify); stored media counts
 in `fileIdsInDoc` like images, and `GET /api/files` answers range requests.
+
+Phase 14 in one paragraph: a placeholder is a text box with `element.placeholder` (a
+hint; `isPlaceholder`), drawn faint while empty and kept when emptied. One press types
+into it whatever the tool (`typeInto` on a select-tool drag, so a drag still moves it).
+The Answer role (`'answer'`, between commenter and editor) may type in placeholders
+only: the board stays read-only for them (`board.answers`), and their typing goes
+through `transactAnswer`. The room judges each update from them with `isOnlyAnswers`
+(`shared/answers.ts`), which decodes it without applying it and allows only text and
+formatting in a placeholder's `text` and a new `h`. Locks bind everyone but the owner
+(`lockedForMe`, `mayLock` in `src/sharing/boardAccess.ts`): only the owner locks, any
+editor unlocks, and locked items select (a drag box takes them in) but do not move,
+nudge, erase or delete. Migration 0006 rebuilds `shares` for the new role.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -236,6 +249,18 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - A new migration must be applied remotely **before** `npm run deploy`
   (`npx wrangler d1 migrations apply sabboura --remote`), or the new Worker queries
   tables that do not exist yet.
+
+- **A board opens fitted only until you change something.** The room's first sync can
+  arrive after the page has drawn; it used to refit the view then, under a drag in
+  progress. Any local change now cancels the pending fit (`attachDocument`).
+- **Locks do not stop the owner**, including on the signed-out board, where you are
+  the owner. A test of a lock blocking a move needs a second account.
+- **An Answer person's board is read-only** (`board.readOnly`); their typing is the
+  one exception, through `transactAnswer`. Anything new they should be able to change
+  needs a place in `isOnlyAnswers` too, or the room refuses it.
+- **Never `open(p, 'w')` in the same expression that reads `p`** in a Python edit
+  script: the file is emptied before it is read. It wiped a source file once; restore
+  with `git checkout --` and re-apply.
 
 ## Design decisions worth not relitigating
 

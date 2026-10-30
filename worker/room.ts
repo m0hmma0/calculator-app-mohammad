@@ -11,6 +11,7 @@ import {
   type PeerIdentity,
   type ServerMessage,
 } from '@shared/collab';
+import { isOnlyAnswers } from '@shared/answers';
 import { fileIdsInDoc, searchTextInDoc } from '@shared/files';
 import { atLeast, boardAccess, type Role, type Viewer } from './access';
 import { AuthError, verifyIdToken } from './auth';
@@ -693,11 +694,16 @@ export class BoardRoom extends DurableObject<Env> {
       case FRAME.UPDATE: {
         // The gate. Hiding the toolbar from a viewer is a courtesy; this is the rule.
         // Their change is not applied, not stored and not passed on, and they are told.
-        if (!atLeast(role, 'editor')) {
+        // Someone who answers gets through only with words typed in placeholders.
+        const answering = role === 'answer' && isOnlyAnswers(this.doc, payload);
+        if (!atLeast(role, 'editor') && !answering) {
           this.sendJson(ws, {
             t: 'error',
             code: 'read-only',
-            message: 'You can view this board but not change it',
+            message:
+              role === 'answer'
+                ? 'You can answer in the placeholders, but not change anything else'
+                : 'You can view this board but not change it',
           });
           return;
         }

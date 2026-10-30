@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Transaction } from 'yjs';
 import type { MarkFormats } from '@/text/marks';
 import { textHeight } from '@/text/measure';
 import {
@@ -10,6 +11,8 @@ import {
   deleteElements,
   insertElements,
   replaceAll,
+  LOCAL_ORIGIN,
+  transactAnswer,
   transactLocal,
   type BoardDoc,
 } from '@/doc/board';
@@ -40,7 +43,7 @@ import {
   createElementId,
   FIRST_PAGE,
   pageOf,
-  isInteractive,
+  isPlaceholder,
   type BoardElement,
   type ElementId,
   type ElementStyle,
@@ -51,6 +54,7 @@ import { simplify, strokeBounds, toFlat, translatePoints, type InkPoint } from '
 import { scaleBoxInto } from '@/model/transform';
 import { keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/zorder';
 import { generateDemoElements } from '@/scene/demoElements';
+import { lockedForMe, mayLock } from '@/sharing/boardAccess';
 import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
@@ -340,14 +344,15 @@ export const useBoardStore = create<BoardState>((set, get) => {
       deletePage(board, id);
     },
 
+    // Someone who answers undoes their own typing: the only changes they have made.
     undo: () => {
       get().endEditing();
-      if (!board.readOnly) board.undoManager.undo();
+      if (!board.readOnly || board.answers) board.undoManager.undo();
     },
 
     redo: () => {
       get().endEditing();
-      if (!board.readOnly) board.undoManager.redo();
+      if (!board.readOnly || board.answers) board.undoManager.redo();
     },
 
     /**
@@ -463,7 +468,12 @@ export const useBoardStore = create<BoardState>((set, get) => {
     replaceElements: (elements) => replaceAll(board, elements),
 
     deleteSelection: () => {
-      const ids = new Set(get().selection);
+      // A locked thing is not deleted by accident: unlocked first, on purpose.
+      const ids = new Set(
+        selectedElements()
+          .filter((element) => !lockedForMe(element))
+          .map((element) => element.id),
+      );
       if (ids.size === 0) return;
       // Deleting a group takes its children with it.
       const doomed = get()
@@ -473,7 +483,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
         .map((element) => element.id);
 
       deleteElements(board, doomed);
-      bump({ selection: [] });
+      bump({ selection: get().selection.filter((id) => !ids.has(id)) });
     },
 
     duplicateSelection: (offset = 16) => {
@@ -497,7 +507,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     nudgeSelection: (dx, dy) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of selectedElements()) {
-        if (!isInteractive(element)) continue;
+        if (element.hidden || lockedForMe(element)) continue;
         patches.set(element.id, { x: element.x + dx, y: element.y + dy });
         for (const child of get().elements) {
           if (child.parentId === element.id) {
@@ -522,7 +532,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     selectAll: () =>
       bump({
         selection: get()
-          .elements.filter((element) => isInteractive(element) && !element.parentId)
+          .elements.filter((element) => !element.hidden && !element.parentId)
           .map((element) => element.id),
       }),
 
@@ -572,13 +582,16 @@ export const useBoardStore = create<BoardState>((set, get) => {
     toggleLockSelection: () => {
       const chosen = selectedElements();
       if (chosen.length === 0) return;
-      const locking = chosen.some((element) => !element.locked);
+      // Only the owner locks; anyone who edits may unlock, on purpose.
+      const locking = mayLock() && chosen.some((element) => !element.locked);
+      if (!locking && !chosen.some((element) => element.locked)) return;
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of chosen) patches.set(element.id, { locked: locking });
       get().applyDiscrete(patches);
     },
 
     setSelectionLocked: (locked) => {
+      if (locked && !mayLock()) return;
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of selectedElements()) {
         if (element.locked !== locked) patches.set(element.id, { locked });
@@ -799,16 +812,24 @@ export const useBoardStore = create<BoardState>((set, get) => {
     },
 
     beginEditing: (id) => {
-      if (board.readOnly) return;
+      if (board.readOnly) {
+        // Someone who answers types in placeholders, and nowhere else.
+        const element = get().elements.find((candidate) => candidate.id === id);
+        if (!board.answers || !element || !isPlaceholder(element)) return;
+        bump({ editingId: id, selection: [] });
+        return;
+      }
       bump({ editingId: id, selection: [id] });
     },
 
     endEditing: () => {
       const { editingId, elements } = get();
       if (!editingId) return;
-      // An empty text box left behind by an accidental click is just litter.
+      // An empty text box left behind by an accidental click is just litter — but an
+      // empty placeholder is waiting for its answer, and shows its hint again.
       const element = elements.find((candidate) => candidate.id === editingId);
-      const empty = element?.type === 'text' && (element.text ?? '').trim() === '';
+      const empty =
+        element?.type === 'text' && !isPlaceholder(element) && (element.text ?? '').trim() === '';
       board.undoManager.stopCapturing();
       // Removed from the document, not just this view, or everyone else keeps it.
       if (empty) deleteElements(board, [editingId]);
@@ -820,17 +841,23 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const element = get().elements.find((candidate) => candidate.id === id);
       // A text box grows to hold what is typed, so nothing spills out of reach of a click.
       const needed = element?.type === 'text' ? textHeight(element, text) : null;
-      patches.set(
-        id,
-        needed !== null && element && needed > element.h ? { text, h: needed } : { text },
-      );
+      const patch =
+        needed !== null && element && needed > element.h ? { text, h: needed } : { text };
+      if (board.readOnly) {
+        // An answer: its words and the box's height, through the one narrow door.
+        const map = board.elements.get(id);
+        if (map) transactAnswer(board, id, () => patchYElement(map, patch));
+        board.undoManager.stopCapturing();
+        return;
+      }
+      patches.set(id, patch);
       get().applyDiscrete(patches);
     },
 
     formatText: (id, from, to, formats) => {
       const map = board.elements.get(id);
       if (!map) return;
-      transactLocal(board, () => formatYText(map, from, to, formats));
+      transactAnswer(board, id, () => formatYText(map, from, to, formats));
     },
 
     formatSelectionText: (formats, style) => {
@@ -954,7 +981,8 @@ export function currentBoardId(): string | null {
  * Switches the open board between editable and read-only — when it opens, and again
  * if the owner changes this person's access while they are on it.
  */
-export function setBoardReadOnly(readOnly: boolean): void {
+export function setBoardReadOnly(readOnly: boolean, answers = false): void {
+  board.answers = readOnly && answers;
   if (board.readOnly === readOnly) return;
   board.readOnly = readOnly;
   const state = useBoardStore.getState();
@@ -987,6 +1015,15 @@ export function onDocumentAttached(listener: (doc: BoardDoc) => void): () => voi
 
 function attachDocument(doc: BoardDoc): void {
   binding?.destroy();
+  stopWatchingWork?.();
+
+  // Once the person has started working on the board, a copy arriving later (the
+  // room's, a moment after opening) leaves their view where it is.
+  const onWork = (transaction: Transaction) => {
+    if (transaction.origin === LOCAL_ORIGIN && transaction.changed.size > 0) openFit.from = null;
+  };
+  doc.doc.on('afterTransaction', onWork);
+  stopWatchingWork = () => doc.doc.off('afterTransaction', onWork);
 
   // The binding sees every page; the store, and so everything drawn and picked, only
   // the one in view.
@@ -1034,8 +1071,11 @@ function attachDocument(doc: BoardDoc): void {
  * A board opens showing everything on it — from the dashboard, from a link, or on a
  * reload. What this browser has stored arrives first, and on a board with a room
  * the room's copy a moment later, so the view is fitted to each in turn — unless the
- * person has already moved it themselves, or is following someone.
+ * person has already moved it themselves, is following someone, or has started
+ * working on the board.
  */
+let stopWatchingWork: (() => void) | null = null;
+
 const openFit: { from: Viewport | null; waitingForSize: boolean } = {
   from: null,
   waitingForSize: false,

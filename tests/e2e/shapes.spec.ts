@@ -278,29 +278,29 @@ test.describe('arranging', () => {
     expect(await layerCount(page)).toBe(3);
   });
 
-  // Checklist item 9.
-  test('locking makes a shape inert and marks it in the layers list', async ({ page }) => {
+  // Checklist item 9 — since Phase 14 a lock binds everyone but the owner; this
+  // signed-out board is the owner's, so here it marks, and does not stop. sharing.spec
+  // covers the others' side.
+  test('locking marks a shape, and leaves the owner free to move it', async ({ page }) => {
     await draw(page, 'KeyR', { x: 300, y: 250 }, { x: 460, y: 350 });
     await page.keyboard.press('KeyV');
     await page.mouse.click(380, 300);
 
     await page.keyboard.press('Shift+ControlOrMeta+KeyL');
     await expect(page.getByTestId('layer-locked')).toBeVisible();
+    await expect(page.getByTestId('toggle-lock')).toHaveText('unlock');
 
+    // The owner still moves it.
+    const before = Number(await page.getByTestId('geo-x').innerText());
     await page.mouse.move(380, 300);
-    await expect.poll(() => cursor(page)).toBe('not-allowed');
-
-    // Clicking it selects nothing.
-    await page.mouse.click(800, 600);
-    await page.mouse.click(380, 300);
-    await expect(page.getByTestId('geo-x')).toHaveCount(0);
+    await page.mouse.down();
+    await page.mouse.move(430, 320, { steps: 5 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => Number(await page.getByTestId('geo-x').innerText()))
+      .toBeCloseTo(before + 50, -1);
 
     // And it unlocks again.
-    await page
-      .getByTestId(
-        `layer-${(await page.getByTestId('layers').locator('li button').first().getAttribute('data-testid'))!.replace('layer-', '')}`,
-      )
-      .click();
     await page.getByTestId('toggle-lock').click();
     await expect(page.getByTestId('layer-locked')).toHaveCount(0);
   });

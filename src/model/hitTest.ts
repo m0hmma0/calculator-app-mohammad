@@ -1,7 +1,7 @@
 import { rectContainsPoint, rectsIntersect, type Point, type Rect } from '@/geometry';
 import { fromFlat, strokeHit } from '@/ink/stroke';
 import { elementAABB, worldToLocal } from './bounds';
-import { isInteractive, type BoardElement } from './element';
+import type { BoardElement } from './element';
 import { lineEnds, polygonPoints, POLYGONAL } from './shapePath';
 import { sortByZ } from './zorder';
 
@@ -99,10 +99,9 @@ export function elementsInMarquee(
   elements: readonly BoardElement[],
   marquee: Rect,
 ): BoardElement[] {
+  // Locked things are caught too: selected, they can be unlocked together.
   return elements.filter(
     (element) =>
-      isInteractive(element) &&
-      element.type !== 'group' &&
-      rectsIntersect(marquee, elementAABB(element)),
+      !element.hidden && element.type !== 'group' && rectsIntersect(marquee, elementAABB(element)),
   );
 }

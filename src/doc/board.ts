@@ -39,6 +39,11 @@ export interface BoardDoc {
    * without this a viewer would see changes that nobody else ever does.
    */
   readOnly: boolean;
+  /**
+   * Read-only, but may type in placeholders: the Answer role. The room checks every
+   * change from such a person and refuses anything else.
+   */
+  answers: boolean;
   /** The page this tab is looking at. New elements land on it; others are left alone. */
   currentPage: string;
   destroy: () => void;
@@ -80,6 +85,7 @@ export function createBoard(options: CreateBoardOptions = {}): BoardDoc {
     undoManager,
     whenReady,
     readOnly: false,
+    answers: false,
     currentPage: FIRST_PAGE,
     destroy: () => {
       stopGuarding();
@@ -189,6 +195,17 @@ function fromBase64(text: string): Uint8Array {
 /** Every local mutation goes through here so it carries the right origin. */
 export function transactLocal(board: BoardDoc, mutate: () => void): void {
   if (board.readOnly) return;
+  board.doc.transact(mutate, LOCAL_ORIGIN);
+}
+
+/**
+ * A change to one element's words, allowed on a read-only board to someone who
+ * answers, if the element is a placeholder — and only its words and height.
+ */
+export function transactAnswer(board: BoardDoc, id: string, mutate: () => void): void {
+  if (!board.readOnly) return transactLocal(board, mutate);
+  if (!board.answers) return;
+  if (typeof board.elements.get(id)?.get('placeholder') !== 'string') return;
   board.doc.transact(mutate, LOCAL_ORIGIN);
 }
 

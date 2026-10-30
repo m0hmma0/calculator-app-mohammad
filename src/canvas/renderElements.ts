@@ -8,6 +8,7 @@ import {
   drawFrameLabel,
   drawImage,
   drawInk,
+  drawPlaceholderEdge,
   drawTable,
   drawText,
 } from './renderContent';
@@ -172,7 +173,10 @@ function drawContent(
 
       if (element.type === 'frame') {
         if (!bare) drawFrameLabel(ctx, element, colors, zoom);
-      } else drawText(ctx, element, colors);
+      } else {
+        drawPlaceholderEdge(ctx, element, colors, zoom);
+        drawText(ctx, element, colors);
+      }
       break;
     }
 

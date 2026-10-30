@@ -1,7 +1,14 @@
 import { FONT_LABELS, type FontKey } from '@/canvas/fonts';
 import { LANGUAGES } from '@/model/highlight';
-import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
-import { canHoldLabel, isTextual, type BoardElement, type ElementId } from '@/model/element';
+import { selectCanEdit, useBoardAccess, selectIsOwner } from '@/sharing/boardAccess';
+import {
+  canHoldLabel,
+  isTextual,
+  type BoardElement,
+  type ElementId,
+  DEFAULT_HINT,
+  isPlaceholder,
+} from '@/model/element';
 import { listKindOf, toggleList, type ListKind } from '@/text/lists';
 import { useTextSelection } from '@/text/selection';
 import { selectionAABB } from '@/model/bounds';
@@ -78,6 +85,7 @@ export function Inspector() {
   const showGeometry = useUiPrefs((state) => state.geometry);
   const reorderSelection = useBoardStore((state) => state.reorderSelection);
   const toggleLockSelection = useBoardStore((state) => state.toggleLockSelection);
+  const owner = useBoardAccess(selectIsOwner);
   const toggleHiddenSelection = useBoardStore((state) => state.toggleHiddenSelection);
   const groupSelection = useBoardStore((state) => state.groupSelection);
   const ungroupSelection = useBoardStore((state) => state.ungroupSelection);
@@ -88,6 +96,7 @@ export function Inspector() {
   const ids = new Set(selection);
   const selected = elements.filter((element) => ids.has(element.id));
   const first = selected[0];
+  const anyLocked = selected.some((element) => element.locked);
   const topLevel = elements.filter((element) => element.parentId === null);
   const box = selected.length > 0 ? selectionAABB(selected) : null;
 
@@ -230,6 +239,38 @@ export function Inspector() {
           {isTextual(first) || (canHoldLabel(first) && (first.text || typingHere)) ? (
             <div className={styles.section} data-testid="text-controls">
               <p className={styles.label}>Text</p>
+              {first.type === 'text' && selected.length === 1 ? (
+                <div className={styles.placeholder}>
+                  <label className={styles.check}>
+                    <input
+                      type="checkbox"
+                      checked={isPlaceholder(first)}
+                      data-testid="placeholder-toggle"
+                      onChange={(event) =>
+                        applyDiscrete(
+                          new Map([
+                            [first.id, { placeholder: event.target.checked ? DEFAULT_HINT : null }],
+                          ]),
+                        )
+                      }
+                    />
+                    Placeholder — anyone can write in it with one click
+                  </label>
+                  {isPlaceholder(first) ? (
+                    <input
+                      type="text"
+                      className={styles.hintField}
+                      value={first.placeholder ?? ''}
+                      placeholder={DEFAULT_HINT}
+                      aria-label="The hint it shows while empty"
+                      data-testid="placeholder-hint"
+                      onChange={(event) =>
+                        applyDiscrete(new Map([[first.id, { placeholder: event.target.value }]]))
+                      }
+                    />
+                  ) : null}
+                </div>
+              ) : null}
               <div className={styles.buttons}>
                 {FONT_KEYS.map((key) => (
                   <button
@@ -660,15 +701,19 @@ export function Inspector() {
               </button>
             </div>
             <div className={styles.buttons}>
-              <button
-                type="button"
-                className={styles.button}
-                aria-pressed={first.locked}
-                data-testid="toggle-lock"
-                onClick={toggleLockSelection}
-              >
-                {first.locked ? 'unlock' : 'lock'}
-              </button>
+              {/* The owner locks; anyone who edits may unlock what is locked. */}
+              {owner || anyLocked ? (
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={anyLocked}
+                  data-testid="toggle-lock"
+                  title={owner ? 'Locked for everyone but you' : 'Locked by the owner'}
+                  onClick={toggleLockSelection}
+                >
+                  {anyLocked ? 'unlock' : 'lock'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={styles.button}

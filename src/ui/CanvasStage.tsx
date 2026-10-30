@@ -24,7 +24,7 @@ import { useUiPrefs } from '@/state/uiPrefs';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
-import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
+import { lockedForMe, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { CommentPins } from './CommentPins';
 import { DevPanel } from './DevPanel';
 import { EmbedLayer } from './EmbedLayer';
@@ -84,7 +84,7 @@ export function CanvasStage() {
       preview ??
       (editing
         ? store.elements.map((element) =>
-            element.id === editing ? { ...element, text: '' } : element,
+            element.id === editing ? { ...element, text: '', placeholder: undefined } : element,
           )
         : store.elements);
     const selection = preview ? [] : store.selection;
@@ -133,7 +133,10 @@ export function CanvasStage() {
         guides: store.guides,
         spacing: store.spacing,
         rotationReadout: store.rotationReadout,
-        lockedSelection: selected.length > 0 && selected.some((element) => element.locked),
+        // Locked for this person: no handles. Locked for others only (the owner's
+        // view): handles, and a padlock to say so.
+        lockedSelection: selected.some(lockedForMe),
+        lockedForOthers: selected.some((element) => element.locked && !lockedForMe(element)),
       },
       colors,
     );

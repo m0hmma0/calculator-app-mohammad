@@ -153,6 +153,11 @@ export interface BoardElement {
 
   /** Text and sticky-note content. */
   text?: string;
+  /**
+   * A placeholder: a text box anyone may type an answer into with one click, showing
+   * this hint while it is empty. Absent on an ordinary text box.
+   */
+  placeholder?: string | null;
   /** Bold, italic, underline, colours and links on parts of the text; absent when none. */
   marks?: TextMark[];
 
@@ -221,6 +226,14 @@ export const LINE_STYLE: ElementStyle = {
 
 export function isStroked(element: BoardElement): boolean {
   return element.type === 'line' || element.type === 'arrow';
+}
+
+/** What a placeholder says while nobody has written in it. */
+export const DEFAULT_HINT = 'Click here to write';
+
+/** A text box that is a placeholder: one click types into it, whatever the tool. */
+export function isPlaceholder(element: Pick<BoardElement, 'type' | 'placeholder'>): boolean {
+  return element.type === 'text' && typeof element.placeholder === 'string';
 }
 
 export function isTextual(element: BoardElement): boolean {

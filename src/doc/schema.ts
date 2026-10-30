@@ -88,6 +88,7 @@ export function toYElement(element: BoardElement): YElement {
   }
   if (element.page !== undefined) map.set('page', element.page);
   if (element.slide !== undefined) map.set('slide', element.slide);
+  if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
   if (element.table) map.set('table', toYTable(element.table));
 
   const style = new Y.Map<unknown>();
@@ -119,6 +120,8 @@ export function fromYElement(map: YElement): BoardElement {
   if (typeof page === 'string') element.page = page;
   const slide = map.get('slide');
   if (typeof slide === 'string') element.slide = slide;
+  const placeholder = map.get('placeholder');
+  if (typeof placeholder === 'string') element.placeholder = placeholder;
   const table = map.get('table');
   if (table instanceof Y.Map) element.table = readTable(table);
   const text = map.get('text');

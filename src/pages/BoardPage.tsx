@@ -48,7 +48,7 @@ function BoardView({ boardId }: { boardId: string }) {
 
     const applyRole = (nextRole: Role | null, canExport: boolean) => {
       useBoardAccess.setState({ role: nextRole, canExport });
-      setBoardReadOnly(!canEdit(nextRole));
+      setBoardReadOnly(!canEdit(nextRole), nextRole === 'answer');
     };
     // A board in this person's own workspace is theirs: they can draw from the first
     // instant. Anyone else waits for the server, so a viewer never gets a moment in

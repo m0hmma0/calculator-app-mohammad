@@ -1,7 +1,10 @@
 import type { Point } from '@/geometry';
-import { createElement } from '@/model/element';
+import { createElement, DEFAULT_HINT, DEFAULT_STYLE, TEXT_STYLE } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
+import { textDefaults } from '@/settings/settings';
+import { showPane } from '@/state/uiPrefs';
 import { useBoardStore } from '@/state/boardStore';
+import { defaultTextBox } from '@/text/measure';
 
 export const STAMPS = ['👍', '❤️', '⭐', '✅', '❓', '🎉', '🔥', '💡'] as const;
 
@@ -12,6 +15,29 @@ export function insertTable() {
   useBoardStore
     .getState()
     .insertAt('table', { w: 420, h: 160 }, { table: { rows: 4, cols: 3, cells: {} } });
+}
+
+/**
+ * A placeholder in the middle of the view: a text box with a hint, for someone to
+ * answer in with one click. It is left selected with the side panel open, so the hint
+ * can be written straight away.
+ */
+export function insertPlaceholder() {
+  const defaults = textDefaults();
+  const style = { ...DEFAULT_STYLE, ...TEXT_STYLE, fontSize: defaults.fontSize };
+  const size = defaultTextBox(style, { chars: Math.min(defaults.chars, 30), lines: 2 });
+  const element = useBoardStore.getState().insertAt('text', size, {
+    text: '',
+    placeholder: DEFAULT_HINT,
+    style: { fontSize: defaults.fontSize },
+  });
+  if (!element) return;
+  showPane();
+  requestAnimationFrame(() => {
+    const field = document.querySelector<HTMLInputElement>('[data-testid="placeholder-hint"]');
+    field?.focus();
+    field?.select();
+  });
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { actionFor } from '@/input/shortcuts';
 import { textSplice } from '@/doc/schema';
-import type { BoardElement } from '@/model/element';
+import { DEFAULT_HINT, isPlaceholder, type BoardElement } from '@/model/element';
 import { detectDirection } from '@/model/textLayout';
 import { useBoardStore } from '@/state/boardStore';
 import { readBox, renderInto, selectionIn, selectRange } from '@/text/domText';
@@ -376,6 +376,9 @@ export function RichTextEditor({
       // The wheel over the words moves the board, as it does everywhere else.
       data-wheel-pans
       data-testid="text-editor"
+      // A placeholder's hint shows while it is empty, as it does on the board.
+      data-placeholder={isPlaceholder(element) ? element.placeholder || DEFAULT_HINT : undefined}
+      data-empty={(element.text ?? '').trim() === '' || undefined}
       dir={detectDirection(text)}
       style={{ ...style, textAlign: center ? 'center' : style.textAlign }}
       onKeyDown={(event) => {

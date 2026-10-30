@@ -1,6 +1,10 @@
 /** Sharing, comments and notifications: the shapes the browser and the Worker agree on. */
 
-export type Role = 'viewer' | 'commenter' | 'editor' | 'owner';
+/**
+ * What someone may do with a board, weakest first. `answer` is a commenter who may
+ * also type in placeholders — and change nothing else; the room checks every change.
+ */
+export type Role = 'viewer' | 'commenter' | 'answer' | 'editor' | 'owner';
 export type GrantRole = Exclude<Role, 'owner'>;
 export type Audience = 'anyone' | 'signed-in' | 'domain';
 export type ResourceType = 'board' | 'folder';
@@ -8,12 +12,16 @@ export type ResourceType = 'board' | 'folder';
 export const ROLE_LABEL: Record<Role, string> = {
   viewer: 'Can view',
   commenter: 'Can comment',
+  answer: 'Can answer',
   editor: 'Can edit',
   owner: 'Owner',
 };
 
 export const canEdit = (role: Role | null) => role === 'editor' || role === 'owner';
-export const canComment = (role: Role | null) => canEdit(role) || role === 'commenter';
+export const canComment = (role: Role | null) =>
+  canEdit(role) || role === 'commenter' || role === 'answer';
+/** Someone who may type in placeholders: anyone who edits, and anyone who answers. */
+export const canAnswer = (role: Role | null) => canEdit(role) || role === 'answer';
 
 export interface LinkSettings {
   token: string;

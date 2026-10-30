@@ -18,6 +18,8 @@ export interface OverlayInput {
   spacing: readonly SpacingMark[];
   rotationReadout: number | null;
   lockedSelection: boolean;
+  /** Locked, but not for this person — the owner: a padlock, and handles as usual. */
+  lockedForOthers?: boolean;
 }
 
 /**
@@ -62,6 +64,7 @@ export function renderOverlay(
     if (!input.lockedSelection) {
       drawHandles(ctx, input.frame, toScreen, colors);
     }
+    if (input.lockedForOthers || input.lockedSelection) drawPadlock(ctx, corners[0]!, colors);
   }
 
   if (input.marquee) drawMarquee(ctx, input.marquee, toScreen, colors);
@@ -226,4 +229,23 @@ function drawRotationReadout(
   ctx.fillText(label, x + width / 2, y + 10);
   ctx.textAlign = 'start';
   ctx.textBaseline = 'alphabetic';
+}
+
+/** A small padlock just above a selection's top-left corner: this is locked. */
+function drawPadlock(ctx: CanvasRenderingContext2D, corner: Point, colors: CanvasColors): void {
+  const x = corner.x;
+  const y = corner.y - 20;
+  ctx.save();
+  ctx.fillStyle = colors.accent;
+  ctx.beginPath();
+  ctx.roundRect(x, y, 16, 14, 3);
+  ctx.fill();
+  ctx.strokeStyle = colors.accent;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(x + 8, y + 1, 4, Math.PI, 0);
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x + 7, y + 5, 2, 5);
+  ctx.restore();
 }

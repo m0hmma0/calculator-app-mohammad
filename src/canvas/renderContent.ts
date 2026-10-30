@@ -1,6 +1,7 @@
 import getStroke from 'perfect-freehand';
 import { detectLanguage, tokenizeLine, TOKEN_COLORS, type Language } from '@/model/highlight';
 import { fromFlat } from '@/ink/stroke';
+import { DEFAULT_HINT, isPlaceholder } from '@/model/element';
 import type { BoardElement, ElementStyle, TextMark } from '@/model/element';
 import { fitFontSize, layoutText, type WrappedLine } from '@/model/textLayout';
 import { runsOf, type MarkSet } from '@/text/marks';
@@ -208,6 +209,10 @@ export function drawText(
   element: BoardElement,
   colors: CanvasColors,
 ): TextRender {
+  // Emptied — even down to a stray line break — a placeholder shows its hint again.
+  if ((element.text ?? '').trim() === '' && isPlaceholder(element)) {
+    return drawText(ctx, hintOf(element, colors), colors);
+  }
   const block = textBlock(ctx, element);
   const { style, marks, fontSize, layout, anchorX, top } = block;
 
@@ -782,4 +787,36 @@ function hostOf(address: string): string {
   } catch {
     return address;
   }
+}
+
+/** An empty placeholder drawn as its hint: the same type, faint and slanted. */
+function hintOf(element: BoardElement, colors: CanvasColors): BoardElement {
+  return {
+    ...element,
+    placeholder: undefined,
+    text: element.placeholder || DEFAULT_HINT,
+    marks: undefined,
+    style: {
+      ...element.style,
+      italic: true,
+      textColor: colors.byToken.get('--text-muted') ?? '#888',
+    },
+  };
+}
+
+/** A placeholder with no outline of its own gets a dashed one, so it is found. */
+export function drawPlaceholderEdge(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  colors: CanvasColors,
+  zoom: number,
+): void {
+  if (!isPlaceholder(element) || element.style.stroke) return;
+  ctx.save();
+  ctx.setLineDash([6 / zoom, 5 / zoom]);
+  ctx.lineWidth = 1.25 / zoom;
+  ctx.strokeStyle = colors.byToken.get('--text-muted') ?? '#888';
+  ctx.globalAlpha *= 0.7;
+  ctx.strokeRect(element.x, element.y, element.w, element.h);
+  ctx.restore();
 }

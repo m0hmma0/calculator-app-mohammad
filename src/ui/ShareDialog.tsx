@@ -10,7 +10,7 @@ import {
 import { api } from '@/api/client';
 import styles from './ShareDialog.module.css';
 
-const ROLES: GrantRole[] = ['viewer', 'commenter', 'editor'];
+const ROLES: GrantRole[] = ['viewer', 'commenter', 'answer', 'editor'];
 
 function untilText(at: number): string {
   return new Date(at).toLocaleString(undefined, {

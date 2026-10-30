@@ -10,6 +10,7 @@ import type {
   ShareState,
   SharedItem,
 } from '@shared/sharing';
+import { ROLE_LABEL } from '@shared/sharing';
 import { sizeForOthers } from '@shared/settings';
 import type { Account } from '../auth';
 import {
@@ -25,7 +26,7 @@ import type { Env } from '../env';
 import { fail, json, newId } from '../http';
 import { settingsOf } from './settings';
 
-const GRANT_ROLES: readonly GrantRole[] = ['viewer', 'commenter', 'editor'];
+const GRANT_ROLES: readonly GrantRole[] = ['viewer', 'commenter', 'answer', 'editor'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EXPIRY_MINUTES = 60 * 24 * 365;
 
@@ -209,7 +210,7 @@ const describeLink = (body: PutLinkBody) => {
         : `people at ${body.domain} with the link`;
   const until =
     body.expiresInMinutes === null ? '' : `, expiring in ${body.expiresInMinutes} minute(s)`;
-  return `${who} ${body.role === 'viewer' ? 'can view' : body.role === 'commenter' ? 'can comment' : 'can edit'}${until}`;
+  return `${who} ${ROLE_LABEL[body.role].toLowerCase()}${until}`;
 };
 
 /** Turns the link on, or changes it. Its token stays the same unless it is reset. */
