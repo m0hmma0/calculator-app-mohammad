@@ -20,6 +20,39 @@ export const IMAGE_TYPES = [
   'image/svg+xml',
 ] as const;
 
+/** Video and sound files that can be put on a board and played there. */
+export const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'] as const;
+export const AUDIO_TYPES = [
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/webm',
+  'audio/flac',
+] as const;
+
+/** A video can be a few minutes of a phone's recording; a sound, a song. */
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+
+export type MediaKind = 'video' | 'audio';
+
+export function mediaKindOf(contentType: string): MediaKind | null {
+  if ((VIDEO_TYPES as readonly string[]).includes(contentType)) return 'video';
+  if ((AUDIO_TYPES as readonly string[]).includes(contentType)) return 'audio';
+  return null;
+}
+
+/** The most that may be stored under one name, for this kind of file. */
+export function maxBytesFor(contentType: string): number {
+  const kind = mediaKindOf(contentType);
+  return kind === 'video' ? MAX_VIDEO_BYTES : kind === 'audio' ? MAX_AUDIO_BYTES : MAX_FILE_BYTES;
+}
+
 const FILE_ID = /^[0-9a-f]{64}$/;
 
 export const isFileId = (value: unknown): value is string =>
@@ -28,9 +61,10 @@ export const isFileId = (value: unknown): value is string =>
 export const fileUrl = (fileId: string): string => `${FILE_ROUTE}${fileId}`;
 
 /**
- * Which stored images a board uses, read from its own Yjs document. The Worker reads
- * this from the document itself rather than trusting a list from the browser, so the
- * record of what is in use cannot drift from what is actually on the board.
+ * Which stored files — images, videos, sounds — a board uses, read from its own Yjs
+ * document. The Worker reads this from the document itself rather than trusting a
+ * list from the browser, so the record of what is in use cannot drift from what is
+ * actually on the board.
  */
 export function fileIdsInDoc(doc: Y.Doc): string[] {
   const found = new Set<string>();
@@ -38,6 +72,9 @@ export function fileIdsInDoc(doc: Y.Doc): string[] {
     if (!(value instanceof Y.Map)) return;
     const image = value.get('image') as { fileId?: unknown } | undefined;
     if (isFileId(image?.fileId)) found.add(image.fileId);
+    // A video or a sound uploaded to the board is stored the same way.
+    const embed = value.get('embed') as { fileId?: unknown } | undefined;
+    if (isFileId(embed?.fileId)) found.add(embed.fileId);
   });
   return [...found];
 }

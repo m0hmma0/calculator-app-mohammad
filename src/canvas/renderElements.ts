@@ -115,6 +115,7 @@ function drawContent(
   colors: CanvasColors,
   zoom: number,
   onImageReady: () => void,
+  bare: boolean,
 ): void {
   const rotated = element.rotation !== 0;
   if (rotated) {
@@ -162,14 +163,16 @@ function drawContent(
       ctx.shadowBlur = 0;
       ctx.shadowOffsetY = 0;
 
-      if (stroke && element.style.strokeWidth > 0) {
+      // A frame being presented is the slide itself: no outline, no title.
+      if (stroke && element.style.strokeWidth > 0 && !bare) {
         ctx.strokeStyle = stroke;
         ctx.lineWidth = element.style.strokeWidth / zoom;
         ctx.stroke();
       }
 
-      if (element.type === 'frame') drawFrameLabel(ctx, element, colors, zoom);
-      else drawText(ctx, element, colors);
+      if (element.type === 'frame') {
+        if (!bare) drawFrameLabel(ctx, element, colors, zoom);
+      } else drawText(ctx, element, colors);
       break;
     }
 
@@ -291,6 +294,8 @@ export function renderElements(
   elements: readonly BoardElement[],
   colors: CanvasColors,
   onImageReady: () => void = () => {},
+  /** A frame drawn as a slide — fill only — because it is being presented. */
+  bareFrame: string | null = null,
 ): RenderStats {
   const view = visibleBounds(vp, size);
 
@@ -322,7 +327,7 @@ export function renderElements(
 
     if (CONTENT.has(element.type)) {
       flush(index);
-      drawContent(ctx, element, colors, vp.zoom, onImageReady);
+      drawContent(ctx, element, colors, vp.zoom, onImageReady, element.id === bareFrame);
       continue;
     }
 

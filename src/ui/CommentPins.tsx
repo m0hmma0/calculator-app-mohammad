@@ -22,7 +22,7 @@ export function CommentPins() {
   );
 
   return (
-    <div className={styles.layer} data-hud>
+    <div className={styles.layer} data-hud data-present-hide>
       {threads.map((thread, index) => {
         if (thread.root.x === null || thread.root.y === null) return null;
         const at = boardToScreen(viewport, { x: thread.root.x, y: thread.root.y });

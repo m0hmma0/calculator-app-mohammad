@@ -2,7 +2,7 @@ import { fileUrl } from '@shared/files';
 import type { ImageRef } from '@/model/element';
 import { currentBoardId } from '@/state/boardStore';
 import { blobToDataUrl, prepareImage } from './images';
-import { sha256Hex, uploadImage } from './uploads';
+import { sha256Hex, uploadFile } from './uploads';
 
 /**
  * On an account board the image is named by its hash and stored in R2 — it goes on
@@ -19,6 +19,6 @@ export async function storeImage(blob: Blob): Promise<ImageRef> {
   }
 
   const fileId = await sha256Hex(prepared.blob);
-  void uploadImage(fileId, boardId, prepared.blob);
+  void uploadFile(fileId, boardId, prepared.blob);
   return { src: fileUrl(fileId), fileId, naturalWidth, naturalHeight, placeholder };
 }

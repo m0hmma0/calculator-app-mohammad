@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import * as Y from 'yjs';
-import { API, createBoard, newAccount, signIn, tokenFor } from './accounts';
+import { API, createBoard, KEYS, newAccount, signIn, tokenFor } from './accounts';
+import { recordWebm, toneWav } from './mediaFixtures';
 
 /**
  * Phase 6: images live in R2, once each, named by their hash. Everything here runs
@@ -426,4 +427,122 @@ test.describe('the file API', () => {
     expect(response.headers()['content-security-policy']).toContain('sandbox');
     expect(response.headers()['content-security-policy']).toContain("default-src 'none'");
   });
+
+  test('serves part of a video, for a player that seeks', async ({ request }) => {
+    const { token, boardId } = await boardFor(request, 'range');
+    const bytes = Buffer.concat([Buffer.alloc(4096, 7), Buffer.from(`range-${Math.random()}`)]);
+    const hash = sha256(bytes);
+    expect((await put(request, hash, bytes, { token, boardId, type: 'video/webm' })).status()).toBe(
+      201,
+    );
+
+    const whole = await request.get(`${API}/api/files/${hash}`);
+    expect(whole.headers()['accept-ranges']).toBe('bytes');
+    const part = await request.get(`${API}/api/files/${hash}`, {
+      headers: { range: 'bytes=100-199' },
+    });
+    expect(part.status()).toBe(206);
+    expect(part.headers()['content-range']).toBe(`bytes 100-199/${bytes.length}`);
+    expect(Buffer.from(await part.body())).toEqual(bytes.subarray(100, 200));
+    const end = await request.get(`${API}/api/files/${hash}`, { headers: { range: 'bytes=-10' } });
+    expect(Buffer.from(await end.body())).toEqual(bytes.subarray(bytes.length - 10));
+  });
+
+  test('takes a sound up to its limit, and no further', async ({ request }) => {
+    const { token, boardId } = await boardFor(request, 'limit');
+    const big = Buffer.alloc(21 * 1024 * 1024, 1);
+    big.write(`limit-${Math.random()}`);
+    expect(
+      (await put(request, sha256(big), big, { token, boardId, type: 'audio/wav' })).status(),
+    ).toBe(413);
+    // The same bytes are a video's worth, well within a video's limit.
+    expect(
+      (await put(request, sha256(big), big, { token, boardId, type: 'video/mp4' })).status(),
+    ).toBe(201);
+  });
 });
+
+test.describe('video and sound', () => {
+  /** Double-clicks a media card in the middle, and waits for it to be playing. */
+  async function play(page: Page, kind: 'video' | 'audio') {
+    const card = page.locator(`[data-testid="embed-media"][data-media="${kind}"]`).first();
+    const box = (await card.boundingBox())!;
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    const player = page.locator(`${kind}[data-testid="embed-player"]`);
+    await expect
+      .poll(() => player.evaluate((node: HTMLMediaElement) => !node.paused && node.currentTime > 0))
+      .toBe(true);
+    return player;
+  }
+
+  // Checklist item 7, from files — on an account board, stored like a picture.
+  test('a video and a sound from files are stored once and play from another device', async ({
+    browser,
+  }) => {
+    const account = newAccount('media');
+    const first = await browser.newContext();
+    const page = await first.newPage();
+    await signIn(page, account);
+    const boardId = await createBoard(page);
+    const video = await recordWebm(page, nonce % 360);
+    const sound = Buffer.concat([toneWav(), Buffer.from(String(nonce))]);
+
+    await page.getByTestId('insert-menu').click();
+    await page.getByTestId('insert-import').click();
+    await page.getByTestId('import-file').setInputFiles([
+      { name: 'Clip.webm', mimeType: 'video/webm', buffer: video },
+      { name: 'Tone.wav', mimeType: 'audio/wav', buffer: sound },
+    ]);
+    await expect(layers(page)).toHaveCount(2);
+    await waitForUploads(page);
+    await expect.poll(() => fileStatus(page.request, sha256(video))).toBe(200);
+    await expect.poll(() => fileStatus(page.request, sha256(sound))).toBe(200);
+    await play(page, 'video');
+
+    // Somewhere else, the same person finds both, playing from the server.
+    const second = await browser.newContext();
+    const other = await second.newPage();
+    await signIn(other, account);
+    await other.goto(`/b/${boardId}`);
+    await expect(layers(other)).toHaveCount(2);
+    const player = await play(other, 'video');
+    await expect(player).toHaveAttribute('src', `/api/files/${sha256(video)}`);
+    await play(other, 'audio');
+
+    await first.close();
+    await second.close();
+  });
+
+  // Checklist item 7, from links.
+  test('a link to a sound and a link to a video play on the board', async ({ page }) => {
+    await signIn(page, newAccount('media-links'));
+    await createBoard(page);
+
+    // A video at an address with no name to go by: the server finds what it is.
+    const name = `/fixture/clip-${nonce}`;
+    const video = await recordWebm(page, nonce % 360);
+    await fetch(`${KEYS}${name}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'video/webm' },
+      body: new Uint8Array(video),
+    });
+    await pasteLink(page, `${KEYS}${name}`, [300, 260]);
+    await expect(page.locator('[data-testid="embed-media"][data-media="video"]')).toBeVisible();
+    await play(page, 'video');
+
+    // A sound, told by its name.
+    await pasteLink(page, `${KEYS}/tone.wav`, [700, 500]);
+    await expect(page.locator('[data-testid="embed-media"][data-media="audio"]')).toHaveCount(1);
+    await play(page, 'audio');
+  });
+});
+
+/** Pastes a web address with the pointer at a spot on the board. */
+async function pasteLink(page: Page, url: string, at: [number, number]) {
+  await page.mouse.move(at[0], at[1]);
+  await page.evaluate((value) => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', value);
+    window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }));
+  }, url);
+}

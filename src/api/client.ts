@@ -156,9 +156,13 @@ export const api = {
 
   /** A web page's title, summary and picture, fetched by the server. */
   unfurl: (url: string) =>
-    request<{ title?: string; description?: string; image?: string; site?: string }>(
-      `/api/unfurl?url=${encodeURIComponent(url)}`,
-    ),
+    request<{
+      title?: string;
+      description?: string;
+      image?: string;
+      site?: string;
+      media?: 'video' | 'audio';
+    }>(`/api/unfurl?url=${encodeURIComponent(url)}`),
   settings: () => request<{ settings: Settings }>('/api/settings'),
   putSettings: (settings: Settings) =>
     request<{ settings: Settings }>('/api/settings', {

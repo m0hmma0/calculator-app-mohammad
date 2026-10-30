@@ -236,7 +236,7 @@ export function InsertMenu() {
               >
                 <ImportIcon />
                 <span>Import…</span>
-                <small>images, SVG, PDF</small>
+                <small>pictures, PDF, video, sound</small>
               </button>
 
               <p className={styles.label}>Stamps</p>

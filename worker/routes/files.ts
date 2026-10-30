@@ -1,4 +1,4 @@
-import { IMAGE_TYPES, isFileId, MAX_FILE_BYTES } from '@shared/files';
+import { IMAGE_TYPES, isFileId, maxBytesFor, mediaKindOf } from '@shared/files';
 import type { Account } from '../auth';
 import { atLeast, boardAccess } from '../access';
 import type { Env } from '../env';
@@ -17,6 +17,8 @@ function fileHeaders(contentType: string, size: number, hash: string): Headers {
   return new Headers({
     'content-type': contentType,
     'content-length': String(size),
+    // A video seeks by asking for part of the file.
+    'accept-ranges': 'bytes',
     'cache-control': 'public, max-age=31536000, immutable',
     etag: `"${hash}"`,
     'x-content-type-options': 'nosniff',
@@ -42,17 +44,36 @@ export async function getFile(request: Request, env: Env, hash: string): Promise
     return new Response(null, { status: 304, headers: { etag: `"${hash}"` } });
   }
 
-  const object = await env.FILES.get(fileKey(hash));
+  // A player asks for the part it needs — the start, or where it was seeked to.
+  const ranged = request.headers.has('range');
+  const object = await env.FILES.get(
+    fileKey(hash),
+    ranged ? { range: request.headers } : undefined,
+  );
   if (!object) return fail('No such file', 404);
 
-  const headers = fileHeaders(
-    object.httpMetadata?.contentType ?? 'application/octet-stream',
-    object.size,
-    hash,
-  );
+  const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream';
+  const part = ranged && object.range ? byteRange(object.range, object.size) : null;
+  const headers = fileHeaders(contentType, part ? part.length : object.size, hash);
+  if (part) headers.set('content-range', `bytes ${part.start}-${part.end}/${object.size}`);
   if (request.method === 'HEAD') return new Response(null, { headers });
 
-  return new Response(object.body, { headers });
+  return new Response(object.body, { status: part ? 206 : 200, headers });
+}
+
+/** Where the part of a file that R2 returned starts and ends, and its length. */
+function byteRange(range: R2Range, size: number) {
+  let start: number;
+  let length: number;
+  if ('suffix' in range && range.suffix !== undefined) {
+    length = Math.min(range.suffix, size);
+    start = size - length;
+  } else {
+    const bounded = range as { offset?: number; length?: number };
+    start = bounded.offset ?? 0;
+    length = bounded.length ?? size - start;
+  }
+  return { start, end: start + length - 1, length };
 }
 
 /** Adding an image to a board is editing it: the owner, or anyone it lets edit. */
@@ -101,7 +122,7 @@ export async function attachFile(
 }
 
 /**
- * Stores an image under its hash. The hash is recomputed here and must match: with
+ * Stores an image, a video or a sound under its hash. The hash is recomputed here and must match: with
  * one shared copy per picture, accepting a mismatched body would let anyone replace
  * an image on someone else's board.
  */
@@ -119,16 +140,17 @@ export async function putFile(
   }
 
   const contentType = (request.headers.get('content-type') ?? '').split(';')[0]!.trim();
-  if (!(IMAGE_TYPES as readonly string[]).includes(contentType)) {
-    return fail('Only images can be uploaded', 415);
+  if (!(IMAGE_TYPES as readonly string[]).includes(contentType) && !mediaKindOf(contentType)) {
+    return fail('Only pictures, videos and sounds can be uploaded', 415);
   }
 
+  const limit = maxBytesFor(contentType);
   const declared = Number(request.headers.get('content-length') ?? '0');
-  if (declared > MAX_FILE_BYTES) return fail('That image is too large', 413);
+  if (declared > limit) return fail('That file is too large', 413);
 
   const body = await request.arrayBuffer();
   if (body.byteLength === 0) return fail('Empty upload', 400);
-  if (body.byteLength > MAX_FILE_BYTES) return fail('That image is too large', 413);
+  if (body.byteLength > limit) return fail('That file is too large', 413);
   if ((await sha256Hex(body)) !== hash) return fail('The upload does not match its hash', 400);
 
   const existing = await env.DB.prepare('SELECT size FROM files WHERE hash = ?1')

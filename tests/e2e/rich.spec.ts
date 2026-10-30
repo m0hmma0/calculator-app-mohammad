@@ -88,27 +88,30 @@ test.describe('presentation', () => {
     await page.getByTestId('present-start').click();
 
     await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
-    // The chrome is gone; the stage is the whole window.
+    // Since Phase 13 the pane stays, with the tools and the slide controls in it; the
+    // board takes the rest of the window, top to bottom.
     const stage = (await page.getByTestId('stage').boundingBox())!;
+    const pane = (await page.getByTestId('controls').boundingBox())!;
     const window = page.viewportSize()!;
-    expect(stage).toMatchObject({ x: 0, y: 0, width: window.width, height: window.height });
-    // Where the top bar was, there is only the board.
-    const atTopLeft = await page.evaluate(() =>
-      document.elementFromPoint(20, 20)?.closest('[data-testid="stage"]'),
-    );
-    expect(atTopLeft).toBeTruthy();
+    expect(stage).toMatchObject({ x: 0, y: 0, height: window.height });
+    expect(stage.width).toBeCloseTo(pane.x, 0);
 
-    // Frame 1 is 200×140 with a 60×40 rectangle in its middle. Filling a 1280×720
-    // window, the rectangle alone covers a large area at the centre of the screen.
-    const centre = { x: window.width / 2 - 100, y: window.height / 2 - 60, w: 200, h: 120 };
+    // Frame 1 is 200×140 with a 60×40 rectangle in its middle. Filling the board, the
+    // rectangle alone covers a large area at the centre of it.
+    const centre = {
+      x: stage.width / 2 - 100,
+      y: stage.height / 2 - 60,
+      w: 200,
+      h: 120,
+    };
     await expect.poll(() => colourFraction(page, '--shape-1', centre)).toBeGreaterThan(0.9);
 
     // Next frame: the empty one to the right.
     await page.keyboard.press('ArrowRight');
     await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
     await expect.poll(() => colourFraction(page, '--shape-1', centre)).toBeLessThan(0.01);
-    // The frame itself fills the window edge to edge, less the margin.
-    const surface = { x: 40, y: 40, w: window.width - 80, h: window.height - 80 };
+    // The frame itself fills the board, less the margin.
+    const surface = { x: 40, y: 40, w: stage.width - 80, h: stage.height - 80 };
     expect(await colourFraction(page, '--surface', surface)).toBeGreaterThan(0.5);
 
     await page.keyboard.press('ArrowRight');

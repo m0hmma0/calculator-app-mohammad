@@ -76,7 +76,7 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   const chatAt = cursor ? boardToScreen(viewport, cursor) : null;
 
   return (
-    <div className={styles.layer} data-hud data-present-keep>
+    <div className={styles.layer} data-hud>
       {list.map((peer) =>
         (previewing ? [] : (peer.state?.selection ?? [])).map((id, index) => {
           const element = byId.get(id);

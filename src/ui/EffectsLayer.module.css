@@ -24,7 +24,7 @@
 }
 
 .big {
-  font-size: clamp(80px, 16vmin, 180px);
+  font-size: calc(clamp(80px, 16vmin, 180px) * var(--boost, 1));
   line-height: 1;
   filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.25));
 }
@@ -86,7 +86,7 @@
   width: 51%;
   background:
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.22) 0 6%, rgba(255, 255, 255, 0.06) 6% 12%),
-    linear-gradient(180deg, #b0102d, #7d0a1f);
+    var(--curtain, #a4161a);
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
 }
 
@@ -108,6 +108,74 @@
   position: absolute;
   bottom: -60px;
   animation: floatUp 2.8s ease-out both;
+}
+
+/* One play among several piled up: each fills the layer. */
+.play {
+  position: absolute;
+  inset: 0;
+}
+
+/* Balloons rise slower than applause, and sway. */
+.drift {
+  position: absolute;
+  bottom: -80px;
+  animation: driftUp 4.2s ease-in both;
+}
+
+.night {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 24, 0.55);
+  animation: fade 4.4s ease both;
+}
+
+.grey {
+  position: absolute;
+  inset: 0;
+  background: rgba(70, 74, 86, 0.45);
+  backdrop-filter: grayscale(0.8);
+  animation: fade 3.2s ease both;
+}
+
+/* The sad face sinks a little as the trombone goes down. */
+.droop {
+  animation: droop 3s ease-in both;
+}
+
+@keyframes driftUp {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(-6deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(18px, -50vh) rotate(6deg);
+  }
+  100% {
+    opacity: 0.9;
+    transform: translate(-12px, -110vh) rotate(-4deg);
+  }
+}
+
+@keyframes droop {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(30px) rotate(-4deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(40px) rotate(-6deg);
+  }
 }
 
 @keyframes fade {

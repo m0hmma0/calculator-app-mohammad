@@ -118,10 +118,18 @@ export function startPresence(room: RoomConnection): PresenceHandle {
 }
 
 /** The session being followed: chosen by clicking an avatar, or a presenter. */
-function leaderSession(): string | null {
-  const presence = usePresence.getState();
+function leaderSession(presence = usePresence.getState()): string | null {
   if (presence.following && presence.peers[presence.following]) return presence.following;
   return presenter(presence)?.session ?? null;
+}
+
+/**
+ * The frame a followed presenter is showing — which this screen then shows alone, as
+ * theirs does. Null when not following anyone who is presenting.
+ */
+export function followedFrameId(presence = usePresence.getState()): string | null {
+  const session = leaderSession(presence);
+  return session ? (presence.peers[session]?.state?.present?.frame ?? null) : null;
 }
 
 /**

@@ -4,8 +4,8 @@ import { fileUrl } from '@shared/files';
 import { RoomConnection, type RoomEvents } from '@/collab/connection';
 import { renderToCanvas } from '@/export/exporters';
 import { dataUrlToBlob, prepareImage } from '@/media/images';
-import { resumeUploads, sha256Hex, uploadImage } from '@/media/uploads';
-import type { BoardElement, ImageRef } from '@/model/element';
+import { resumeUploads, sha256Hex, uploadFile } from '@/media/uploads';
+import type { BoardElement, EmbedData, ImageRef } from '@/model/element';
 import { REMOTE_ORIGIN, SYSTEM_ORIGIN, type BoardDoc } from './board';
 import { patchYElement } from './schema';
 
@@ -66,7 +66,7 @@ async function moveInlineImages(doc: BoardDoc, boardId: string): Promise<void> {
     try {
       const prepared = await prepareImage(await dataUrlToBlob(src));
       const fileId = await sha256Hex(prepared.blob);
-      void uploadImage(fileId, boardId, prepared.blob);
+      void uploadFile(fileId, boardId, prepared.blob);
 
       doc.doc.transact(() => {
         const map = doc.elements.get(id);
@@ -94,6 +94,8 @@ function fileIdsOn(doc: BoardDoc): string[] {
   doc.elements.forEach((map) => {
     const fileId = (map.get('image') as ImageRef | undefined)?.fileId;
     if (fileId) ids.push(fileId);
+    const media = (map.get('embed') as EmbedData | undefined)?.fileId;
+    if (media) ids.push(media);
   });
   return ids;
 }

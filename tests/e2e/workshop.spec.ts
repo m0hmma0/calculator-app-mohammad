@@ -474,8 +474,8 @@ function makePdf(colours: [number, number, number][]): Buffer {
   return Buffer.from(body, 'latin1');
 }
 
-// Checklist item 9, second half.
-test('a PDF comes in as one stored picture per page', async ({ page }) => {
+// Checklist item 9, second half; since Phase 13 each page is also a numbered frame.
+test('a PDF comes in as one stored picture per page, each in its own frame', async ({ page }) => {
   await signIn(page, newAccount('pdf'));
   await createBoard(page);
   await page.getByTestId('insert-menu').click();
@@ -490,7 +490,10 @@ test('a PDF comes in as one stored picture per page', async ({ page }) => {
     ]),
   });
 
-  await expect(layerItems(page)).toHaveText(['image', 'image', 'image'], { timeout: 20_000 });
+  await expect(layerItems(page)).toHaveCount(6, { timeout: 20_000 });
+  const names = await layerItems(page).allInnerTexts();
+  expect(names.filter((name) => /image/i.test(name))).toHaveLength(3);
+  expect(names.filter((name) => /frame/i.test(name))).toHaveLength(3);
   await expect(page.getByTestId('import-status')).toBeHidden();
   // Each page's picture is the page: the first page's red square is on the board.
   await page.keyboard.press('Shift+Digit1');
@@ -501,7 +504,7 @@ test('a PDF comes in as one stored picture per page', async ({ page }) => {
 
   // And the pictures are stored, not just drawn: they survive a reload.
   await page.reload();
-  await expect(layerItems(page)).toHaveCount(3);
+  await expect(layerItems(page)).toHaveCount(6);
   await page.keyboard.press('Shift+Digit1');
   await expect.poll(() => colourFraction(page, '#1a33cc', all)).toBeGreaterThan(0.002);
 });
@@ -515,6 +518,10 @@ test('a celebration plays for everyone on the board, and ends by itself', async 
       await expect(page.getByTestId('celebration')).toHaveAttribute('data-effect', 'confetti');
     }
     await expect(b.getByTestId('celebration')).toHaveCount(0, { timeout: 8000 });
+
+    // A new one, from the number pad, plays for the other window too.
+    await a.keyboard.press('Numpad8');
+    await expect(b.getByTestId('celebration')).toHaveAttribute('data-effect', 'fireworks');
 
     // While presenting too, number pad 2 is a drum roll — for the audience as well.
     await drag(a, 'KeyF', [200, 200], [500, 400]);

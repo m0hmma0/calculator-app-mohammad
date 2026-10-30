@@ -123,6 +123,11 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('celebrate.quiet', 'Quiet', 'Celebrations', ['Numpad5']),
   action('celebrate.curtain', 'Curtain call', 'Celebrations', ['Numpad6']),
   action('celebrate.applause', 'Applause', 'Celebrations', ['Numpad7']),
+  action('celebrate.fireworks', 'Fireworks', 'Celebrations', ['Numpad8']),
+  action('celebrate.balloons', 'Balloons', 'Celebrations', ['Numpad9']),
+  action('celebrate.hearts', 'Hearts', 'Celebrations', ['Numpad0']),
+  action('celebrate.fanfare', 'Fanfare', 'Celebrations', ['NumpadDivide']),
+  action('celebrate.womp', 'Womp womp', 'Celebrations', ['NumpadMultiply']),
 
   action('text.bold', 'Bold', 'While typing', ['Mod+KeyB'], 'typing'),
   action('text.italic', 'Italic', 'While typing', ['Mod+KeyI'], 'typing'),

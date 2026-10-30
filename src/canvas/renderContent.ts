@@ -458,6 +458,9 @@ function drawUploadProgress(
   ctx.restore();
 }
 
+/** Room before a frame's title for its number, in screen pixels. */
+export const FRAME_NUMBER_WIDTH = 34;
+
 export function drawFrameLabel(
   ctx: CanvasRenderingContext2D,
   element: BoardElement,
@@ -471,8 +474,92 @@ export function drawFrameLabel(
   ctx.font = `500 ${size}px ${'ui-monospace, SFMono-Regular, Menlo, monospace'}`;
   ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(label, element.x, element.y - size * 0.45);
+  // The frame's number sits before the title, over the board (FrameNumbers).
+  ctx.fillText(label, element.x + FRAME_NUMBER_WIDTH / zoom, element.y - size * 0.45);
   ctx.restore();
+}
+
+const PLAYER_COLOURS: Record<string, string> = {
+  Vimeo: '#1ab7ea',
+  SoundCloud: '#ff5500',
+  Spotify: '#1db954',
+};
+
+/**
+ * A video or a sound: a video is a dark screen (its first picture is laid over it), a
+ * sound or another site's player a card — a round button, its title, where it is
+ * from — with the upload's progress along the bottom while it is being stored.
+ */
+function drawPlayable(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  embed: NonNullable<BoardElement['embed']>,
+  colors: CanvasColors,
+  zoom: number,
+) {
+  const { x, y, w, h } = element;
+  const screen = embed.media === 'video' && embed.kind === 'media';
+  if (screen) {
+    const radius = Math.min(element.style.radius, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, radius);
+    ctx.fillStyle = '#0f0f12';
+    ctx.fill();
+  } else {
+    cardBox(ctx, element, colors, zoom);
+  }
+
+  // The round button: centred on a screen, at the left of a card.
+  const r = screen ? Math.min(w, h) * 0.13 : Math.min(h * 0.28, 30);
+  const cx = screen ? x + w / 2 : x + 16 + r;
+  const cy = screen ? y + h / 2 : y + Math.min(h / 2, 16 + r);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = screen
+    ? 'rgba(255,255,255,0.18)'
+    : (PLAYER_COLOURS[embed.site ?? ''] ?? (colors.byToken.get('--accent') || '#3b45d8'));
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  if (embed.media === 'audio') {
+    // A note: a stem and a head.
+    ctx.fillRect(cx + r * 0.08, cy - r * 0.5, r * 0.14, r * 0.85);
+    ctx.beginPath();
+    ctx.ellipse(cx - r * 0.08, cy + r * 0.38, r * 0.24, r * 0.18, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.3, cy - r * 0.45);
+    ctx.lineTo(cx + r * 0.5, cy);
+    ctx.lineTo(cx - r * 0.3, cy + r * 0.45);
+    ctx.fill();
+  }
+
+  if (!screen) {
+    const left = cx + r + 14;
+    const width = x + w - left - 12;
+    const size = element.style.fontSize;
+    ctx.textBaseline = 'top';
+    let line = y + 16;
+    ctx.font = fontString({ ...element.style, fontWeight: 650 }, size);
+    ctx.fillStyle = resolveColor(element.style.textColor, colors) ?? '#222';
+    ctx.fillText(fitLine(ctx, embed.title || embed.url, width), left, line);
+    line += size * 1.45;
+    ctx.font = fontString(element.style, size * 0.78);
+    ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
+    const from = embed.site ?? (embed.media === 'audio' ? 'Sound' : 'Video');
+    ctx.fillText(fitLine(ctx, `${from} · double-click to play`, width), left, line);
+  }
+
+  const upload = uploadStateOf(embed.fileId);
+  if (upload) {
+    const done = upload.total > 0 ? upload.loaded / upload.total : 0;
+    const bar = 4 / zoom;
+    ctx.fillStyle = 'rgba(127,127,127,0.35)';
+    ctx.fillRect(x, y + h - bar, w, bar);
+    ctx.fillStyle =
+      upload.status === 'rejected' ? '#d8375c' : (colors.byToken.get('--accent') ?? '#3b45d8');
+    ctx.fillRect(x, y + h - bar, w * done, bar);
+  }
 }
 
 /** Draws text cut to a width with an ellipsis, so it never spills out of its box. */
@@ -660,6 +747,12 @@ export function drawEmbed(
     return;
   }
 
+  if (embed.kind === 'media' || embed.kind === 'player') {
+    drawPlayable(ctx, element, embed, colors, zoom);
+    ctx.restore();
+    return;
+  }
+
   cardBox(ctx, element, colors, zoom);
   const top = element.y + embedImageHeight(element);
   const width = element.w - 28;
@@ -678,6 +771,15 @@ export function drawEmbed(
   }
   ctx.font = fontString(element.style, size * 0.75);
   ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
-  ctx.fillText(fitLine(ctx, embed.site || new URL(embed.url).hostname, width), element.x + 14, y);
+  ctx.fillText(fitLine(ctx, embed.site || hostOf(embed.url), width), element.x + 14, y);
   ctx.restore();
+}
+
+/** An address's site, for a card's last line; the address itself if it has none. */
+function hostOf(address: string): string {
+  try {
+    return new URL(address).hostname || address;
+  } catch {
+    return address;
+  }
 }

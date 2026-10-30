@@ -25,7 +25,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **10** | Quick fixes and the text box                 | built       |
 | **11** | One control pane, and who sees what          | built       |
 | **12** | Settings and shortcuts                       | built       |
-| 13     | Presenting, frames, celebrations and media   | not started |
+| **13** | Presenting, frames, celebrations and media   | built       |
 | 14     | Classroom: placeholders, Answer role, locks  | not started |
 | 15     | Undo across people and sessions              | not started |
 | 16     | Dashboard organisation                       | not started |
@@ -107,15 +107,15 @@ the board, presenting (ahead of the board's keys), or typing in a text box. A fe
 are fixed and cannot be given away: hold `Space` to pan, the arrows nudge, `Esc` puts
 things down, and copy, cut and paste stay the browser's.
 
-| Keys (defaults)             | Action                                               |
-| --------------------------- | ---------------------------------------------------- |
-| `V` / `H`                   | Select tool / hand tool                              |
-| `P` `I` `E` `K`             | Pen, highlighter, eraser, laser                      |
-| `R` `O` `L` `A` `T` `N` `F` | Rectangle, ellipse, line, arrow, text, sticky, frame |
-| Number pad `1`–`7`          | Celebrations, at any time                            |
-| `+` / `−`                   | Zoom in / out                                        |
-| `Shift 0` / `1` / `2`       | Zoom to 100% / fit / selection                       |
-| `⌘`/`Ctrl` + scroll, pinch  | Zoom toward the pointer                              |
+| Keys (defaults)              | Action                                               |
+| ---------------------------- | ---------------------------------------------------- |
+| `V` / `H`                    | Select tool / hand tool                              |
+| `P` `I` `E` `K`              | Pen, highlighter, eraser, laser                      |
+| `R` `O` `L` `A` `T` `N` `F`  | Rectangle, ellipse, line, arrow, text, sticky, frame |
+| Number pad `1`–`0`, `/`, `*` | Celebrations, at any time                            |
+| `+` / `−`                    | Zoom in / out                                        |
+| `Shift 0` / `1` / `2`        | Zoom to 100% / fit / selection                       |
+| `⌘`/`Ctrl` + scroll, pinch   | Zoom toward the pointer                              |
 
 Shortcuts match on physical key position (`event.code`), so they work on any keyboard
 layout, Arabic included.
@@ -127,6 +127,27 @@ shortcut: change a key, add or remove one, see clashes, reset one or all. Signed
 settings live on the account (`user_settings`, migration 0005, `GET`/`PUT
 /api/settings`) and follow you to any device; signed out, they stay in this browser. A
 board's open response carries its owner's size for others, `textSize`.
+
+## Presenting, frames and media
+
+Frames are slides. Each has a number before its title — a drop-down for anyone who can
+edit — and the presentation follows the numbers; frames never numbered (every frame on
+an older board, and new ones) come after, in reading order. The order is a fractional
+key on each frame (`slide`). Presenting shows the frame and nothing else, on a dark
+surround, without its outline or title, for the presenter and for everyone following;
+the control pane keeps the tools, Insert, undo and the slide controls (along the bottom
+on a tall screen). A PDF's pages come in as numbered frames, each holding its page.
+
+Celebrations vary from play to play (colours, shapes, where they come from, the sound —
+never the same variation twice running) and pile up when started again while one is
+playing. Each play carries its variant and level in the document, and its id seeds the
+randomness, so every screen draws the same thing.
+
+Video and sound files are stored like pictures — once each, by hash, in R2 — and served
+with range requests so a player can seek (50 MB for a video, 20 MB for a sound). On the
+signed-out board they stay in this browser's IndexedDB. Links to media files, to Vimeo,
+SoundCloud and Spotify, and to YouTube play in place; a link whose name does not say
+what it is becomes a player when the server finds a video or sound behind it.
 
 ## The document
 

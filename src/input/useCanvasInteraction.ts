@@ -1005,8 +1005,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         const row = Math.min(rows - 1, Math.max(0, Math.floor((point.y - target.y) / rowHeight)));
         const col = Math.min(cols - 1, Math.max(0, Math.floor((point.x - target.x) / colWidth)));
         store.beginCellEdit(target.id, row, col);
-      } else if (target.type === 'embed' && target.embed?.kind === 'video') {
-        // A video plays in place; until then it is just a picture you can move.
+      } else if (target.type === 'embed' && target.embed && target.embed.kind !== 'link') {
+        // A video or a sound plays in place; until then it is a card you can move.
         useEmbeds.setState({ playing: target.id });
       }
     };

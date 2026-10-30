@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { fitToRect } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import type { BoardElement } from '@/model/element';
+import { keysBetween } from '@/model/zorder';
 import { useBoardStore } from '@/state/boardStore';
 
 /** Margin around a frame in presentation, in screen pixels. */
@@ -19,12 +20,11 @@ export const usePresentation = create<PresentationStore>(() => ({
 }));
 
 /**
- * The page's frames in reading order: top to bottom in rows, left to right within a
- * row. Frames whose tops are within half the shorter one's height share a row, so a
- * hand-placed row that is a few pixels off still reads left to right.
+ * Frames in reading order: top to bottom in rows, left to right within a row. Frames
+ * whose tops are within half the shorter one's height share a row, so a hand-placed
+ * row that is a few pixels off still reads left to right.
  */
-export function framesInOrder(elements: readonly BoardElement[]): BoardElement[] {
-  const frames = elements.filter((element) => element.type === 'frame' && !element.hidden);
+function readingOrder(frames: readonly BoardElement[]): BoardElement[] {
   const byTop = [...frames].sort((a, b) => a.y - b.y || a.x - b.x);
   const rows: BoardElement[][] = [];
   for (const frame of byTop) {
@@ -34,6 +34,49 @@ export function framesInOrder(elements: readonly BoardElement[]): BoardElement[]
     else rows.push([frame]);
   }
   return rows.flatMap((row) => row.sort((a, b) => a.x - b.x));
+}
+
+/**
+ * The page's frames in presentation order: the ones given a number first, by it;
+ * then any never numbered — every frame on an older board, and new ones — in reading
+ * order. Two with the same key (a duplicated frame) also fall back to reading order.
+ */
+export function framesInOrder(elements: readonly BoardElement[]): BoardElement[] {
+  const reading = readingOrder(
+    elements.filter((element) => element.type === 'frame' && !element.hidden),
+  );
+  const place = new Map(reading.map((frame, index) => [frame.id, index]));
+  const numbered = reading
+    .filter((frame) => frame.slide)
+    .sort((a, b) =>
+      a.slide! < b.slide! ? -1 : a.slide! > b.slide! ? 1 : place.get(a.id)! - place.get(b.id)!,
+    );
+  return [...numbered, ...reading.filter((frame) => !frame.slide)];
+}
+
+/** Each frame's number, from 1, as the presentation will show them. */
+export function frameNumbers(elements: readonly BoardElement[]): Map<string, number> {
+  return new Map(framesInOrder(elements).map((frame, index) => [frame.id, index + 1]));
+}
+
+/**
+ * Keys that put frames in exactly this order. Every frame is given one, so the order
+ * holds from then on, wherever anyone moves them.
+ */
+export function slidePatches(order: readonly string[]): Map<string, Partial<BoardElement>> {
+  const keys = keysBetween(null, null, order.length);
+  return new Map(order.map((id, index) => [id, { slide: keys[index]! }]));
+}
+
+/** Gives a frame a new number (from 1); the others close up around it. */
+export function renumberFrame(frameId: string, number: number): void {
+  const store = useBoardStore.getState();
+  const order = framesInOrder(store.elements).map((frame) => frame.id);
+  const from = order.indexOf(frameId);
+  if (from === -1) return;
+  order.splice(from, 1);
+  order.splice(Math.min(order.length, Math.max(0, number - 1)), 0, frameId);
+  store.applyDiscrete(slidePatches(order));
 }
 
 function show(frameId: string | null) {

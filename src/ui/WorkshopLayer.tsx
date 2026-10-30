@@ -11,6 +11,9 @@ import {
 } from '@/workshop/presentation';
 import { castVote, serverNow, stopTimer, useWorkshop } from '@/workshop/workshop';
 import { actionFor, isRecordingShortcut } from '@/input/shortcuts';
+import { rectsIntersect } from '@/geometry';
+import { useFrameOnShow } from '@/workshop/onShow';
+import { useSidePane } from './layout';
 import styles from './WorkshopLayer.module.css';
 
 /** What each presenting shortcut does; Settings can change the keys. */
@@ -77,12 +80,19 @@ function VoteLayer() {
   const viewport = useBoardStore((state) => state.viewport);
   const preview = useHistory((state) => state.preview);
   const editable = useBoardAccess(selectCanEdit);
+  const onShow = useFrameOnShow();
   if (!vote || preview) return null;
 
   const spent = Object.values(mine).reduce((sum, dots) => sum + dots, 0);
   const left = vote.budget - spent;
   const canVote = vote.open && editable;
-  const stickies = elements.filter((element) => element.type === 'sticky' && !element.hidden);
+  const stickies = elements.filter(
+    (element) =>
+      element.type === 'sticky' &&
+      !element.hidden &&
+      // While a frame is on show, only its own notes carry dots.
+      (!onShow || rectsIntersect(element, onShow)),
+  );
 
   return (
     <>
@@ -147,11 +157,9 @@ function VoteLayer() {
   );
 }
 
-/** The presenter's controls: where they are, and the keys that move on. */
-function PresentationBar() {
+/** The keys that move a presentation on, while it is on. */
+function usePresentingKeys() {
   const presenting = usePresentation((state) => state.presenting);
-  const frame = usePresentation((state) => state.frame);
-  const elements = useBoardStore((state) => state.elements);
 
   useEffect(() => {
     if (!presenting) return;
@@ -168,32 +176,57 @@ function PresentationBar() {
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [presenting]);
+}
 
-  if (!presenting) return null;
+/**
+ * Where the presentation is, and the way on: in the control pane on a wide screen,
+ * along the bottom of a tall one. `placement` says which this one is.
+ */
+export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
+  const presenting = usePresentation((state) => state.presenting);
+  const frame = usePresentation((state) => state.frame);
+  const elements = useBoardStore((state) => state.elements);
+  const sidePane = useSidePane();
+  if (!presenting || sidePane !== (placement === 'pane')) return null;
+
   const frames = framesInOrder(elements);
   const index = frames.findIndex((each) => each.id === frame);
   return (
-    <div className={styles.presentBar} data-testid="presentation-bar">
+    <div
+      className={placement === 'pane' ? styles.slidesInPane : styles.presentBar}
+      role="group"
+      aria-label="Presentation"
+      data-testid="presentation-bar"
+    >
+      <div className={styles.slideSteps}>
+        <button
+          type="button"
+          aria-label="Previous frame"
+          data-testid="slide-previous"
+          disabled={index <= 0}
+          onClick={() => stepPresentation(-1)}
+        >
+          ‹
+        </button>
+        <span data-testid="presentation-counter">
+          {index + 1} / {frames.length}
+        </span>
+        <button
+          type="button"
+          aria-label="Next frame"
+          data-testid="slide-next"
+          disabled={index >= frames.length - 1}
+          onClick={() => stepPresentation(1)}
+        >
+          ›
+        </button>
+      </div>
       <button
         type="button"
-        aria-label="Previous frame"
-        disabled={index <= 0}
-        onClick={() => stepPresentation(-1)}
+        className={styles.exit}
+        data-testid="present-stop"
+        onClick={stopPresentation}
       >
-        ‹
-      </button>
-      <span data-testid="presentation-counter">
-        {index + 1} / {frames.length}
-      </span>
-      <button
-        type="button"
-        aria-label="Next frame"
-        disabled={index >= frames.length - 1}
-        onClick={() => stepPresentation(1)}
-      >
-        ›
-      </button>
-      <button type="button" data-testid="present-stop" onClick={stopPresentation}>
         Exit
       </button>
     </div>
@@ -201,11 +234,12 @@ function PresentationBar() {
 }
 
 export function WorkshopLayer() {
+  usePresentingKeys();
   return (
-    <div className={styles.layer} data-hud data-present-keep>
+    <div className={styles.layer} data-hud>
       <VoteLayer />
       <TimerWidget />
-      <PresentationBar />
+      <SlideControls placement="bottom" />
     </div>
   );
 }

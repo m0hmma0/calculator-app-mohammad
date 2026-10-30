@@ -81,3 +81,31 @@
   font-size: 16px;
   cursor: pointer;
 }
+
+/* A sound being played: its controls in the card, under the strip. */
+.embed[data-kind='audio'] {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+}
+
+.audio {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: calc(100% - 16px);
+  pointer-events: auto;
+}
+
+.embed[data-kind='audio'] .grip {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.embed[data-kind='audio'] .stop {
+  color: var(--text-2);
+}
+
+.marker {
+  position: absolute;
+}

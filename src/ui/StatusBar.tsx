@@ -48,7 +48,12 @@ export function StatusBar() {
 
   if (!online) {
     return (
-      <div className={`${styles.bar} ${styles.offline}`} data-testid="status-offline" role="status">
+      <div
+        className={`${styles.bar} ${styles.offline}`}
+        data-present-hide
+        data-testid="status-offline"
+        role="status"
+      >
         <span className={styles.dot} />
         Working offline — your changes are saved here
       </div>
@@ -59,6 +64,7 @@ export function StatusBar() {
     return (
       <div
         className={`${styles.bar} ${styles.offline}`}
+        data-present-hide
         data-testid="status-reconnecting"
         role="status"
       >
@@ -70,7 +76,7 @@ export function StatusBar() {
 
   if (!hydrated) {
     return (
-      <div className={styles.bar} data-testid="status-loading" role="status">
+      <div className={styles.bar} data-present-hide data-testid="status-loading" role="status">
         <span className={styles.dot} />
         Loading your board…
       </div>
@@ -80,7 +86,12 @@ export function StatusBar() {
   if (!upload) return null;
 
   return (
-    <div className={`${styles.bar} ${styles.busy}`} data-testid={upload.testId} role="status">
+    <div
+      className={`${styles.bar} ${styles.busy}`}
+      data-present-hide
+      data-testid={upload.testId}
+      role="status"
+    >
       <span className={styles.dot} />
       {upload.text}
     </div>

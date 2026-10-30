@@ -127,16 +127,11 @@
 }
 
 /*
- * Presentation: the stage covers the window and only the content layers stay — the
- * frame on screen, its embeds, other people's cursors, the timer and the votes.
+ * Presenting: the frame is the slide, so what is about the board rather than on it —
+ * the side panel, frame numbers, comment pins, the minimap, status lines — steps
+ * aside. The drawing tools' options, typing and the celebrations stay.
  */
-:global(html[data-presenting]) .stage {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-}
-
-:global(html[data-presenting]) .stage > :not(canvas, [data-present-keep]) {
+:global(html[data-presenting]) .stage > [data-present-hide] {
   display: none;
 }
 

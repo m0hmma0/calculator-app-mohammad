@@ -122,6 +122,7 @@
   cursor: default;
 }
 
+/* Slide controls along the bottom of a tall screen. */
 .presentBar {
   position: absolute;
   bottom: 16px;
@@ -136,12 +137,36 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   box-shadow: var(--shadow-2);
-  opacity: 0.85;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.presentBar button {
+/* The same controls in the pane on a wide screen. */
+.slidesInPane {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.slideSteps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.slideSteps span {
+  white-space: nowrap;
+}
+
+.presentBar button,
+.slidesInPane button {
   border: 0;
   background: none;
   min-width: 28px;
@@ -153,15 +178,23 @@
   cursor: pointer;
 }
 
-.presentBar button:last-child {
+.presentBar .exit,
+.slidesInPane .exit {
   font-size: 13px;
   padding: 0 10px;
 }
 
-.presentBar button:hover:not(:disabled) {
+.slidesInPane .exit {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.presentBar button:hover:not(:disabled),
+.slidesInPane button:hover:not(:disabled) {
   background: var(--surface-2);
 }
 
-.presentBar button:disabled {
+.presentBar button:disabled,
+.slidesInPane button:disabled {
   opacity: 0.35;
 }

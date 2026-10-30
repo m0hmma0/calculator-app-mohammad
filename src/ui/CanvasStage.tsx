@@ -14,6 +14,9 @@ import { useLibraryDrop } from '@/library/library';
 import { useUploads } from '@/media/uploads';
 import { useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
+import { boardToScreen } from '@/canvas/viewport';
+import { frameOnShowId } from '@/workshop/onShow';
+import { usePresentation } from '@/workshop/presentation';
 import { isTrailAlive } from '@/laser/laser';
 import { useShortcuts } from '@/input/useShortcuts';
 import { stampCursor } from '@/input/insertions';
@@ -25,6 +28,7 @@ import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { CommentPins } from './CommentPins';
 import { DevPanel } from './DevPanel';
 import { EmbedLayer } from './EmbedLayer';
+import { FrameNumbers } from './FrameNumbers';
 import { TableCellEditor } from './TableCellEditor';
 import { PeersLayer } from './PeersLayer';
 import { Inspector } from './Inspector';
@@ -41,6 +45,8 @@ import { ToolOptions } from './ToolOptions';
 import styles from './CanvasStage.module.css';
 
 const STATS_INTERVAL_MS = 250;
+/** Around the slide while presenting: dark, as a projector's screen is. */
+const PRESENT_SURROUND = '#101217';
 
 export function CanvasStage() {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -83,12 +89,36 @@ export function CanvasStage() {
         : store.elements);
     const selection = preview ? [] : store.selection;
 
-    ctx.fillStyle = colors.background;
-    ctx.fillRect(0, 0, frame.width, frame.height);
-    drawGrid(ctx, viewport, frame, colors.dot, frame.dpr);
+    // Presenting, or following a presenter: the frame on show, and nothing around it.
+    const showId = preview ? null : frameOnShowId();
+    const shown = showId ? elements.find((element) => element.id === showId) : undefined;
+    if (shown) {
+      const corner = boardToScreen(viewport, { x: shown.x, y: shown.y });
+      ctx.fillStyle = PRESENT_SURROUND;
+      ctx.fillRect(0, 0, frame.width, frame.height);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(corner.x, corner.y, shown.w * viewport.zoom, shown.h * viewport.zoom);
+      ctx.clip();
+      ctx.fillStyle = colors.background;
+      ctx.fillRect(0, 0, frame.width, frame.height);
+    } else {
+      ctx.fillStyle = colors.background;
+      ctx.fillRect(0, 0, frame.width, frame.height);
+      drawGrid(ctx, viewport, frame, colors.dot, frame.dpr);
+    }
 
-    const { visible } = renderElements(ctx, viewport, frame, elements, colors, redrawRef.current);
+    const { visible } = renderElements(
+      ctx,
+      viewport,
+      frame,
+      elements,
+      colors,
+      redrawRef.current,
+      shown?.id ?? null,
+    );
     if (draft) renderElements(ctx, viewport, frame, [draft], colors, redrawRef.current);
+    if (shown) ctx.restore();
 
     const selectedIds = new Set(selection);
     const selected = elements.filter((element) => selectedIds.has(element.id));
@@ -188,6 +218,8 @@ export function CanvasStage() {
   // Upload progress lives outside the document, so it needs its own redraws.
   useEffect(() => useUploads.subscribe(() => redraw()), [redraw]);
   useEffect(() => useHistory.subscribe(() => redraw()), [redraw]);
+  // Presenting starts and stops without the camera necessarily moving.
+  useEffect(() => usePresentation.subscribe(() => redraw()), [redraw]);
 
   // Someone else's laser fades on this screen too, frame by frame, until it is gone.
   useEffect(() => {
@@ -253,7 +285,7 @@ export function CanvasStage() {
       />
 
       {isEmpty ? (
-        <div className={styles.empty}>
+        <div className={styles.empty} data-present-hide>
           <div className={styles.card}>
             <h2 className={styles.title}>Draw something</h2>
             <EmptyHint />
@@ -262,11 +294,12 @@ export function CanvasStage() {
       ) : null}
 
       {minimap && owner ? (
-        <div className={styles.hud} data-hud>
+        <div className={styles.hud} data-hud data-present-hide>
           <Minimap />
         </div>
       ) : null}
 
+      <FrameNumbers />
       <EmbedLayer />
       <PeersLayer hostRef={hostRef} />
       <CommentPins />

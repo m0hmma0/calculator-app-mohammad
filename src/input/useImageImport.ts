@@ -5,7 +5,8 @@ import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
 import { imageBlobsFrom, pictureBox } from '@/media/images';
 import { storeImage } from '@/media/storeImage';
-import { importFile, isPdfFile, startImportBatch } from '@/importers/importFile';
+import { importFile, isPdfFile, startImportBatch, useImport } from '@/importers/importFile';
+import { insertMedia, isMediaFile } from '@/media/mediaFiles';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 
 /**
@@ -102,12 +103,25 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
         void importFile(pdf);
         return;
       }
+      const rect = host.getBoundingClientRect();
+      const screenPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      // A video or a sound plays where it was dropped.
+      const media = [...(event.dataTransfer?.files ?? [])].filter(isMediaFile);
+      if (media.length > 0 && !boardDoc().readOnly) {
+        event.preventDefault();
+        const at = screenToBoard(useBoardStore.getState().viewport, screenPoint);
+        media.forEach((file, index) => {
+          void insertMedia(file, { x: at.x + index * 40, y: at.y + index * 40 }).catch((error) =>
+            useImport.setState({ error: (error as Error).message }),
+          );
+        });
+        return;
+      }
       const blobs = imageBlobsFrom(event.dataTransfer);
       if (blobs.length === 0) return;
 
       event.preventDefault();
-      const rect = host.getBoundingClientRect();
-      void placeAt(blobs, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+      void placeAt(blobs, screenPoint);
     };
 
     host.addEventListener('pointermove', trackPointer);

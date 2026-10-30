@@ -104,7 +104,7 @@ async function upload(fileId: string, boardId: string, blob: Blob, attempt = 0):
   try {
     if (!(await attach(fileId, boardId))) await send(fileId, boardId, blob);
     // This tab has the bytes already; showing them needs no download.
-    await primeImage(fileUrl(fileId), blob);
+    if (blob.type.startsWith('image/')) await primeImage(fileUrl(fileId), blob);
     setState(fileId, null);
     await removePending(fileId);
   } catch (error) {
@@ -126,10 +126,11 @@ async function upload(fileId: string, boardId: string, blob: Blob, attempt = 0):
 }
 
 /**
- * Starts storing an image for a board. Returns at once: the image goes onto the
- * board straight away, with its blurred placeholder, and sharpens when this lands.
+ * Starts storing a file — an image, a video, a sound — for a board. Returns at once:
+ * an image goes onto the board straight away, with its blurred placeholder, and
+ * sharpens when this lands; a video plays from this tab's copy meanwhile.
  */
-export async function uploadImage(fileId: string, boardId: string, blob: Blob): Promise<void> {
+export async function uploadFile(fileId: string, boardId: string, blob: Blob): Promise<void> {
   setState(fileId, { loaded: 0, total: blob.size, status: 'uploading' });
   // Kept on disk first, so a tab closed mid-upload can finish the job next time.
   await savePending({ fileId, boardId, blob });

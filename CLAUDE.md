@@ -10,16 +10,17 @@ with something the user checks themselves against a written checklist.
 Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
 back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools and
 rich content)**, **Phase 10 (quick fixes and the text box)**, **Phase 11 (one
-control pane, and who sees what)** and **Phase 12 (settings and shortcuts)** are built,
-tested and deployed at <https://sabboura.mh-hamad.workers.dev> (migrations 0001–0005
-applied remotely) but not yet checked by the user.
+control pane, and who sees what)**, **Phase 12 (settings and shortcuts)** and **Phase 13
+(presenting, frames, celebrations and media)** are built, tested and deployed at
+<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0005 applied remotely) but not
+yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
 10–16 — 11 one control pane and role-based controls, 12 settings and shortcuts, 13
 presenting/frames/celebrations/media, 14 placeholders and the "Answer" role and owner
 locks, 15 undo across people and sessions, 16 dashboard organisation — and the
 original 10 (accessibility, Arabic and RTL) and 11 (hardening) are now **17** and
-**18**. The next phase is **13**. Parked by the user: student picture uploads,
+**18**. The next phase is **14**. Parked by the user: student picture uploads,
 read4more.com, "see the stroke before it ends", Chrome zoom.
 
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
@@ -40,6 +41,18 @@ someone else's board the size is the owner's (`textSize` in the board's open
 response). Every shortcut is one entry in `src/input/shortcuts.ts` with a scope (board,
 presenting, typing); the handlers call `actionFor(event, scope)`. Settings is a page
 (`/settings`) and the same panel as a dialog over a board (`src/settings/dialog.ts`).
+
+Phase 13 in one paragraph: a frame's place in the presentation is `element.slide`, a
+fractional key (`framesInOrder`, `renumberFrame`, `slidePatches` in
+`src/workshop/presentation.ts`); numbered frames first, the rest in reading order.
+`FrameNumbers` draws the number badges (a select for editors). The frame on show
+(`src/workshop/onShow.ts` — presenting, or following a presenter) is drawn bare and
+clipped on a dark surround; embeds and vote dots are clipped to it too. While
+presenting, `BoardControls` shows only the slide controls, tools, Insert and full
+screen. Celebrations carry `level` and `variant` (`src/fun/effects.ts`); several play at
+once. Media is an embed of kind `media` (a file: `fileId` when stored, `local-media:`
+on the signed-out board) or `player` (Vimeo, SoundCloud, Spotify); stored media counts
+in `fileIdsInDoc` like images, and `GET /api/files` answers range requests.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -168,6 +181,16 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   (a unit test checks). Keys are `event.code`, written `Mod+Alt+Shift+Code`.
 - **Waiting for "Saved to your account" right after a change** used to pass before the
   save began; a change now shows "Saving…" at once, so the wait is real.
+- **A media embed's address may be relative** (`/api/files/<hash>`) or not a web
+  address at all (`local-media:<hash>`): never `new URL()` it without a try. That
+  crashed the side panel once, only on account boards.
+- **Presenting no longer covers the window**: the stage keeps its place beside the
+  pane, and children marked `data-present-hide` (side panel, frame numbers, comment
+  pins, minimap, status lines) step aside. A new overlay that should not show on a
+  slide needs that attribute.
+- **The slide controls render once**, in the pane on a wide screen or along the
+  bottom of a tall one (`useSidePane`), so `presentation-bar` and `present-stop` are
+  never doubled.
 - **Celebrations are the number pad, at any time** — the letters that started them
   while presenting are gone (they would have fought the tool keys once presenting
   keeps the drawing tools, Phase 13).

@@ -87,13 +87,21 @@ export async function unfurl(request: Request, env: Env): Promise<Response> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         'user-agent': 'Mozilla/5.0 (compatible; SabbouraBot/1.0; link preview)',
-        accept: 'text/html,application/xhtml+xml',
+        accept: 'text/html,application/xhtml+xml,*/*;q=0.5',
       },
     });
   } catch {
     return fail('That page did not answer', 502);
   }
-  if (!response.ok || !/html/i.test(response.headers.get('content-type') ?? '')) {
+  const type = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+  // A link straight to a video or a sound: the board plays it rather than show a card.
+  const media = /^video\//.test(type) ? 'video' : /^audio\//.test(type) ? 'audio' : null;
+  if (response.ok && media) {
+    await response.body?.cancel().catch(() => undefined);
+    const name = decodeURIComponent(target.pathname.split('/').pop() ?? '') || target.hostname;
+    return json({ media, title: name.slice(0, 200), site: target.hostname.replace(/^www\./, '') });
+  }
+  if (!response.ok || !/html/i.test(type)) {
     await response.body?.cancel().catch(() => undefined);
     return json({});
   }

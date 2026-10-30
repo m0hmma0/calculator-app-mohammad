@@ -62,6 +62,34 @@ async function mint(params) {
     .sign(privateKey);
 }
 
+const fixtures = new Map();
+
+/** A WAV file: a second of a sine tone, 8 kHz, 16-bit mono. */
+function toneWav() {
+  const rate = 8000;
+  const samples = rate;
+  const buffer = Buffer.alloc(44 + samples * 2);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + samples * 2, 4);
+  buffer.write('WAVEfmt ', 8);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(rate, 24);
+  buffer.writeUInt32LE(rate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(samples * 2, 40);
+  for (let index = 0; index < samples; index += 1) {
+    buffer.writeInt16LE(
+      Math.round(Math.sin((index / rate) * 440 * Math.PI * 2) * 8000),
+      44 + index * 2,
+    );
+  }
+  return buffer;
+}
+
 const keyServer = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', `http://localhost:${KEY_PORT}`);
   response.setHeader('access-control-allow-origin', '*');
@@ -92,6 +120,38 @@ const keyServer = createServer(async (request, response) => {
         'base64',
       ),
     );
+    return;
+  }
+  // A second of a 440 Hz tone, for the tests that paste a link to a sound.
+  if (url.pathname === '/tone.wav') {
+    response.writeHead(200, { 'content-type': 'audio/wav' });
+    response.end(toneWav());
+    return;
+  }
+  // Files a test puts here to link to — a video it recorded, say — served back as sent.
+  if (url.pathname.startsWith('/fixture/')) {
+    if (request.method === 'PUT') {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      fixtures.set(url.pathname, {
+        type: request.headers['content-type'] ?? 'application/octet-stream',
+        body: Buffer.concat(chunks),
+      });
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+    const fixture = fixtures.get(url.pathname);
+    if (!fixture) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    response.writeHead(200, {
+      'content-type': fixture.type,
+      'content-length': fixture.body.length,
+    });
+    response.end(fixture.body);
     return;
   }
   if (url.pathname === '/ready') {

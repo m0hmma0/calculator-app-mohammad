@@ -17,7 +17,7 @@ export function DevPanel() {
   const toggleDevPanel = useBoardStore((state) => state.toggleDevPanel);
 
   return (
-    <aside className={styles.panel} data-hud data-testid="dev-panel">
+    <aside className={styles.panel} data-hud data-present-hide data-testid="dev-panel">
       <p className={styles.heading}>
         Renderer
         <button type="button" className={styles.close} onClick={toggleDevPanel} aria-label="Close">

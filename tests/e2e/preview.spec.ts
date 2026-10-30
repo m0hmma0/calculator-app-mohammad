@@ -68,9 +68,13 @@ test.describe('artifact preview', () => {
       mimeType: 'application/pdf',
       buffer: onePagePdf(),
     });
-    await expect(page.getByTestId('layers').locator('li')).toHaveText(['image'], {
-      timeout: 20_000,
-    });
+    // The page, as a picture in a frame of its own.
+    const items = page.getByTestId('layers').locator('li');
+    await expect(items).toHaveCount(2, { timeout: 20_000 });
+    expect((await items.allInnerTexts()).map((name) => name.trim()).sort()).toEqual([
+      'frame',
+      'image',
+    ]);
   });
 });
 

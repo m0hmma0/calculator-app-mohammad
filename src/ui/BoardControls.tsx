@@ -9,7 +9,9 @@ import {
 import { toggleFullScreen } from '@/input/useShortcuts';
 import { selectCanEdit, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { toggleMinimap, togglePane, useUiPrefs } from '@/state/uiPrefs';
+import { usePresentation } from '@/workshop/presentation';
 import { InsertMenu } from './InsertMenu';
+import { SlideControls } from './WorkshopLayer';
 import { PageBar } from './PageBar';
 import { ToolBar } from './ToolBar';
 import { ToolsMenu } from './ToolsMenu';
@@ -50,8 +52,28 @@ export function BoardControls({
   onRenameBoard,
 }: BoardControlsProps) {
   const editable = useBoardAccess(selectCanEdit);
+  const presenting = usePresentation((state) => state.presenting);
   const ref = useRef<HTMLElement | null>(null);
   useSqueezeToTwoRows(ref);
+
+  // Presenting keeps what draws on the slide — the tools, Insert, undo and redo —
+  // and the way through the slides; everything about the board itself steps aside.
+  if (presenting) {
+    return (
+      <header className={styles.controls} ref={ref} data-testid="controls" data-presenting="true">
+        <SlideControls placement="pane" />
+        <ToolBar />
+        {editable ? (
+          <div className={styles.menus}>
+            <InsertMenu />
+          </div>
+        ) : null}
+        <div className={styles.viewButtons}>
+          <FullScreenButton />
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className={styles.controls} ref={ref} data-testid="controls">

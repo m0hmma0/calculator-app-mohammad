@@ -124,7 +124,7 @@ export function Inspector() {
   if (historyOpen || !editable || !open) return null;
 
   return (
-    <aside className={styles.panel} data-hud data-testid="inspector">
+    <aside className={styles.panel} data-hud data-present-hide data-testid="inspector">
       <button
         type="button"
         className={styles.close}
@@ -203,18 +203,27 @@ export function Inspector() {
 
           {first.type === 'embed' && first.embed && selected.length === 1 ? (
             <div className={styles.section}>
-              <p className={styles.label}>{first.embed.kind === 'video' ? 'Video' : 'Link'}</p>
+              <p className={styles.label}>
+                {first.embed.kind === 'link'
+                  ? 'Link'
+                  : first.embed.media === 'audio'
+                    ? 'Sound'
+                    : 'Video'}
+              </p>
               <p className={styles.embedTitle} data-testid="embed-title">
                 {first.embed.title ?? first.embed.url}
               </p>
-              <a
-                className={styles.embedLink}
-                href={first.embed.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open {first.embed.site ?? new URL(first.embed.url).hostname} ↗
-              </a>
+              {/* A file stored on the board has no page to open; anything on the web does. */}
+              {webHost(first.embed.url) ? (
+                <a
+                  className={styles.embedLink}
+                  href={first.embed.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open {first.embed.site ?? webHost(first.embed.url)} ↗
+                </a>
+              ) : null}
             </div>
           ) : null}
 
@@ -750,4 +759,14 @@ export function Inspector() {
       ) : null}
     </aside>
   );
+}
+
+/** The site an address is on, if it is a web address at all. */
+function webHost(address: string): string | null {
+  try {
+    const url = new URL(address);
+    return /^https?:$/.test(url.protocol) ? url.hostname : null;
+  } catch {
+    return null;
+  }
 }

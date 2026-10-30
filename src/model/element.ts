@@ -46,7 +46,13 @@ export interface TextMark {
 
 /** Something from the web: a video that plays in place, or a link's preview card. */
 export interface EmbedData {
-  kind: 'video' | 'link';
+  /**
+   * `video` a YouTube video; `link` a card for a page; `media` a video or sound file,
+   * uploaded or linked, played by the browser itself; `player` another site's player
+   * (Vimeo, SoundCloud, Spotify) in a frame.
+   */
+  kind: 'video' | 'link' | 'media' | 'player';
+  /** What was pasted — or, for `media`, what plays: a stored file, or one elsewhere. */
   url: string;
   title?: string;
   description?: string;
@@ -55,6 +61,12 @@ export interface EmbedData {
   site?: string;
   /** YouTube's id for the video. */
   videoId?: string;
+  /** For `media` and `player`: whether it is something to watch or to listen to. */
+  media?: 'video' | 'audio';
+  /** For an uploaded `media` file: its hash, so the board keeps it stored. */
+  fileId?: string;
+  /** For `player`: the address of the site's own player. */
+  player?: string;
 }
 
 export type ElementType = ShapeType | ContentType | 'group';
@@ -125,6 +137,11 @@ export interface BoardElement {
   parentId: ElementId | null;
   /** Which page of the board it is on. Absent means the first page. */
   page?: string;
+  /**
+   * A frame's place in the presentation, as a fractional key. Frames without one come
+   * after those with one, in reading order — which is every frame on an older board.
+   */
+  slide?: string;
   style: ElementStyle;
 
   /**
