@@ -54,7 +54,7 @@ function BoardView({ boardId }: { boardId: string }) {
     // instant. Anyone else waits for the server, so a viewer never gets a moment in
     // which their changes seem to land.
     const owns = useWorkspace.getState().boards.some((board) => board.id === boardId);
-    useBoardAccess.setState({ ownerName: null, title: null });
+    useBoardAccess.setState({ ownerName: null, title: null, textSize: null });
     applyRole(owns ? 'owner' : null, owns);
 
     void (async () => {
@@ -71,7 +71,12 @@ function BoardView({ boardId }: { boardId: string }) {
               applyRole(owns ? 'owner' : 'viewer', owns);
               return;
             }
-            useBoardAccess.setState({ ownerName: opened.ownerName, title: opened.board.title });
+            useBoardAccess.setState({
+              ownerName: opened.ownerName,
+              title: opened.board.title,
+              // The owner's own text starts at their own size, not the one for others.
+              textSize: opened.role === 'owner' ? null : opened.textSize,
+            });
             applyRole(opened.role, opened.canExport);
           },
           events: {
@@ -116,7 +121,13 @@ function BoardView({ boardId }: { boardId: string }) {
       attachHistory(null, null);
       useComments.getState().close();
       setBoardReadOnly(false);
-      useBoardAccess.setState({ role: 'owner', canExport: true, ownerName: null, title: null });
+      useBoardAccess.setState({
+        role: 'owner',
+        canExport: true,
+        ownerName: null,
+        title: null,
+        textSize: null,
+      });
       resetPresence();
       // Leaving the board sends whatever has not been sent yet.
       void sync?.flush().finally(() => sync?.stop());

@@ -248,6 +248,10 @@ export function Inspector() {
                     {size}
                   </button>
                 ))}
+                {/* The exact size, which a default set in Settings need not be one of. */}
+                <span className={styles.value} data-testid="font-size">
+                  {Math.round(first.style.fontSize)}px
+                </span>
               </div>
               <div className={styles.buttons}>
                 {/* While typing, these format the selected words (or what is typed

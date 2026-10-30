@@ -24,7 +24,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **9**  | Presentation mode, workshop tools, embeds    | built       |
 | **10** | Quick fixes and the text box                 | built       |
 | **11** | One control pane, and who sees what          | built       |
-| 12     | Settings and shortcuts                       | not started |
+| **12** | Settings and shortcuts                       | built       |
 | 13     | Presenting, frames, celebrations and media   | not started |
 | 14     | Classroom: placeholders, Answer role, locks  | not started |
 | 15     | Undo across people and sessions              | not started |
@@ -99,19 +99,34 @@ tests/
 
 Directories for `tools/` and `model/` arrive with the phases that need them.
 
-## Shortcuts
+## Shortcuts and settings
 
-| Keys                       | Action                             |
-| -------------------------- | ---------------------------------- |
-| `V` / `H`                  | Select tool / hand tool            |
-| Hold `Space`               | Temporary hand tool                |
-| Scroll                     | Pan · `Shift`+scroll pans sideways |
-| `⌘`/`Ctrl` + scroll, pinch | Zoom toward the pointer            |
-| `+` / `−`                  | Zoom in / out                      |
-| `Shift 0` / `Shift 1`      | Zoom to 100% / zoom to fit         |
-| `Shift 2`                  | Zoom to selection (Phase 2)        |
+Every shortcut is in one list, `src/input/shortcuts.ts`: the keyboard handlers, the
+cheat sheet (`?`) and Settings all read it. Each action has default keys and a scope —
+the board, presenting (ahead of the board's keys), or typing in a text box. A few keys
+are fixed and cannot be given away: hold `Space` to pan, the arrows nudge, `Esc` puts
+things down, and copy, cut and paste stay the browser's.
 
-Shortcuts match on physical key position, so they work on any keyboard layout.
+| Keys (defaults)             | Action                                               |
+| --------------------------- | ---------------------------------------------------- |
+| `V` / `H`                   | Select tool / hand tool                              |
+| `P` `I` `E` `K`             | Pen, highlighter, eraser, laser                      |
+| `R` `O` `L` `A` `T` `N` `F` | Rectangle, ellipse, line, arrow, text, sticky, frame |
+| Number pad `1`–`7`          | Celebrations, at any time                            |
+| `+` / `−`                   | Zoom in / out                                        |
+| `Shift 0` / `1` / `2`       | Zoom to 100% / fit / selection                       |
+| `⌘`/`Ctrl` + scroll, pinch  | Zoom toward the pointer                              |
+
+Shortcuts match on physical key position (`event.code`), so they work on any keyboard
+layout, Arabic included.
+
+**Settings** (`/settings` from the dashboard, or Tools → Settings over a board) holds the
+size new text starts at, the shape of a clicked text box (characters by lines), the
+size others start at on your boards (yours unless you pick another), and every
+shortcut: change a key, add or remove one, see clashes, reset one or all. Signed in,
+settings live on the account (`user_settings`, migration 0005, `GET`/`PUT
+/api/settings`) and follow you to any device; signed out, they stay in this browser. A
+board's open response carries its owner's size for others, `textSize`.
 
 ## The document
 

@@ -541,6 +541,9 @@ export function Dashboard({ view }: { view: View }) {
           >
             Trash
           </Link>
+          <Link to={{ name: 'settings' }} className={styles.navItem} data-testid="nav-settings">
+            Settings
+          </Link>
         </nav>
 
         <div className={styles.sidebarHead}>

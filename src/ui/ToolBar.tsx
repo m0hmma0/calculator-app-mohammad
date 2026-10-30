@@ -1,3 +1,5 @@
+import { shortcutLabel, useShortcutLabel, withKey } from '@/input/shortcuts';
+import { useSettings } from '@/settings/settings';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore, VIEWER_TOOLS, type Tool } from '@/state/boardStore';
 import { ToolIcon } from './ToolIcon';
@@ -14,6 +16,7 @@ export function ToolBar() {
   const tool = useBoardStore((state) => state.tool);
   const setTool = useBoardStore((state) => state.setTool);
   const editable = useBoardAccess(selectCanEdit);
+  const shortcuts = useSettings((state) => state.settings.shortcuts);
   // Viewers keep the tools that change nothing: looking around, and pointing.
   const tools = editable ? BAR_TOOLS : BAR_TOOLS.filter((id) => VIEWER_TOOLS.has(id));
 
@@ -29,8 +32,8 @@ export function ToolBar() {
               type="button"
               className={styles.tool}
               aria-pressed={tool === id}
-              aria-label={spec.shortcut ? `${spec.label} (${spec.shortcut})` : spec.label}
-              title={spec.shortcut ? `${spec.label} — ${spec.shortcut}` : spec.label}
+              aria-label={spec.label}
+              title={withKey(spec.label, shortcutLabel(`tool.${id}`, shortcuts))}
               onClick={() => setTool(id)}
               data-testid={`tool-${id}`}
             >
@@ -49,14 +52,16 @@ function UndoRedo() {
   const canRedo = useBoardStore((state) => state.canRedo);
   const undo = useBoardStore((state) => state.undo);
   const redo = useBoardStore((state) => state.redo);
+  const undoKey = useShortcutLabel('undo');
+  const redoKey = useShortcutLabel('redo');
   return (
     <div className={styles.tools} role="group" aria-label="History">
       <button
         type="button"
         className={styles.tool}
         disabled={!canUndo}
-        aria-label="Undo (Ctrl+Z)"
-        title="Undo — Ctrl/⌘ Z"
+        aria-label="Undo"
+        title={withKey('Undo', undoKey)}
         data-testid="undo"
         onClick={undo}
       >
@@ -75,8 +80,8 @@ function UndoRedo() {
         type="button"
         className={styles.tool}
         disabled={!canRedo}
-        aria-label="Redo (Ctrl+Shift+Z)"
-        title="Redo — Ctrl/⌘ Shift Z"
+        aria-label="Redo"
+        title={withKey('Redo', redoKey)}
         data-testid="redo"
         onClick={redo}
       >

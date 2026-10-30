@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 import { insertTable } from '@/input/insertions';
+import { shortcutLabel } from '@/input/shortcuts';
+import { openSettings } from '@/settings/dialog';
+import { useSettings } from '@/settings/settings';
 import { toggleLayers, toggleMinimap } from '@/state/uiPrefs';
 import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { exportBlob, downloadBlob, type ExportFormat } from '@/export/exporters';
@@ -42,13 +45,15 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
 
   const canExport = useBoardAccess((state) => state.canExport);
   const owner = useBoardAccess(selectIsOwner);
+  const shortcuts = useSettings((state) => state.settings.shortcuts);
   const commands = useMemo<Command[]>(() => {
     const store = useBoardStore.getState;
 
-    const tool = (id: Tool, label: string, hint: string): Command => ({
+    const key = (id: string) => shortcutLabel(id, shortcuts) ?? undefined;
+    const tool = (id: Tool, label: string): Command => ({
       id: `tool-${id}`,
       label,
-      hint,
+      hint: key(`tool.${id}`),
       run: () => store().setTool(id),
     });
 
@@ -68,26 +73,41 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
     };
 
     return [
-      tool('select', 'Select tool', 'V'),
-      tool('hand', 'Hand tool', 'H'),
-      tool('rect', 'Rectangle', 'R'),
-      tool('ellipse', 'Ellipse', 'O'),
-      tool('line', 'Line', 'L'),
-      tool('arrow', 'Arrow', 'A'),
-      tool('pen', 'Pen', 'P'),
-      tool('highlighter', 'Highlighter', 'I'),
-      tool('eraser', 'Eraser', 'E'),
-      tool('text', 'Text', 'T'),
-      tool('sticky', 'Sticky note', 'N'),
-      tool('frame', 'Frame', 'F'),
-      tool('laser', 'Laser pointer', 'K'),
-      { id: 'undo', label: 'Undo', hint: '⌘Z', run: () => store().undo() },
-      { id: 'redo', label: 'Redo', hint: '⇧⌘Z', run: () => store().redo() },
-      { id: 'fit', label: 'Zoom to fit', hint: '⇧1', run: () => store().zoomToFit() },
-      { id: 'hundred', label: 'Zoom to 100%', hint: '⇧0', run: () => store().zoomTo100() },
-      { id: 'select-all', label: 'Select all', hint: '⌘A', run: () => store().selectAll() },
+      tool('select', 'Select tool'),
+      tool('hand', 'Hand tool'),
+      tool('rect', 'Rectangle'),
+      tool('ellipse', 'Ellipse'),
+      tool('line', 'Line'),
+      tool('arrow', 'Arrow'),
+      tool('pen', 'Pen'),
+      tool('highlighter', 'Highlighter'),
+      tool('eraser', 'Eraser'),
+      tool('text', 'Text'),
+      tool('sticky', 'Sticky note'),
+      tool('frame', 'Frame'),
+      tool('laser', 'Laser pointer'),
+      { id: 'undo', label: 'Undo', hint: key('undo'), run: () => store().undo() },
+      { id: 'redo', label: 'Redo', hint: key('redo'), run: () => store().redo() },
+      { id: 'fit', label: 'Zoom to fit', hint: key('zoom-fit'), run: () => store().zoomToFit() },
+      {
+        id: 'hundred',
+        label: 'Zoom to 100%',
+        hint: key('zoom-100'),
+        run: () => store().zoomTo100(),
+      },
+      {
+        id: 'select-all',
+        label: 'Select all',
+        hint: key('select-all'),
+        run: () => store().selectAll(),
+      },
       { id: 'insert-table', label: 'Insert a table', run: insertTable },
-      { id: 'group', label: 'Group selection', hint: '⌘G', run: () => store().groupSelection() },
+      {
+        id: 'group',
+        label: 'Group selection',
+        hint: key('group'),
+        run: () => store().groupSelection(),
+      },
       // Only where the owner allows it — the menu is where "no export" shows.
       ...(canExport
         ? [
@@ -101,15 +121,28 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
             },
           ]
         : []),
+      { id: 'settings', label: 'Settings', hint: key('settings'), run: () => openSettings() },
+      {
+        id: 'change-shortcuts',
+        label: 'Change keyboard shortcuts',
+        run: () => openSettings('shortcuts'),
+      },
       {
         id: 'shortcuts',
         label: 'Keyboard shortcuts',
-        hint: '?',
+        hint: key('sheet'),
         run: () => store().toggleShortcuts(),
       },
       // The minimap is the owner's.
       ...(owner
-        ? [{ id: 'minimap', label: 'Show or hide the minimap', hint: 'M', run: toggleMinimap }]
+        ? [
+            {
+              id: 'minimap',
+              label: 'Show or hide the minimap',
+              hint: key('minimap'),
+              run: toggleMinimap,
+            },
+          ]
         : []),
       { id: 'layers', label: 'Show or hide the object list', run: toggleLayers },
       {
@@ -119,7 +152,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       },
       { id: 'clear', label: 'Clear the board', run: () => store().clearBoard() },
     ];
-  }, [canExport, owner]);
+  }, [canExport, owner, shortcuts]);
 
   const results = useMemo(
     () => commands.filter((command) => matches(query, command.label)),

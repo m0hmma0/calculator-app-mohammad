@@ -11,6 +11,8 @@ import {
   useUiPrefs,
 } from '@/state/uiPrefs';
 import { celebrate, EFFECTS } from '@/fun/effects';
+import { shortcutLabel, withKey } from '@/input/shortcuts';
+import { useSettings } from '@/settings/settings';
 import { startPresentation } from '@/workshop/presentation';
 import {
   clearVote,
@@ -58,6 +60,7 @@ export function InsertMenu() {
   const minimap = useUiPrefs((state) => state.minimap);
   const sound = useUiPrefs((state) => state.sound);
   const recentTimers = useUiPrefs((state) => state.recentTimers);
+  const shortcuts = useSettings((state) => state.settings.shortcuts);
   const timer = useWorkshop((state) => state.timer);
   const vote = useWorkshop((state) => state.vote);
   const importStatus = useImport((state) => state.status);
@@ -180,8 +183,8 @@ export function InsertMenu() {
                       type="button"
                       role="menuitemradio"
                       aria-checked={tool === id}
-                      aria-label={spec.shortcut ? `${spec.label} (${spec.shortcut})` : spec.label}
-                      title={spec.shortcut ? `${spec.label} — ${spec.shortcut}` : spec.label}
+                      aria-label={spec.label}
+                      title={withKey(spec.label, shortcutLabel(`tool.${id}`, shortcuts))}
                       data-testid={`insert-tool-${id}`}
                       onClick={run(() => setTool(id))}
                     >
@@ -205,7 +208,9 @@ export function InsertMenu() {
                   >
                     <ToolIcon id={id} />
                     <span>{id === 'text' ? 'ABC Text' : spec.label}</span>
-                    <kbd>{spec.shortcut}</kbd>
+                    {shortcutLabel(`tool.${id}`, shortcuts) ? (
+                      <kbd>{shortcutLabel(`tool.${id}`, shortcuts)}</kbd>
+                    ) : null}
                   </button>
                 );
               })}
@@ -384,7 +389,10 @@ export function InsertMenu() {
                     role="menuitem"
                     className={styles.stamp}
                     aria-label={`${effect.label} for everyone`}
-                    title={`${effect.label} — ${effect.key} while presenting`}
+                    title={withKey(
+                      effect.label,
+                      shortcutLabel(`celebrate.${effect.kind}`, shortcuts),
+                    )}
                     data-testid={`celebrate-${effect.kind}`}
                     onClick={run(() => celebrate(effect.kind))}
                   >

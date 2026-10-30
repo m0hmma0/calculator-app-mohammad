@@ -31,6 +31,7 @@ import {
   transferBoard,
 } from './routes/sharing';
 import { addLibraryItem, listLibrary, removeLibraryItem } from './routes/library';
+import { getSettings, putSettings } from './routes/settings';
 import { unfurl } from './routes/unfurl';
 import { emptyTrash, getTrash, getWorkspace } from './routes/workspace';
 import { upsertUser } from './db';
@@ -153,6 +154,8 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
     return addLibraryItem(request, env, account);
   const libraryItem = /^\/api\/library\/([\w-]+)$/.exec(pathname);
   if (libraryItem && method === 'DELETE') return removeLibraryItem(env, account, libraryItem[1]!);
+  if (pathname === '/api/settings' && method === 'GET') return getSettings(env, account);
+  if (pathname === '/api/settings' && method === 'PUT') return putSettings(request, env, account);
   if (pathname === '/api/notifications' && method === 'GET') return listNotifications(env, account);
   if (pathname === '/api/notifications/read' && method === 'POST') {
     return readNotifications(env, account);

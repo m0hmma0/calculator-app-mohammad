@@ -9,17 +9,17 @@ with something the user checks themselves against a written checklist.
 
 Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not reported
 back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools and
-rich content)**, **Phase 10 (quick fixes and the text box)** and **Phase 11 (one
-control pane, and who sees what)** are built, tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0004 applied remotely) but not
-yet checked by the user.
+rich content)**, **Phase 10 (quick fixes and the text box)**, **Phase 11 (one
+control pane, and who sees what)** and **Phase 12 (settings and shortcuts)** are built,
+tested and deployed at <https://sabboura.mh-hamad.workers.dev> (migrations 0001–0005
+applied remotely) but not yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
 10–16 — 11 one control pane and role-based controls, 12 settings and shortcuts, 13
 presenting/frames/celebrations/media, 14 placeholders and the "Answer" role and owner
 locks, 15 undo across people and sessions, 16 dashboard organisation — and the
 original 10 (accessibility, Arabic and RTL) and 11 (hardening) are now **17** and
-**18**. The next phase is **12**. Parked by the user: student picture uploads,
+**18**. The next phase is **13**. Parked by the user: student picture uploads,
 read4more.com, "see the stroke before it ends", Chrome zoom.
 
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
@@ -30,6 +30,16 @@ welcome message as `now`), tables/code/embeds as element types, `/api/unfurl` fo
 cards, a per-account library (`worker/routes/library.ts`, migration 0004), and SVG/PDF
 import (`src/importers/`). Not built from the original plan: LaTeX, `.excalidraw`
 import, emoji reactions.
+
+Phase 12 in one paragraph: settings (`shared/settings.ts`, sanitised on both sides) are
+the default text size, the clicked box's shape in characters × lines, the size others
+start at on your boards, and changed shortcuts. Signed in they live in D1
+(`user_settings`, `/api/settings`) with a localStorage copy; signed out, only the copy
+(`src/settings/settings.ts`). `textDefaults()` is what a new text box starts at — on
+someone else's board the size is the owner's (`textSize` in the board's open
+response). Every shortcut is one entry in `src/input/shortcuts.ts` with a scope (board,
+presenting, typing); the handlers call `actionFor(event, scope)`. Settings is a page
+(`/settings`) and the same panel as a dialog over a board (`src/settings/dialog.ts`).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -152,6 +162,15 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **Text tool defaults are big** (40px type, 55 characters by 8 lines when clicked);
   a test that needs a small box drags one out. Typed text grows a box's height
   (`setElementText` measures it), so heights in tests are lower bounds.
+- **A new shortcut is a line in `ACTIONS` (`src/input/shortcuts.ts`)** and a case in
+  the handler for its scope — never a key compared by hand, or Settings cannot change
+  it and the cheat sheet will not show it. Default keys must not clash within a scope
+  (a unit test checks). Keys are `event.code`, written `Mod+Alt+Shift+Code`.
+- **Waiting for "Saved to your account" right after a change** used to pass before the
+  save began; a change now shows "Saving…" at once, so the wait is real.
+- **Celebrations are the number pad, at any time** — the letters that started them
+  while presenting are gone (they would have fought the tool keys once presenting
+  keeps the drawing tools, Phase 13).
 - **The canvas presses `preventDefault` on pointer-down**, so focus never moves on its
   own: anything that must end on a click elsewhere (typing) is ended there explicitly.
 - **The text editor is `contenteditable`, not a textarea** (except for code), so tests

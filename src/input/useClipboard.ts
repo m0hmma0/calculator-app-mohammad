@@ -10,6 +10,7 @@ import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
 import { useBoardStore } from '@/state/boardStore';
 import { defaultTextBox, textHeight, textWidth } from '@/text/measure';
+import { textDefaults } from '@/settings/settings';
 
 const MIME = 'application/x-sabboura+json';
 const FALLBACK_KEY = 'sabboura:clipboard';
@@ -43,12 +44,14 @@ function decode(text: string): BoardElement[] | null {
 function placeText(text: string, at: Point) {
   const store = useBoardStore.getState();
   if (store.stageSize.width <= 1 && store.stageSize.height <= 1) return;
+  const defaults = textDefaults();
   const element = createElement({
     type: 'text',
     box: { x: at.x, y: at.y, w: 1, h: 1 },
     z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+    style: { fontSize: defaults.fontSize },
   });
-  const full = defaultTextBox(element.style);
+  const full = defaultTextBox(element.style, defaults);
   const widest = Math.max(
     0,
     ...text.split('\n').map((line) => textWidth(element.style, line) ?? full.w),

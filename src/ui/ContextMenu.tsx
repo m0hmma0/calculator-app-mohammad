@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { screenToBoard } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
+import { keyLabel, shortcutLabel } from '@/input/shortcuts';
 import { pasteFromClipboard } from '@/input/useClipboard';
 import { selectCanComment, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
+import { useSettings } from '@/settings/settings';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 import { togglePane, useUiPrefs } from '@/state/uiPrefs';
 import styles from './ContextMenu.module.css';
@@ -11,7 +13,7 @@ import styles from './ContextMenu.module.css';
 interface Entry {
   id: string;
   label: string;
-  hint?: string;
+  hint?: string | null;
   run: () => void;
   disabled?: boolean;
   separated?: boolean;
@@ -31,6 +33,7 @@ export function ContextMenu() {
   const canComment = useBoardAccess(selectCanComment);
   // Comments live on a board with a room; the signed-out board has none.
   const onBoard = usePresence((state) => state.status !== null);
+  const shortcuts = useSettings((state) => state.settings.shortcuts);
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -70,6 +73,7 @@ export function ContextMenu() {
   const chosen = elements.filter((element) => ids.has(element.id));
   const hasSelection = chosen.length > 0;
   const readOnly = boardDoc().readOnly;
+  const key = (id: string) => shortcutLabel(id, shortcuts);
 
   const comment: Entry = {
     id: 'comment',
@@ -93,35 +97,35 @@ export function ContextMenu() {
         {
           id: 'copy',
           label: 'Copy',
-          hint: '⌘C',
+          hint: keyLabel('Mod+KeyC'),
           disabled: !hasSelection,
           run: () => document.execCommand('copy'),
         },
         {
           id: 'paste',
           label: 'Paste',
-          hint: '⌘V',
+          hint: keyLabel('Mod+KeyV'),
           disabled: readOnly,
           run: () => void pasteFromClipboard(),
         },
         {
           id: 'duplicate',
           label: 'Duplicate',
-          hint: '⌘D',
+          hint: key('duplicate'),
           disabled: !hasSelection,
           run: () => store().duplicateSelection(),
         },
         {
           id: 'delete',
           label: 'Delete',
-          hint: 'Del',
+          hint: key('delete'),
           disabled: !hasSelection,
           run: () => store().deleteSelection(),
         },
         {
           id: 'lock',
           label: 'Lock',
-          hint: '⇧⌘L',
+          hint: key('lock'),
           separated: true,
           disabled: !chosen.some((element) => !element.locked),
           run: () => store().setSelectionLocked(true),
@@ -135,14 +139,14 @@ export function ContextMenu() {
         {
           id: 'group',
           label: 'Group',
-          hint: '⌘G',
+          hint: key('group'),
           disabled: chosen.length < 2,
           run: () => store().groupSelection(),
         },
         {
           id: 'ungroup',
           label: 'Ungroup',
-          hint: '⇧⌘G',
+          hint: key('ungroup'),
           disabled: !chosen.some((element) => element.type === 'group'),
           run: () => store().ungroupSelection(),
         },

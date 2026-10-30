@@ -8,6 +8,8 @@ interface BoardAccessStore {
   canExport: boolean;
   ownerName: string | null;
   title: string | null;
+  /** On someone else's board, the size new text starts at: its owner's choice. */
+  textSize: number | null;
 }
 
 /**
@@ -19,6 +21,7 @@ export const useBoardAccess = create<BoardAccessStore>(() => ({
   canExport: true,
   ownerName: null,
   title: null,
+  textSize: null,
 }));
 
 export const selectCanEdit = (state: BoardAccessStore) => canEdit(state.role);

@@ -516,11 +516,11 @@ test('a celebration plays for everyone on the board, and ends by itself', async 
     }
     await expect(b.getByTestId('celebration')).toHaveCount(0, { timeout: 8000 });
 
-    // While presenting, D is a drum roll — for the audience too.
+    // While presenting too, number pad 2 is a drum roll — for the audience as well.
     await drag(a, 'KeyF', [200, 200], [500, 400]);
     await a.getByTestId('insert-menu').click();
     await a.getByTestId('present-start').click();
-    await a.keyboard.press('KeyD');
+    await a.keyboard.press('Numpad2');
     await expect(b.getByTestId('celebration')).toHaveAttribute('data-effect', 'drumroll');
 
     // Someone arriving afterwards does not get an old celebration replayed.

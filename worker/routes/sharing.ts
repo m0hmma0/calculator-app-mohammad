@@ -10,6 +10,7 @@ import type {
   ShareState,
   SharedItem,
 } from '@shared/sharing';
+import { sizeForOthers } from '@shared/settings';
 import type { Account } from '../auth';
 import {
   atLeast,
@@ -22,6 +23,7 @@ import {
 } from '../access';
 import type { Env } from '../env';
 import { fail, json, newId } from '../http';
+import { settingsOf } from './settings';
 
 const GRANT_ROLES: readonly GrantRole[] = ['viewer', 'commenter', 'editor'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -506,6 +508,8 @@ export async function openBoard(
     role: access.role,
     canExport: atLeast(access.role, 'editor') || access.board.viewer_export === 1,
     ownerName: owner?.name ?? owner?.email ?? null,
+    // New text on this board starts at the size its owner chose for everyone.
+    textSize: sizeForOthers(await settingsOf(env, access.ownerId)),
   };
   return json(body);
 }

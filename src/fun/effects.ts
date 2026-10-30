@@ -24,15 +24,14 @@ export const EFFECTS: ReadonlyArray<{
   kind: EffectKind;
   emoji: string;
   label: string;
-  key: string;
 }> = [
-  { kind: 'confetti', emoji: '🎉', label: 'Confetti', key: 'C' },
-  { kind: 'drumroll', emoji: '🥁', label: 'Drum roll', key: 'D' },
-  { kind: 'bubbles', emoji: '🫧', label: 'Bubbles', key: 'O' },
-  { kind: 'micdrop', emoji: '🎤', label: 'Mic drop', key: 'M' },
-  { kind: 'quiet', emoji: '🤫', label: 'Quiet', key: 'Q' },
-  { kind: 'curtain', emoji: '🎭', label: 'Curtain call', key: 'U' },
-  { kind: 'applause', emoji: '👏', label: 'Applause', key: 'A' },
+  { kind: 'confetti', emoji: '🎉', label: 'Confetti' },
+  { kind: 'drumroll', emoji: '🥁', label: 'Drum roll' },
+  { kind: 'bubbles', emoji: '🫧', label: 'Bubbles' },
+  { kind: 'micdrop', emoji: '🎤', label: 'Mic drop' },
+  { kind: 'quiet', emoji: '🤫', label: 'Quiet' },
+  { kind: 'curtain', emoji: '🎭', label: 'Curtain call' },
+  { kind: 'applause', emoji: '👏', label: 'Applause' },
 ];
 
 /** How long each plays, in milliseconds. */

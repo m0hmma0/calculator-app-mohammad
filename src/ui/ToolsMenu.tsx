@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { openHistory, useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
+import { openSettings } from '@/settings/dialog';
 import { useComments } from '@/sharing/comments';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { toggleLayers, useUiPrefs } from '@/state/uiPrefs';
@@ -121,6 +122,15 @@ export function ToolsMenu() {
               <span>{layers ? 'Hide the object list' : 'Show the object list'}</span>
             </button>
           ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            className={menu.item}
+            data-testid="tools-settings"
+            onClick={run(() => openSettings())}
+          >
+            <span>Settings</span>
+          </button>
         </div>
       ) : null}
       {open && view === 'library' ? (

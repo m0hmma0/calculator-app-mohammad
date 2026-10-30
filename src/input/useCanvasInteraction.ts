@@ -1,6 +1,7 @@
 import { useEffect, type RefObject } from 'react';
 import { recognizeShape } from '@/ink/recognize';
 import { defaultTextBox } from '@/text/measure';
+import { textDefaults } from '@/settings/settings';
 import { placeStamp } from './insertions';
 import { tableGrid } from '@/canvas/renderContent';
 import { useEmbeds } from '@/state/embedStore';
@@ -811,13 +812,15 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         const dragged =
           Math.hypot(end.x - drag.origin.x, end.y - drag.origin.y) * store.viewport.zoom >=
           DRAG_THRESHOLD * 2;
+        const defaults = textDefaults();
         const element = createElement({
           type: 'text',
           box: { x: drag.origin.x, y: drag.origin.y, w: 1, h: 1 },
           z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+          style: { fontSize: defaults.fontSize },
         });
         const box = dragged ? rectFromPoints(drag.origin, end) : null;
-        const size = box ?? defaultTextBox(element.style);
+        const size = box ?? defaultTextBox(element.style, defaults);
         Object.assign(element, box ?? { x: drag.origin.x, y: drag.origin.y }, {
           w: Math.max(40, size.w),
           h: Math.max(element.style.fontSize * element.style.lineHeight, size.h),

@@ -77,6 +77,8 @@ export interface OpenBoardResponse {
   role: Role;
   canExport: boolean;
   ownerName: string | null;
+  /** The size new text starts at on this board: the owner's choice for everyone on it. */
+  textSize: number;
 }
 
 export interface SharedItem {

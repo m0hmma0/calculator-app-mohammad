@@ -1,53 +1,22 @@
 import { useEffect } from 'react';
+import { ACTIONS, GROUPS, keyLabel, keysOf } from '@/input/shortcuts';
+import { openSettings } from '@/settings/dialog';
+import { useSettings } from '@/settings/settings';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './ShortcutSheet.module.css';
 
-const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
+/** Keys that are not on the list to change: they mean the same thing everywhere. */
+const FIXED: Array<{ title: string; rows: Array<[string, string]> }> = [
   {
-    title: 'Tools',
+    title: 'Always',
     rows: [
-      ['V', 'Move and select'],
-      ['H · Space', 'Pan the board'],
-      ['R · O', 'Rectangle · Ellipse'],
-      ['L · A', 'Line · Arrow'],
-      ['P · I', 'Pen · Highlighter'],
-      ['E', 'Eraser'],
-      ['T · N', 'Text · Sticky note'],
-      ['F', 'Frame'],
-      ['K', 'Laser pointer'],
-    ],
-  },
-  {
-    title: 'Editing',
-    rows: [
-      ['⌘Z · ⇧⌘Z', 'Undo · Redo'],
-      ['⌘D · Alt-drag', 'Duplicate'],
-      ['⌘G · ⇧⌘G', 'Group · Ungroup'],
-      ['⇧⌘L · ⇧⌘H', 'Lock · Hide'],
-      ['[ · ]', 'Send backward · forward'],
-      ['⌘[ · ⌘]', 'Send to back · front'],
-      ['⌘A · Esc', 'Select all · Deselect'],
-      ['Delete', 'Delete selection'],
-      ['Arrows', 'Nudge 1px (10px with Shift)'],
-    ],
-  },
-  {
-    title: 'While typing',
-    rows: [
-      ['⌘B · ⌘I · ⌘U', 'Bold · Italic · Underline'],
-      ['⌘K', 'Link the selected words'],
-      ['⌘-click', 'Open a link'],
-    ],
-  },
-  {
-    title: 'View',
-    rows: [
+      ['Space (hold)', 'Pan the board'],
       ['Scroll', 'Pan'],
-      ['⌘Scroll', 'Zoom'],
-      ['M', 'Show or hide the minimap'],
-      ['⇧1 · ⇧2 · ⇧0', 'Fit · Selection · 100%'],
-      ['+ · −', 'Zoom in · out'],
-      ['?', 'This sheet'],
+      ['Ctrl/⌘ scroll', 'Zoom'],
+      ['Arrows', 'Nudge 1px (10px with Shift)'],
+      ['Esc', 'Put down the selection'],
+      ['Ctrl/⌘ C · X · V', 'Copy · Cut · Paste'],
+      ['Ctrl/⌘ click', 'Open a link in the words'],
     ],
   },
   {
@@ -55,32 +24,50 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
     rows: [
       ['Shift', 'Square, circle or 15° line'],
       ['Shift (pen)', 'Straight line; snaps level or upright when close'],
-      ['⌘ (pen)', 'Turn an outline into a shape'],
+      ['Ctrl/⌘ (pen)', 'Turn an outline into a shape'],
       ['Shift (resize)', 'Keep the aspect ratio'],
       ['Shift (image)', 'Free the aspect ratio'],
       ['Alt', 'Resize about the centre'],
-      ['⌘', 'Ignore snapping'],
+      ['Ctrl/⌘', 'Ignore snapping'],
     ],
   },
 ];
 
+/**
+ * Every shortcut, as this person has them: the list in `shortcuts.ts`, with whatever
+ * they changed in Settings. Actions with no key are left out here; Settings has them.
+ */
 export function ShortcutSheet() {
   const open = useBoardStore((state) => state.shortcutsOpen);
-  const toggle = useBoardStore((state) => state.toggleShortcuts);
+  const shortcuts = useSettings((state) => state.settings.shortcuts);
+  const close = () => useBoardStore.setState({ shortcutsOpen: false });
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') toggle();
+      if (event.key === 'Escape') useBoardStore.setState({ shortcutsOpen: false });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, toggle]);
+  }, [open]);
 
   if (!open) return null;
 
+  const groups = [
+    ...GROUPS.map((title) => ({
+      title,
+      rows: ACTIONS.filter((each) => each.group === title)
+        .map((each): [string, string] => [
+          keysOf(each.id, shortcuts).map(keyLabel).join(' · '),
+          each.label,
+        ])
+        .filter(([keys]) => keys !== ''),
+    })),
+    ...FIXED,
+  ].filter((group) => group.rows.length > 0);
+
   return (
-    <div className={styles.backdrop} data-hud onClick={toggle} data-testid="shortcut-sheet">
+    <div className={styles.backdrop} data-hud onClick={close} data-testid="shortcut-sheet">
       <div
         className={styles.sheet}
         role="dialog"
@@ -89,18 +76,31 @@ export function ShortcutSheet() {
       >
         <header className={styles.header}>
           <h2 className={styles.title}>Keyboard shortcuts</h2>
-          <button type="button" className={styles.close} onClick={toggle} aria-label="Close">
-            ✕
-          </button>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.change}
+              data-testid="sheet-change-shortcuts"
+              onClick={() => {
+                close();
+                openSettings('shortcuts');
+              }}
+            >
+              Change shortcuts
+            </button>
+            <button type="button" className={styles.close} onClick={close} aria-label="Close">
+              ✕
+            </button>
+          </div>
         </header>
 
         <div className={styles.columns}>
-          {GROUPS.map((group) => (
+          {groups.map((group) => (
             <section key={group.title} className={styles.group}>
               <h3 className={styles.groupTitle}>{group.title}</h3>
               <dl className={styles.rows}>
                 {group.rows.map(([keys, label]) => (
-                  <div key={keys} className={styles.row}>
+                  <div key={label} className={styles.row}>
                     <dt className={styles.keys}>{keys}</dt>
                     <dd className={styles.label}>{label}</dd>
                   </div>

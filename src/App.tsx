@@ -5,6 +5,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { LocalBoard } from '@/pages/LocalBoard';
 import { BoardPage } from '@/pages/BoardPage';
 import { LinkLanding, SharedFolder } from '@/pages/Shared';
+import { SettingsPage } from '@/pages/SettingsPage';
 import { SignIn } from '@/pages/SignIn';
 import { shareLink } from '@/sharing/linkSession';
 import { RouterProvider, useRouter } from '@/router/router';
@@ -66,6 +67,8 @@ function Routes() {
       return <Dashboard view={{ kind: 'trash' }} />;
     case 'shared':
       return <Dashboard view={{ kind: 'shared' }} />;
+    case 'settings':
+      return <SettingsPage />;
     default:
       return <Dashboard view={{ kind: 'folder', folderId: null }} />;
   }

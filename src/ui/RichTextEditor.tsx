@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { actionFor } from '@/input/shortcuts';
 import { textSplice } from '@/doc/schema';
 import type { BoardElement } from '@/model/element';
 import { detectDirection } from '@/model/textLayout';
@@ -378,24 +379,24 @@ export function RichTextEditor({
       dir={detectDirection(text)}
       style={{ ...style, textAlign: center ? 'center' : style.textAlign }}
       onKeyDown={(event) => {
-        const mod = event.ctrlKey || event.metaKey;
-        if (!mod || event.altKey) return;
-        const key = event.key.toLowerCase();
-        if (key === 'b' || key === 'i' || key === 'u') {
+        // Only keys held with Ctrl, ⌘ or Alt can be shortcuts here; the rest type.
+        if (!event.ctrlKey && !event.metaKey && !event.altKey) return;
+        const id = actionFor(event.nativeEvent, 'typing') ?? actionFor(event.nativeEvent, 'board');
+        if (id === 'text.bold' || id === 'text.italic' || id === 'text.underline') {
           event.preventDefault();
-          toggle(key === 'b' ? 'bold' : key === 'i' ? 'italic' : 'underline');
-        } else if (key === 'k') {
+          toggle(id === 'text.bold' ? 'bold' : id === 'text.italic' ? 'italic' : 'underline');
+        } else if (id === 'text.link') {
           // A link: the address field opens in the side panel, opening the panel if
           // it is shut — asked for, unlike opening it just because typing began.
           event.preventDefault();
           publish();
           showPane();
           useTextSelection.setState({ linkOpen: true });
-        } else if (key === 'z' || key === 'y') {
+        } else if (id === 'undo' || id === 'redo') {
           // Undo is the board's: it knows what this person typed, and nobody else.
           event.preventDefault();
           const store = useBoardStore.getState();
-          if (key === 'y' || event.shiftKey) store.redo();
+          if (id === 'redo') store.redo();
           else store.undo();
         }
       }}

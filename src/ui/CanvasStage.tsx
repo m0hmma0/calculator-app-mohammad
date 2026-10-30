@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { shortcutLabel } from '@/input/shortcuts';
+import { useSettings } from '@/settings/settings';
 import { drawGrid } from '@/canvas/grid';
 import { renderElements } from '@/canvas/renderElements';
 import { renderLaser } from '@/canvas/renderLaser';
@@ -29,6 +31,7 @@ import { Inspector } from './Inspector';
 import { Minimap } from './Minimap';
 import { CommandPalette } from './CommandPalette';
 import { ContextMenu } from './ContextMenu';
+import { SettingsDialog } from './SettingsDialog';
 import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
@@ -253,13 +256,7 @@ export function CanvasStage() {
         <div className={styles.empty}>
           <div className={styles.card}>
             <h2 className={styles.title}>Draw something</h2>
-            <p className={styles.body}>
-              Shapes, notes, text and frames are in <strong>Insert</strong> — or press{' '}
-              <span className={styles.key}>R</span> <span className={styles.key}>O</span>{' '}
-              <span className={styles.key}>N</span> <span className={styles.key}>T</span>.{' '}
-              <span className={styles.key}>P</span> draws, <span className={styles.key}>V</span>{' '}
-              selects, <span className={styles.key}>Space</span> pans.
-            </p>
+            <EmptyHint />
           </div>
         </div>
       ) : null}
@@ -280,10 +277,37 @@ export function CanvasStage() {
       <TableCellEditor viewport={viewport} />
       <Inspector />
       <ShortcutSheet />
+      <SettingsDialog />
       <CommandPalette />
       <ContextMenu />
       <StatusBar />
       {devPanelOpen ? <DevPanel /> : null}
     </div>
+  );
+}
+
+/** The first keys to know, as this person has them set. */
+function EmptyHint() {
+  const shortcuts = useSettings((state) => state.settings.shortcuts);
+  const key = (id: string) => {
+    const label = shortcutLabel(id, shortcuts);
+    return label ? (
+      <span key={id} className={styles.key}>
+        {label}
+      </span>
+    ) : null;
+  };
+  const making = ['tool.rect', 'tool.ellipse', 'tool.sticky', 'tool.text']
+    .map(key)
+    .filter(Boolean)
+    .flatMap((node, index) => (index === 0 ? [node] : [' ', node]));
+  return (
+    <p className={styles.body}>
+      Shapes, notes, text and frames are in <strong>Insert</strong>
+      {making.length > 0 ? <> — or press {making}</> : null}.{' '}
+      {key('tool.pen') ? <>{key('tool.pen')} draws, </> : null}
+      {key('tool.select') ? <>{key('tool.select')} selects, </> : null}
+      <span className={styles.key}>Space</span> pans.
+    </p>
   );
 }

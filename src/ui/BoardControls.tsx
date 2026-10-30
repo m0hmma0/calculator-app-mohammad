@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import { toggleFullScreen } from '@/input/useShortcuts';
 import { selectCanEdit, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { toggleMinimap, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { InsertMenu } from './InsertMenu';
@@ -181,10 +182,7 @@ function FullScreenButton() {
       aria-label={full ? 'Leave full screen' : 'Full screen'}
       title={full ? 'Leave full screen' : 'Full screen'}
       data-testid="fullscreen"
-      onClick={() => {
-        if (document.fullscreenElement) void document.exitFullscreen();
-        else void document.documentElement.requestFullscreen().catch(() => {});
-      }}
+      onClick={toggleFullScreen}
     >
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path

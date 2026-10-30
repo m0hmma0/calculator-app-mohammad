@@ -4,11 +4,6 @@ import type { BoardElement, ElementStyle } from '@/model/element';
 import { layoutText } from '@/model/textLayout';
 import { runsOf } from './marks';
 
-/** A new text box, clicked rather than dragged out: this many characters wide… */
-export const TEXT_BOX_CHARS = 55;
-/** …and this many lines tall. */
-export const TEXT_BOX_LINES = 8;
-
 const SAMPLE = 'The quick brown fox jumps over the lazy dog';
 
 let context: CanvasRenderingContext2D | null | undefined;
@@ -25,8 +20,14 @@ export function measuring(): CanvasRenderingContext2D | null {
   return context;
 }
 
-/** The size a clicked text box starts at: 55 characters by 8 lines of its own type. */
-export function defaultTextBox(style: ElementStyle): { w: number; h: number } {
+/**
+ * The size a clicked text box starts at: so many characters by so many lines of its
+ * own type — 55 by 8 unless the person chose otherwise in Settings.
+ */
+export function defaultTextBox(
+  style: ElementStyle,
+  shape: { chars: number; lines: number },
+): { w: number; h: number } {
   const ctx = measuring();
   let average = style.fontSize * 0.5;
   if (ctx) {
@@ -34,8 +35,8 @@ export function defaultTextBox(style: ElementStyle): { w: number; h: number } {
     average = ctx.measureText(SAMPLE).width / SAMPLE.length;
   }
   return {
-    w: Math.round(average * TEXT_BOX_CHARS + TEXT_PADDING * 2),
-    h: Math.round(style.fontSize * style.lineHeight * TEXT_BOX_LINES + TEXT_PADDING * 2),
+    w: Math.round(average * shape.chars + TEXT_PADDING * 2),
+    h: Math.round(style.fontSize * style.lineHeight * shape.lines + TEXT_PADDING * 2),
   };
 }
 

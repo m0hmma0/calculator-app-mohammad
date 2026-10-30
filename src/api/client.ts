@@ -22,6 +22,7 @@ import type {
   ShareState,
   SharedItem,
 } from '@shared/sharing';
+import type { Settings } from '@shared/settings';
 import { currentIdToken } from '@/auth/session';
 import type { BoardElement } from '@/model/element';
 import { guestIdentity, shareLink } from '@/sharing/linkSession';
@@ -158,6 +159,13 @@ export const api = {
     request<{ title?: string; description?: string; image?: string; site?: string }>(
       `/api/unfurl?url=${encodeURIComponent(url)}`,
     ),
+  settings: () => request<{ settings: Settings }>('/api/settings'),
+  putSettings: (settings: Settings) =>
+    request<{ settings: Settings }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ settings }),
+    }),
+
   library: () => request<{ items: unknown[] }>('/api/library'),
   addToLibrary: (name: string, elements: BoardElement[]) =>
     request<{ item: unknown }>('/api/library', {
