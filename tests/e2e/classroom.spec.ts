@@ -101,6 +101,7 @@ test.describe('the Answer role', () => {
     await drawRect(teacher.page, [900, 500], [1000, 580]);
     await teacher.page.getByTestId('insert-menu').click();
     await teacher.page.getByTestId('insert-placeholder').click();
+    await teacher.page.mouse.click(400, 200);
     await teacher.page.getByTestId('placeholder-hint').fill('Your answer');
     await expect(layers(teacher.page)).toHaveCount(2);
 

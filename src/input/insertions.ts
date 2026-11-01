@@ -1,10 +1,10 @@
-import type { Point } from '@/geometry';
-import { createElement, DEFAULT_HINT, DEFAULT_STYLE, TEXT_STYLE } from '@/model/element';
+import type { Point, Rect } from '@/geometry';
+import { createElement, DEFAULT_HINT, type BoardElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
 import { textDefaults } from '@/settings/settings';
 import { showPane } from '@/state/uiPrefs';
 import { useBoardStore } from '@/state/boardStore';
-import { defaultTextBox } from '@/text/measure';
+import { defaultTextBox, textHeight } from '@/text/measure';
 
 export const STAMPS = ['👍', '❤️', '⭐', '✅', '❓', '🎉', '🔥', '💡'] as const;
 
@@ -18,26 +18,46 @@ export function insertTable() {
 }
 
 /**
- * A placeholder in the middle of the view: a text box with a hint, for someone to
- * answer in with one click. It is left selected with the side panel open, so the hint
- * can be written straight away.
+ * A placeholder where the placeholder tool was used: clicked, one line as wide as a
+ * short answer; dragged, the box dragged out — never shorter than its hint needs. It is
+ * left selected with the side panel open, so the hint can be written straight away.
  */
-export function insertPlaceholder() {
+export function placePlaceholder(origin: Point, dragged: Rect | null) {
+  const store = useBoardStore.getState();
   const defaults = textDefaults();
-  const style = { ...DEFAULT_STYLE, ...TEXT_STYLE, fontSize: defaults.fontSize };
-  const size = defaultTextBox(style, { chars: Math.min(defaults.chars, 30), lines: 2 });
-  const element = useBoardStore.getState().insertAt('text', size, {
-    text: '',
-    placeholder: DEFAULT_HINT,
+  const element = createElement({
+    type: 'text',
+    box: { x: origin.x, y: origin.y, w: 1, h: 1 },
+    z: keyBetween(store.elements.at(-1)?.z ?? null, null),
     style: { fontSize: defaults.fontSize },
   });
-  if (!element) return;
+  element.text = '';
+  element.placeholder = DEFAULT_HINT;
+  const box = dragged ?? {
+    x: origin.x,
+    y: origin.y,
+    ...defaultTextBox(element.style, { chars: Math.min(defaults.chars, 30), lines: 1 }),
+  };
+  Object.assign(element, box, { w: Math.max(40, box.w) });
+  element.h = Math.max(dragged?.h ?? 0, textHeight(element, DEFAULT_HINT) ?? box.h);
+  // The tool is put down first: taking up another one clears the selection.
+  store.setTool('select');
+  store.addElement(element);
   showPane();
   requestAnimationFrame(() => {
     const field = document.querySelector<HTMLInputElement>('[data-testid="placeholder-hint"]');
     field?.focus();
     field?.select();
   });
+}
+
+/** A new hint for a placeholder, and the room for it: the box grows if the hint wraps. */
+export function hintPatch(element: BoardElement, hint: string | null): Partial<BoardElement> {
+  if (hint === null) return { placeholder: null };
+  const needed = textHeight(element, hint || DEFAULT_HINT);
+  return needed !== null && needed > element.h
+    ? { placeholder: hint, h: needed }
+    : { placeholder: hint };
 }
 
 /**

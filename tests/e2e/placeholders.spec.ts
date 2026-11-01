@@ -52,25 +52,34 @@ async function colourFraction(
   );
 }
 
-/** Inserts a placeholder with a hint; it lands in the middle of the board. */
-async function insertPlaceholder(page: Page, hint: string) {
+/**
+ * Takes the placeholder tool from Insert and clicks on the board, which places a
+ * one-line placeholder with its top left where the click was; then writes its hint.
+ * Returns a point inside it. Positions are worked out on screen, at 100%.
+ */
+async function insertPlaceholder(page: Page, hint: string, at: [number, number] = [300, 300]) {
+  await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
   await page.getByTestId('insert-menu').click();
   await page.getByTestId('insert-placeholder').click();
+  await page.mouse.click(at[0], at[1]);
   const field = page.getByTestId('placeholder-hint');
   await expect(field).toBeFocused();
   await field.fill(hint);
   await expect(layerItems(page)).toHaveCount(1);
-  // The middle of the board, where it is.
-  const stage = (await page.getByTestId('stage').boundingBox())!;
-  return { x: stage.x + stage.width / 2, y: stage.y + stage.height / 2 };
+  return { x: at[0] + 80, y: at[1] + 30 };
 }
+
+const readout = async (page: Page, id: string) =>
+  parseFloat(await page.getByTestId(id).innerText());
 
 // Checklist item 1.
 test('one click types into a placeholder, whatever the tool; emptied, its hint is back', async ({
   page,
 }) => {
   const middle = await insertPlaceholder(page, 'Your name');
-  const area = { x: middle.x - 120, y: middle.y - 30, w: 240, h: 60 };
+  // Where the end of the hint is drawn, past where the answer below will reach, and
+  // clear of the box's dashed edge.
+  const area = { x: middle.x + 20, y: middle.y - 20, w: 120, h: 38 };
   // Its hint is drawn, faint, while it is empty.
   await page.mouse.click(60, 60);
   await expect.poll(() => colourFraction(page, '--text-muted', area)).toBeGreaterThan(0.004);
@@ -99,21 +108,73 @@ test('one click types into a placeholder, whatever the tool; emptied, its hint i
   await expect.poll(() => colourFraction(page, '--text-muted', area)).toBeGreaterThan(0.004);
 });
 
-test('with the select tool, a drag moves a placeholder and a click types into it', async ({
+test('a click places one line where it is clicked; a drag, the size dragged', async ({ page }) => {
+  await insertPlaceholder(page, 'Name', [300, 260]);
+  // One line, not two: the hint needs no more.
+  const size = await readout(page, 'font-size');
+  expect(await readout(page, 'geo-h')).toBeLessThan(size * 2);
+  // Where it was clicked: its hint starts there.
+  await page.mouse.click(60, 60);
+  await expect
+    .poll(() => colourFraction(page, '--text-muted', { x: 308, y: 268, w: 110, h: 40 }))
+    .toBeGreaterThan(0.004);
+
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-placeholder').click();
+  await page.mouse.move(300, 420);
+  await page.mouse.down();
+  await page.mouse.move(700, 620, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId('placeholder-hint')).toBeFocused();
+  await expect(layerItems(page)).toHaveCount(2);
+  expect(Math.abs((await readout(page, 'geo-w')) - 400)).toBeLessThan(4);
+  expect(Math.abs((await readout(page, 'geo-h')) - 200)).toBeLessThan(4);
+});
+
+test('with the select tool, inside types, the edge takes hold, and the corner resizes', async ({
   page,
 }) => {
-  const middle = await insertPlaceholder(page, 'Answer here');
-  await page.keyboard.press('KeyV');
-  await page.mouse.click(60, 60);
-
-  await page.mouse.move(middle.x, middle.y);
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-placeholder').click();
+  await page.mouse.move(300, 300);
   await page.mouse.down();
-  await page.mouse.move(middle.x + 80, middle.y + 60, { steps: 6 });
+  await page.mouse.move(700, 420, { steps: 6 });
+  await page.mouse.up();
+  await page.getByTestId('placeholder-hint').fill('Answer here');
+  await page.mouse.click(60, 60);
+  await page.keyboard.press('KeyV');
+  const cursor = page.getByTestId('stage');
+
+  // The pointer says which is which.
+  await page.mouse.move(500, 360);
+  await expect(cursor).toHaveAttribute('data-cursor', 'text');
+  await page.mouse.move(303, 360);
+  await expect(cursor).toHaveAttribute('data-cursor', 'move');
+
+  // A click on the edge selects it, without typing.
+  await page.mouse.click(303, 360);
+  await expect(editor(page)).toHaveCount(0);
+  await expect(page.getByTestId('geo-w')).toHaveText('400');
+
+  // Its corner shows the resize arrows, and resizes.
+  await page.mouse.move(700, 420);
+  await expect(cursor).toHaveAttribute('data-cursor', 'nwse-resize');
+  await page.mouse.down();
+  await page.mouse.move(800, 470, { steps: 6 });
+  await page.mouse.up();
+  expect(Math.abs((await readout(page, 'geo-w')) - 500)).toBeLessThan(4);
+
+  // Dragged by its edge, it moves.
+  const x = await readout(page, 'geo-x');
+  await page.mouse.move(303, 360);
+  await page.mouse.down();
+  await page.mouse.move(363, 400, { steps: 6 });
   await page.mouse.up();
   await expect(editor(page)).toHaveCount(0);
-  await expect(page.getByTestId('geo-x')).toBeVisible();
+  expect(Math.abs((await readout(page, 'geo-x')) - (x + 60))).toBeLessThan(4);
 
-  await page.mouse.click(middle.x + 80, middle.y + 60);
+  // Inside, a click types.
+  await page.mouse.click(600, 420);
   await expect(editor(page)).toBeVisible();
 });
 

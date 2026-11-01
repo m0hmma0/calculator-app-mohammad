@@ -151,11 +151,14 @@ what it is becomes a player when the server finds a video or sound behind it.
 
 ## Placeholders, the Answer role and locks
 
-A placeholder is a text box with a hint (`element.placeholder`; Insert → Placeholder, or
-the side panel's "Placeholder" switch on any text box). Its hint is drawn faint and
-italic while it is empty and comes back when it is emptied, and the box survives being
-emptied. One click types into it whatever tool is held — with the select tool, a drag
-still moves it.
+A placeholder is a text box with a hint (`element.placeholder`). Insert → Placeholder
+takes up the placeholder tool: click on the board for a one-line placeholder, or drag
+out the size you want, as with the text tool; the side panel's "Placeholder" switch
+turns any text box into one. Its hint is drawn faint and italic while it is empty and
+comes back when it is emptied, the box survives being emptied, and it grows when its
+hint needs more room. One click types into it whatever tool is held — except that with
+the select tool, its edge (where the pointer shows the move arrows) is where it is
+selected, moved and resized, and only inside it is a click a click to type.
 
 **Can answer** is a role between commenter and editor, for links and for people. Such a
 person has the hand and the laser, may comment, and may type in placeholders and do

@@ -59,7 +59,15 @@ import { loadViewport, saveViewport, setViewportScope } from './viewportStorage'
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
 export type ContentTool =
-  'pen' | 'highlighter' | 'eraser' | 'laser' | 'text' | 'sticky' | 'frame' | 'stamp';
+  | 'pen'
+  | 'highlighter'
+  | 'eraser'
+  | 'laser'
+  | 'text'
+  | 'sticky'
+  | 'frame'
+  | 'stamp'
+  | 'placeholder';
 
 export type Tool = 'select' | 'hand' | ShapeType | ContentTool;
 
@@ -74,6 +82,7 @@ export const CONTENT_TOOLS: readonly ContentTool[] = [
   'sticky',
   'frame',
   'stamp',
+  'placeholder',
 ];
 
 export const SHAPE_TOOLS: readonly ShapeType[] = [

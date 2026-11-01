@@ -105,3 +105,23 @@ export function elementsInMarquee(
       !element.hidden && element.type !== 'group' && rectsIntersect(marquee, elementAABB(element)),
   );
 }
+
+/** How wide, on screen, a placeholder's edge is: the band where it is taken hold of. */
+const PLACEHOLDER_EDGE_PX = 10;
+
+/**
+ * Whether a point is on a placeholder's edge rather than inside it. Inside is where it
+ * is written in; the edge — and just outside it — is where it is selected and moved,
+ * like any other box. On a box too small for the full band, the band narrows so there
+ * is always an inside.
+ */
+export function onPlaceholderEdge(element: BoardElement, world: Point, zoom: number): boolean {
+  const local = worldToLocal(element, world);
+  const band = Math.min(PLACEHOLDER_EDGE_PX / zoom, element.w / 4, element.h / 4);
+  return !(
+    local.x > band &&
+    local.y > band &&
+    local.x < element.w - band &&
+    local.y < element.h - band
+  );
+}

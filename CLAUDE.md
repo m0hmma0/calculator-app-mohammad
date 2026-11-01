@@ -56,8 +56,12 @@ on the signed-out board) or `player` (Vimeo, SoundCloud, Spotify); stored media 
 in `fileIdsInDoc` like images, and `GET /api/files` answers range requests.
 
 Phase 14 in one paragraph: a placeholder is a text box with `element.placeholder` (a
-hint; `isPlaceholder`), drawn faint while empty and kept when emptied. One press types
-into it whatever the tool (`typeInto` on a select-tool drag, so a drag still moves it).
+hint; `isPlaceholder`), drawn faint while empty and kept when emptied. It is placed
+with the `placeholder` tool (Insert → Placeholder): a click gives one line, a drag the
+size dragged (`placePlaceholder`). One press types into it whatever the tool, except
+that the select tool of someone who edits tells its edge from its inside
+(`onPlaceholderEdge`, a 10 px band): inside types, the edge selects, moves and resizes
+like any box. Hover follows the same rule, after a selection's handles.
 The Answer role (`'answer'`, between commenter and editor) may type in placeholders
 only: the board stays read-only for them (`board.answers`), and their typing goes
 through `transactAnswer`. The room judges each update from them with `isOnlyAnswers`

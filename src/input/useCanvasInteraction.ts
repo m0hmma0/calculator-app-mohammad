@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from 'react';
 import { recognizeShape } from '@/ink/recognize';
 import { defaultTextBox } from '@/text/measure';
 import { textDefaults } from '@/settings/settings';
-import { placeStamp } from './insertions';
+import { placePlaceholder, placeStamp } from './insertions';
 import { tableGrid } from '@/canvas/renderContent';
 import { useEmbeds } from '@/state/embedStore';
 import { useHistory } from '@/collab/history';
@@ -27,7 +27,7 @@ import {
   isPlaceholder,
 } from '@/model/element';
 import { frameCentre, handlePoint, selectionFrame, type SelectionFrame } from '@/model/handles';
-import { elementAt, elementsInMarquee, hitTestElement } from '@/model/hitTest';
+import { elementAt, elementsInMarquee, hitTestElement, onPlaceholderEdge } from '@/model/hitTest';
 import { boxFromEnds, lineEnds } from '@/model/shapePath';
 import {
   angleFromCentre,
@@ -76,8 +76,6 @@ type Drag =
       origin: Point;
       start: Map<ElementId, Point>;
       moved: boolean;
-      /** A placeholder pressed: if the press does not move, it was a click into it. */
-      typeInto?: ElementId;
     }
   | {
       kind: 'resize';
@@ -98,7 +96,14 @@ type Drag =
       marker: boolean;
     }
   | { kind: 'erase'; pointerId: number }
-  | { kind: 'textbox'; pointerId: number; origin: Point; end: Point }
+  | {
+      kind: 'textbox';
+      pointerId: number;
+      origin: Point;
+      end: Point;
+      /** Placing a placeholder rather than a text box to type in. */
+      placeholder: boolean;
+    }
   | { kind: 'laser'; pointerId: number }
   | {
       kind: 'rotate';
@@ -399,8 +404,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         }
       }
 
-      // A placeholder takes one click to type into, whatever the tool held. With the
-      // select tool a drag still moves it; anything else, the press is the click.
+      // A placeholder takes one click to type into, whatever the tool held. Only the
+      // select tool, in the hands of someone who edits, tells its edge from its inside:
+      // that is decided below, after the handles of a selection have had their turn.
       if (event.button === 0) {
         const point = board(event);
         const under = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
@@ -408,7 +414,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         });
         if (under && isPlaceholder(under) && canTypeInto()) {
           const editor = selectCanEdit(useBoardAccess.getState());
-          if (!(editor && tool === 'select' && !lockedForMe(under))) {
+          if (!(editor && tool === 'select')) {
             event.preventDefault();
             store.beginEditing(under.id);
             return;
@@ -453,11 +459,18 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return;
       }
 
-      if (tool === 'text') {
-        // A text box is dragged out to the size wanted, or clicked for the default.
+      if (tool === 'text' || tool === 'placeholder') {
+        // A text box — or a placeholder — is dragged out to the size wanted, or clicked
+        // for the default.
         host.setPointerCapture(event.pointerId);
         const origin = board(event);
-        drag = { kind: 'textbox', pointerId: event.pointerId, origin, end: origin };
+        drag = {
+          kind: 'textbox',
+          pointerId: event.pointerId,
+          origin,
+          end: origin,
+          placeholder: tool === 'placeholder',
+        };
         return;
       }
 
@@ -535,6 +548,18 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return;
       }
 
+      // Inside a placeholder is for writing in it; its edge is where it is taken hold of.
+      if (
+        target &&
+        isPlaceholder(target) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !onPlaceholderEdge(target, point, zoom)
+      ) {
+        store.beginEditing(target.id);
+        return;
+      }
+
       if (targetId) {
         const alreadySelected = store.selection.includes(targetId);
         if (event.shiftKey) {
@@ -547,9 +572,6 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         // Alt-drag leaves the original behind and moves a copy.
         if (event.altKey) useBoardStore.getState().duplicateSelection(0);
         beginMove(event);
-        if (drag.kind === 'move' && target && isPlaceholder(target) && !event.altKey) {
-          drag.typeInto = target.id;
-        }
         return;
       }
 
@@ -587,8 +609,13 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       // A link's address shows on hover only while selecting (or, for a viewer, panning).
       if (tool !== 'select' && tool !== 'hand' && host.title) host.title = '';
 
-      // Over a placeholder, the pointer says "type here", whatever the tool.
-      if (lastClient && canTypeInto()) {
+      // Over a placeholder, the pointer says "type here", whatever the tool — except the
+      // select tool of someone who edits, which tells the edge from the inside below.
+      if (
+        lastClient &&
+        canTypeInto() &&
+        !(tool === 'select' && selectCanEdit(useBoardAccess.getState()))
+      ) {
         const point = board(lastClient);
         const under = elementAt(store.elements, point, PICK_SLOP / store.viewport.zoom, {
           includeLocked: true,
@@ -617,6 +644,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (tool === 'pen') return setCursor('pen');
       if (tool === 'highlighter') return setCursor('highlighter');
       if (tool === 'text') return setCursor('text');
+      if (tool === 'placeholder') return setCursor('crosshair');
       if (!lastClient) return setCursor('default');
 
       const point = board(lastClient);
@@ -638,6 +666,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (host.title !== hint) host.title = hint;
       if (link) return setCursor('pointer');
       if (!target) return setCursor('default');
+      if (isPlaceholder(target) && !onPlaceholderEdge(target, point, zoom)) {
+        return setCursor('text');
+      }
       if (lockedForMe(target)) return setCursor('not-allowed');
       return setCursor('move');
     };
@@ -850,23 +881,27 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         const dragged =
           Math.hypot(end.x - drag.origin.x, end.y - drag.origin.y) * store.viewport.zoom >=
           DRAG_THRESHOLD * 2;
-        const defaults = textDefaults();
-        const element = createElement({
-          type: 'text',
-          box: { x: drag.origin.x, y: drag.origin.y, w: 1, h: 1 },
-          z: keyBetween(store.elements.at(-1)?.z ?? null, null),
-          style: { fontSize: defaults.fontSize },
-        });
         const box = dragged ? rectFromPoints(drag.origin, end) : null;
-        const size = box ?? defaultTextBox(element.style, defaults);
-        Object.assign(element, box ?? { x: drag.origin.x, y: drag.origin.y }, {
-          w: Math.max(40, size.w),
-          h: Math.max(element.style.fontSize * element.style.lineHeight, size.h),
-        });
-        element.text = '';
-        store.addElement(element);
-        store.setTool('select');
-        store.beginEditing(element.id);
+        if (drag.placeholder) {
+          placePlaceholder(drag.origin, box);
+        } else {
+          const defaults = textDefaults();
+          const element = createElement({
+            type: 'text',
+            box: { x: drag.origin.x, y: drag.origin.y, w: 1, h: 1 },
+            z: keyBetween(store.elements.at(-1)?.z ?? null, null),
+            style: { fontSize: defaults.fontSize },
+          });
+          const size = box ?? defaultTextBox(element.style, defaults);
+          Object.assign(element, box ?? { x: drag.origin.x, y: drag.origin.y }, {
+            w: Math.max(40, size.w),
+            h: Math.max(element.style.fontSize * element.style.lineHeight, size.h),
+          });
+          element.text = '';
+          store.addElement(element);
+          store.setTool('select');
+          store.beginEditing(element.id);
+        }
       }
 
       if (drag.kind === 'draw') {
@@ -951,8 +986,6 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       if (drag.kind === 'pan') store.setPanning(false);
       if (drag.kind === 'move') store.setSnapFeedback([], []);
-      // A placeholder pressed and let go where it was: a click into it, to type.
-      if (drag.kind === 'move' && !drag.moved && drag.typeInto) store.beginEditing(drag.typeInto);
       if (drag.kind === 'rotate') store.setRotationReadout(null);
 
       // A whole gesture is one undo step; the next one starts fresh.

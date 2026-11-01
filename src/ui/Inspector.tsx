@@ -15,6 +15,7 @@ import { selectionAABB } from '@/model/bounds';
 import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
+import { hintPatch } from '@/input/insertions';
 import { useBoardStore } from '@/state/boardStore';
 import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { linkLabel, normaliseLink } from '@/text/marks';
@@ -249,7 +250,10 @@ export function Inspector() {
                       onChange={(event) =>
                         applyDiscrete(
                           new Map([
-                            [first.id, { placeholder: event.target.checked ? DEFAULT_HINT : null }],
+                            [
+                              first.id,
+                              hintPatch(first, event.target.checked ? DEFAULT_HINT : null),
+                            ],
                           ]),
                         )
                       }
@@ -265,7 +269,7 @@ export function Inspector() {
                       aria-label="The hint it shows while empty"
                       data-testid="placeholder-hint"
                       onChange={(event) =>
-                        applyDiscrete(new Map([[first.id, { placeholder: event.target.value }]]))
+                        applyDiscrete(new Map([[first.id, hintPatch(first, event.target.value)]]))
                       }
                     />
                   ) : null}

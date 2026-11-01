@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { importFile, IMPORT_ACCEPT, startImportBatch, useImport } from '@/importers/importFile';
-import { STAMPS, insertPlaceholder, insertTable } from '@/input/insertions';
+import { STAMPS, insertTable } from '@/input/insertions';
 import { selectCanEdit, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 import {
@@ -40,7 +40,7 @@ const SHAPES: Tool[] = [
 ];
 const CONTENT: Tool[] = ['sticky', 'text', 'frame'];
 /** Tools picked from this menu; while one is in hand, the menu's button says so. */
-const MENU_TOOLS = new Set<Tool>([...SHAPES, ...CONTENT, 'stamp']);
+const MENU_TOOLS = new Set<Tool>([...SHAPES, ...CONTENT, 'stamp', 'placeholder']);
 const VOTE_BUDGET = 3;
 const MAX_TIMER_SECONDS = 99 * 60 + 59;
 
@@ -216,13 +216,14 @@ export function InsertMenu() {
               })}
               <button
                 type="button"
-                role="menuitem"
+                role="menuitemradio"
+                aria-checked={tool === 'placeholder'}
                 className={styles.item}
                 data-testid="insert-placeholder"
-                title="A box anyone can write an answer in with one click"
-                onClick={run(insertPlaceholder)}
+                title="A box anyone can write an answer in with one click. Click on the board for one line, or drag out the size you want"
+                onClick={run(() => setTool('placeholder'))}
               >
-                <PlaceholderIcon />
+                <ToolIcon id="placeholder" />
                 <span>Placeholder</span>
                 <small>for answers</small>
               </button>
@@ -467,7 +468,6 @@ function Icon({ path }: { path: string }) {
 const TableIcon = () => (
   <Icon path="M2.5 3.5h11v9h-11zM2.5 6.5h11M2.5 9.5h11M6.2 3.5v9M9.8 3.5v9" />
 );
-const PlaceholderIcon = () => <Icon path="M2.5 4.5h11v7h-11zM5 8h.01M8 8h.01M11 8h.01" />;
 const ImportIcon = () => <Icon path="M8 2.5v7.5M5 7l3 3 3-3M3 11.5v2h10v-2" />;
 const PresentIcon = () => (
   <Icon path="M2.5 3h11v7.5h-11zM8 10.5V13M5.5 13.5h5M7 5.2v3.1l2.6-1.55Z" />

@@ -72,6 +72,11 @@ export const TOOL_SPECS: ToolSpec[] = [
     path: 'M5.2 2.5v11M10.8 2.5v11M2.5 5.2h11M2.5 10.8h11',
   },
   {
+    id: 'placeholder',
+    label: 'Placeholder',
+    path: 'M2.5 4.5h11v7h-11zM5 8h.01M8 8h.01M11 8h.01',
+  },
+  {
     id: 'laser',
     label: 'Laser pointer',
     path: 'M8 2.4v2.4M8 11.2v2.4M2.4 8h2.4M11.2 8h2.4M8 6.2A1.8 1.8 0 1 1 8 9.8a1.8 1.8 0 0 1 0-3.6Z',
