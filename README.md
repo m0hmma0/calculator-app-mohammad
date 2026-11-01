@@ -217,8 +217,11 @@ board does anything.
 Each message to a room is a request Cloudflare counts, and each stored change rows it
 writes, so a page sends presence only while someone else is on the board, and gathers
 its changes for 400 ms when nobody is there to watch them live (40 ms when someone is).
-Saves rewrite only the records that changed, and a board's thumbnail is uploaded after
-15 seconds without a change, or when the board is left or its tab hidden.
+The room passes every change on at once but writes its log once a second, one entry per
+person, so typing costs a row or four a second rather than per letter; a change counts
+as saved (the page is told) only once it is written. Saves rewrite only the records that
+changed, and a board's thumbnail is uploaded after 15 seconds without a change, or when
+the board is left or its tab hidden.
 
 ## Sharing
 

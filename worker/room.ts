@@ -37,6 +37,13 @@ interface Attachment {
 const SNAPSHOT_EVERY = 200;
 /** Write the board to R2 and D1 this long after the last change. */
 const PERSIST_DELAY_MS = 2000;
+/**
+ * Changes are written to the log at most this often, as one entry per person. Typing
+ * arrives a letter at a time and every entry costs rows, so they are gathered; they are
+ * still passed on to everyone the moment they arrive, and only the sender's "saved"
+ * (the ack) waits for the write.
+ */
+const FLUSH_MS = 1000;
 /** SQLite rows top out at 2 MB; blobs are split well below that. */
 const BLOB_PART_BYTES = 1024 * 1024;
 const MAX_PRESENCE_BYTES = 16 * 1024;
@@ -64,6 +71,11 @@ export class BoardRoom extends DurableObject<Env> {
   private readonly sql: SqlStorage;
   private doc = new Y.Doc();
   private sinceSnapshot = 0;
+  /** Changes applied and passed on but not yet written, by who made them. */
+  private held = new Map<string, Uint8Array[]>();
+  /** A socket for each held change, owed its ack once the change is written. */
+  private owed: WebSocket[] = [];
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly assemblers = new Map<string, FrameAssembler>();
   private chunkId = 0;
   private lastSweep = 0;
@@ -223,20 +235,47 @@ export class BoardRoom extends DurableObject<Env> {
     if (changes.length === 0) return null;
     const effective = changes.length === 1 ? changes[0]! : Y.mergeUpdates(changes);
 
-    const seq = this.sql
-      .exec<{ seq: number }>(
-        'INSERT INTO updates (at, uid) VALUES (?, ?) RETURNING seq',
-        Date.now(),
-        uid,
-      )
-      .one().seq;
-    this.putBlob(BLOB_UPDATE, seq, effective);
-    this.sinceSnapshot += 1;
-    if (this.sinceSnapshot >= SNAPSHOT_EVERY) this.takeSnapshot(null);
-    // Read before written: a drag sends dozens of changes, and each write is billed.
-    if (!this.meta('dirty')) this.setMeta('dirty', '1');
-    void this.scheduleAlarm(Date.now() + PERSIST_DELAY_MS);
+    const theirs = this.held.get(uid);
+    if (theirs) theirs.push(effective);
+    else this.held.set(uid, [effective]);
+    this.flushTimer ??= setTimeout(() => this.flush(), FLUSH_MS);
     return effective;
+  }
+
+  /**
+   * Writes what is held — one log entry per person — and then sends the acks it held
+   * back. Called by its timer, and at once before anything reads the log (history, a
+   * named version) and whenever a socket goes, so nothing waits on a timer that a
+   * room put to sleep might never run.
+   */
+  private flush(): void {
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
+    if (this.held.size > 0) {
+      for (const [uid, updates] of this.held) {
+        const seq = this.sql
+          .exec<{ seq: number }>(
+            'INSERT INTO updates (at, uid) VALUES (?, ?) RETURNING seq',
+            Date.now(),
+            uid,
+          )
+          .one().seq;
+        this.putBlob(
+          BLOB_UPDATE,
+          seq,
+          updates.length === 1 ? updates[0]! : Y.mergeUpdates(updates),
+        );
+        this.sinceSnapshot += 1;
+      }
+      this.held.clear();
+      if (this.sinceSnapshot >= SNAPSHOT_EVERY) this.takeSnapshot(null);
+      // Read before written: each write is billed.
+      if (!this.meta('dirty')) this.setMeta('dirty', '1');
+      void this.scheduleAlarm(Date.now() + PERSIST_DELAY_MS);
+    }
+    const owed = this.owed;
+    this.owed = [];
+    for (const socket of owed) this.sendJson(socket, { t: 'ack' });
   }
 
   /**
@@ -271,6 +310,7 @@ export class BoardRoom extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
+    this.flush();
     if (this.meta('dirty')) {
       this.sql.exec("DELETE FROM meta WHERE key = 'dirty'");
       await this.persist();
@@ -324,6 +364,10 @@ export class BoardRoom extends DurableObject<Env> {
 
     // The board was emptied from the trash: nothing of it should outlive that.
     if (url.pathname === '/destroy') {
+      if (this.flushTimer) clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+      this.held.clear();
+      this.owed = [];
       await this.ctx.storage.deleteAlarm();
       for (const socket of this.ctx.getWebSockets()) socket.close(4404, 'Board deleted');
       await this.ctx.storage.deleteAll();
@@ -573,9 +617,10 @@ export class BoardRoom extends DurableObject<Env> {
     for (const other of this.others(ws)) {
       this.sendJson(other, { t: 'join', session: attachment.session, user });
     }
-    // The room asks for what it is missing, too: that is how offline work comes in.
-    // Not from someone who may not edit: there is nothing of theirs it would accept.
-    if (atLeast(access.role, 'editor')) {
+    // The room asks for what it is missing, too: that is how offline work comes in, and
+    // how changes it held but never wrote (it restarted within FLUSH_MS) come back.
+    // Answers too, judged like any other; not from a viewer, whose nothing it accepts.
+    if (atLeast(access.role, 'editor') || access.role === 'answer') {
       this.sendBinary(ws, frame(FRAME.SYNC_STEP1, Y.encodeStateVector(this.doc)));
     }
   }
@@ -636,9 +681,11 @@ export class BoardRoom extends DurableObject<Env> {
         // History is for people who can restore from it.
         case 'history':
           if (!atLeast(role, 'editor')) return;
+          this.flush();
           return this.history(ws);
         case 'history-state': {
           if (!atLeast(role, 'editor')) return;
+          this.flush();
           const seq = Math.max(0, Math.min(Math.floor(Number(parsed.seq)) || 0, this.lastSeq()));
           const past = this.docAt(seq);
           const at =
@@ -662,6 +709,7 @@ export class BoardRoom extends DurableObject<Env> {
             .trim()
             .slice(0, 80);
           if (!name) return;
+          this.flush();
           this.takeSnapshot(name);
           for (const socket of [ws, ...this.others(ws)]) this.history(socket);
           return;
@@ -712,8 +760,11 @@ export class BoardRoom extends DurableObject<Env> {
         if (effective) {
           const out = frame(FRAME.UPDATE, effective);
           for (const other of this.others(ws)) this.sendBinary(other, out);
+          // Saved once it is written, within FLUSH_MS.
+          this.owed.push(ws);
+        } else {
+          this.sendJson(ws, { t: 'ack' });
         }
-        this.sendJson(ws, { t: 'ack' });
         return;
       }
       default:
@@ -730,6 +781,8 @@ export class BoardRoom extends DurableObject<Env> {
   }
 
   private leave(ws: WebSocket): void {
+    // A page closing may be the last thing this room hears for a while.
+    this.flush();
     const { session, user } = this.attachment(ws);
     this.assemblers.delete(session);
     try {

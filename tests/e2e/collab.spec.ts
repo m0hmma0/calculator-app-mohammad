@@ -837,6 +837,43 @@ test.describe('what goes to the room', () => {
     expect(sent.changesSince(dragging)).toBeLessThanOrEqual(6);
   });
 
+  test('typing with someone else there is saved a second at a time, not a letter at a time', async ({
+    browser,
+  }) => {
+    const { a, b, close } = await twoWindows(browser, 'typing');
+    await a.keyboard.press('KeyT');
+    await a.mouse.move(300, 300);
+    await a.mouse.down();
+    await a.mouse.move(700, 380, { steps: 4 });
+    await a.mouse.up();
+    await a.keyboard.type('Ab');
+    await expect(b.getByTestId('layers').locator('li')).toHaveCount(1);
+    // Version history steps through what the room has saved, one entry at a time.
+    const savedSteps = async () => {
+      await a.getByTestId('tools-menu').click();
+      await a.getByTestId('open-history').click();
+      const max = Number(await a.getByTestId('history-scrubber').getAttribute('max'));
+      await a.getByTestId('close-history').click();
+      return max;
+    };
+    await a.keyboard.press('Escape');
+    const before = await savedSteps();
+
+    // About a second of typing, sent live — a message every few letters.
+    await a.mouse.dblclick(500, 330);
+    await expect(a.getByTestId('text-editor')).toBeVisible();
+    await a.keyboard.press('End');
+    await a.keyboard.type(' quick brown fox jumps', { delay: 45 });
+    await a.keyboard.press('Escape');
+
+    // Opening history writes whatever the room holds; a last batch still on its way
+    // could only make the count smaller.
+    const added = (await savedSteps()) - before;
+    expect(added).toBeGreaterThanOrEqual(1);
+    expect(added).toBeLessThanOrEqual(4);
+    await close();
+  });
+
   test('with someone else there, presence and a drag go live', async ({ browser }) => {
     const { a, b, close } = await twoWindows(browser, 'company');
     const sent = wire(a);

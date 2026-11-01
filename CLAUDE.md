@@ -77,7 +77,12 @@ trash is emptied, so undo still works until then.
 
 Each board has a room — the `BoardRoom` Durable Object (`worker/room.ts`), SQLite-backed.
 It owns the board's content: an append-only update log plus snapshots every 200
-updates, from which version history is read. It writes the R2 snapshot and the D1
+entries, from which version history is read. Changes are applied and passed on at
+once but written to the log once a second, one entry per person (`flush`, `FLUSH_MS`);
+the sender's ack waits for the write, and anything held is written at once when a
+socket closes, before history is read and at the alarm. On connect the room asks
+editors and Answer people for anything it lacks, which is how changes it held but lost
+in a restart, and answers typed offline, come back. It writes the R2 snapshot and the D1
 search text and image references itself, two seconds after changes (an alarm). The
 browser only uploads the thumbnail. A room with no storage seeds itself from the R2
 snapshot, which is how pre-Phase-7 boards and duplicates arrive. Sockets hibernate;
@@ -278,7 +283,8 @@ doc.getMap(...)` read left to right was false on the first call. It refused the 
   editing). Saves now write only what changed (`boardFilesUpdate`). The rooms took about
   94,000 requests that day, nearly all live-connection messages; presence now goes only
   while someone else is on the board, and changes are batched for 400 ms when nobody is
-  (40 ms when someone is). Before adding anything that writes per change or sends per
+  (40 ms when someone is). The room writes its log once a second, one entry per person,
+  instead of one entry (about 4 rows) per message. Before adding anything that writes per change or sends per
   frame, work out its daily cost; `npx wrangler d1 insights sabboura --sort-by writes`
   and Cloudflare's GraphQL analytics (`durableObjectsInvocationsAdaptiveGroups`,
   `durableObjectsPeriodicGroups`) show where it goes.

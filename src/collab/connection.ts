@@ -217,7 +217,9 @@ export class RoomConnection {
         this.sendBatch();
       } else if (message.t === 'leave') {
         this.others.delete(message.session);
-      } else if (message.t === 'ack') {
+      } else if (message.t === 'ack' || (message.t === 'error' && message.code === 'read-only')) {
+        // A change refused is a change answered: waiting on it would leave "Saving…"
+        // up for good.
         this.unacked = Math.max(0, this.unacked - 1);
         if (this.unacked === 0) this.resolveSettled();
       }

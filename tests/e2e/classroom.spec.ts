@@ -1,4 +1,11 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+  type WebSocketRoute,
+} from '@playwright/test';
 import * as Y from 'yjs';
 import { API, createBoard, newAccount, signIn, tokenFor } from './accounts';
 
@@ -162,6 +169,57 @@ test.describe('the Answer role', () => {
       (each) => each.get('type') === 'rect',
     )!;
     expect(after.get('x')).toBe(rect.get('x'));
+
+    await close(teacher.context, student.context);
+  });
+});
+
+test.describe('answers and the line', () => {
+  test('an answer typed while the line is down reaches the board once it is back', async ({
+    browser,
+  }) => {
+    const teacher = await person(browser, 'teacher2');
+    const boardId = await createBoard(teacher.page);
+    await teacher.page.getByTestId('insert-menu').click();
+    await teacher.page.getByTestId('insert-placeholder').click();
+    await teacher.page.mouse.click(400, 200);
+    await teacher.page.getByTestId('placeholder-hint').fill('Your answer');
+    const student = await person(browser, 'student2');
+    await shareWith(teacher.page, student.account, 'answer');
+
+    // Everything the student's page sends can be dropped, without it being told.
+    const line: { cut: boolean; route: WebSocketRoute | null } = { cut: false, route: null };
+    await student.context.routeWebSocket(/\/room$/, (socket) => {
+      line.route = socket;
+      const server = socket.connectToServer();
+      socket.onMessage((message) => {
+        if (!line.cut) server.send(message);
+      });
+      server.onMessage((message) => socket.send(message));
+    });
+    await openAs(student.page, boardId);
+    const spot = await findPlaceholder(student.page);
+    await student.page.mouse.click(spot.x, spot.y);
+    await expect(student.page.getByTestId('text-editor')).toBeVisible();
+
+    line.cut = true;
+    await student.page.keyboard.type('Offline');
+    await student.page.keyboard.press('Escape');
+    await student.page.waitForTimeout(1500);
+    const answerOf = async () =>
+      textOf(
+        elementsOf(await saved(teacher.account, boardId)).find((each) => each.has('placeholder')),
+      );
+    expect(await answerOf()).toBe('');
+
+    // The line is back and the page reconnects: the room asks what it is missing.
+    line.cut = false;
+    await line.route!.close();
+    await expect(student.page.getByTestId('connection-status')).toHaveAttribute(
+      'data-status',
+      'connected',
+    );
+    await expect.poll(answerOf, { timeout: 15_000 }).toBe('Offline');
 
     await close(teacher.context, student.context);
   });
