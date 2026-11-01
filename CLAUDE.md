@@ -262,6 +262,12 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **An Answer person's board is read-only** (`board.readOnly`); their typing is the
   one exception, through `transactAnswer`. Anything new they should be able to change
   needs a place in `isOnlyAnswers` too, or the room refuses it.
+- **A Yjs document rebuilt from stored updates holds its root types as stand-ins** until
+  something asks for one by name (`doc.getMap('elements')`), which swaps in the real map
+  and re-parents its children. So ask first, then compare: `item.parent ===
+doc.getMap(...)` read left to right was false on the first call. It refused the first
+  answer typed into a room that had just woken (`isOnlyAnswers`); CI's slower runner
+  hit it, this container rarely.
 - **Never `open(p, 'w')` in the same expression that reads `p`** in a Python edit
   script: the file is emptied before it is read. It wiped a source file once; restore
   with `git checkout --` and re-apply.

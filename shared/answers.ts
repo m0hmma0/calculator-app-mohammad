@@ -13,20 +13,20 @@ import * as Y from 'yjs';
  */
 
 /** The element a placeholder's map is, if this is one: a text box with a hint. */
-function isPlaceholderMap(doc: Y.Doc, type: unknown): boolean {
+function isPlaceholderMap(elements: Y.Map<unknown>, type: unknown): boolean {
   if (!(type instanceof Y.Map)) return false;
   if (type.get('type') !== 'text' || typeof type.get('placeholder') !== 'string') return false;
   // An element of the board itself, not something nested elsewhere.
-  return type._item?.parent === doc.getMap('elements');
+  return type._item?.parent === elements;
 }
 
 /** Whether a piece placed here is part of an answer. */
-function isAnswerPlace(doc: Y.Doc, parent: unknown, sub: string | null): boolean {
+function isAnswerPlace(elements: Y.Map<unknown>, parent: unknown, sub: string | null): boolean {
   if (parent instanceof Y.Text && sub === null) {
     const holder = parent._item;
-    return holder?.parentSub === 'text' && isPlaceholderMap(doc, holder.parent);
+    return holder?.parentSub === 'text' && isPlaceholderMap(elements, holder.parent);
   }
-  return sub === 'h' && isPlaceholderMap(doc, parent);
+  return sub === 'h' && isPlaceholderMap(elements, parent);
 }
 
 /** What a new piece may hold: words and formatting in the words, a number for a height. */
@@ -61,6 +61,11 @@ function known(doc: Y.Doc, id: Y.ID): Y.Item | Y.GC | null {
 }
 
 export function isOnlyAnswers(doc: Y.Doc, update: Uint8Array): boolean {
+  // Asked for first, before anything is compared with it. A document rebuilt from stored
+  // changes — a room waking up — holds its elements in a stand-in until something asks
+  // for them by name; the asking swaps in the real map and moves the children to it, so
+  // a parent read before the swap would never match. That refused a room's first answer.
+  const elements = doc.getMap('elements');
   let decoded: ReturnType<typeof Y.decodeUpdate>;
   try {
     decoded = Y.decodeUpdate(update);
@@ -104,7 +109,7 @@ export function isOnlyAnswers(doc: Y.Doc, update: Uint8Array): boolean {
     if (Y.getState(doc.store, struct.id.client) >= struct.id.clock + struct.length) continue;
     if (!(struct instanceof Y.Item)) return false;
     const place = placeOf(struct);
-    if (!place || !isAnswerPlace(doc, place.parent, place.sub)) return false;
+    if (!place || !isAnswerPlace(elements, place.parent, place.sub)) return false;
     if (!isAnswerContent(struct, place.sub)) return false;
   }
 
@@ -117,7 +122,7 @@ export function isOnlyAnswers(doc: Y.Doc, update: Uint8Array): boolean {
         const existing = known(doc, id);
         if (existing) {
           if (existing instanceof Y.Item && !existing.deleted) {
-            if (!isAnswerPlace(doc, existing.parent, existing.parentSub)) return false;
+            if (!isAnswerPlace(elements, existing.parent, existing.parentSub)) return false;
           }
           clock = existing.id.clock + existing.length;
           continue;

@@ -45,6 +45,15 @@ const map = (id: string) => student.getMap('elements').get(id) as Y.Map<unknown>
 const words = (id: string) => map(id).get('text') as Y.Text;
 
 describe('someone who answers', () => {
+  it('is judged rightly by a room that has just rebuilt its board from storage', () => {
+    // A waking room applies its stored changes to a new document and has asked it for
+    // nothing yet: the first answer used to be refused.
+    const woken = new Y.Doc();
+    Y.applyUpdate(woken, Y.encodeStateAsUpdate(room));
+    words('answer').insert(0, 'A');
+    expect(isOnlyAnswers(woken, change())).toBe(true);
+  });
+
   it('may type into a placeholder: at the start, along it, and several letters at once', () => {
     words('answer').insert(0, 'A');
     expect(isOnlyAnswers(room, change())).toBe(true);
