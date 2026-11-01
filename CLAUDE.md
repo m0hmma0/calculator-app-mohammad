@@ -26,7 +26,7 @@ eraser, the side panel's layering and toggle, duplicates below, strikethrough, t
 shortcuts, boards shared for answering by default) and **14.2** (paste to fit the
 selection, cropping, the old lock plus "lock for others", panning while dragging). Phase
 15 now holds only undo that survives closing a board, and Phase 17 only keyboard use of
-the canvas and visible focus. The next phase is **14.1**. Parked by the user: student
+the canvas and visible focus. **14.1 is built**; the next phase is **14.2**. Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -78,6 +78,19 @@ formatting in a placeholder's `text` and a new `h`. Locks bind everyone but the 
 (`lockedForMe`, `mayLock` in `src/sharing/boardAccess.ts`): only the owner locks, any
 editor unlocks, and locked items select (a drag box takes them in) but do not move,
 nudge, erase or delete. Migration 0006 rebuilds `shares` for the new role.
+
+Phase 14.1 in one paragraph: `element.autoHeight` marks a text box whose height follows
+its text (clicked boxes, clicked placeholders, pasted text); `fitted` (src/text/measure.ts)
+works the height out, and the store applies it to every change that touches width, text,
+style or hint (`fitHeights` before `applyPatches`). Dragging only the height of such a box
+clears the flag; Settings no longer has a box height (`boxLines` is gone). `readBox` ignores a `<br>` that is the box's very last node. The eraser's
+`removeElements` deletes from the document. The side panel (z-index 8, inside a stage that
+`isolation: isolate`s its layers) shows when on and there is a selection, a tool with
+options (`hasToolOptions`) or the object list; `ToolOptions inPanel` renders the pen's
+settings at its top. `duplicateSelection('below' | 'inPlace')`. A `strike` mark and style.
+Shortcuts `tool.placeholder` (Q), `tool.stamp` (S; again cycles), `stamp.N` (unset),
+`present` (Mod+Enter), `text.strike` (Mod+Shift+X). New boards and duplicates get a link
+(`defaultLink`): anyone, answer, logged as "link on".
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -202,9 +215,10 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   square half of it, wide a sixth, very wide a ninth), so a near-square one is still
   taller than the screen at 100%; a test that grabs a picture's handles zooms to the
   selection first.
-- **Text tool defaults are big** (40px type, 55 characters by 8 lines when clicked);
-  a test that needs a small box drags one out. Typed text grows a box's height
-  (`setElementText` measures it), so heights in tests are lower bounds.
+- **Text tool defaults are big** (40px type, 55 characters wide when clicked, one line
+  tall and following its words); a test that needs a small box drags one out. Typed
+  text grows a dragged box's height (`setElementText` measures it), so heights there
+  are lower bounds; a clicked box's height is exact.
 - **A new shortcut is a line in `ACTIONS` (`src/input/shortcuts.ts`)** and a case in
   the handler for its scope — never a key compared by hand, or Settings cannot change
   it and the cheat sheet will not show it. Default keys must not clash within a scope
@@ -281,6 +295,12 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 doc.getMap(...)` read left to right was false on the first call. It refused the first
   answer typed into a room that had just woken (`isOnlyAnswers`); CI's slower runner
   hit it, this container rarely.
+- **A new board already has a link** (anyone, can answer). A test that wants a link to
+  view turns it on only if it is off and sets the role (`enableLink` in sharing.spec);
+  clicking the switch blindly turns it off.
+- **The side panel can be absent with nothing selected** (when the object list is off),
+  and the pen's options move into it when it is on: a test of the floating options bar
+  switches the panel off first.
 - **Never `open(p, 'w')` in the same expression that reads `p`** in a Python edit
   script: the file is emptied before it is read. It wiped a source file once; restore
   with `git checkout --` and re-apply.

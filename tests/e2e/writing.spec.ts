@@ -79,7 +79,9 @@ test.describe('text boxes', () => {
     await expect.poll(() => typed(page)).toBe('hello world');
   });
 
-  test('a click places a large box with large type; a drag sets the size', async ({ page }) => {
+  test('a click places a wide box with large type, as tall as its words; a drag sets the size', async ({
+    page,
+  }) => {
     await page.keyboard.press('KeyT');
     await page.mouse.move(300, 300);
     await expect(page.getByTestId('stage')).toHaveAttribute('data-cursor', 'text');
@@ -87,10 +89,10 @@ test.describe('text boxes', () => {
     await page.mouse.click(120, 140);
     await page.keyboard.type('Hi');
     await page.keyboard.press('Escape');
-    // 55 characters wide and 8 lines of 40px type tall.
+    // 55 characters wide, and one line of 40px type tall: its height follows its words.
     const clicked = await geo(page);
     expect(clicked.w).toBeGreaterThan(800);
-    expect(clicked.h).toBeCloseTo(8 * 40 * 1.35 + 4, -1);
+    expect(clicked.h).toBeCloseTo(40 * 1.35 + 4, -1);
     await expect(page.getByTestId('size-40')).toHaveAttribute('aria-pressed', 'true');
 
     await page.keyboard.press('KeyT');

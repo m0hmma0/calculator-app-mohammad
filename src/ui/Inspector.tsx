@@ -16,11 +16,12 @@ import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { hintPatch } from '@/input/insertions';
-import { useBoardStore } from '@/state/boardStore';
+import { hasToolOptions, useBoardStore } from '@/state/boardStore';
 import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { linkLabel, normaliseLink } from '@/text/marks';
 import { LinkField, LinkIcon } from './LinkField';
 import { HIGHLIGHTS, TEXT_COLOURS } from './palettes';
+import { ToolOptions } from './ToolOptions';
 import styles from './Inspector.module.css';
 
 const FILLS = [
@@ -73,6 +74,7 @@ export function Inspector() {
   const showLayers = useUiPrefs((state) => state.layers);
   const typing = useTextSelection();
   const open = useUiPrefs((state) => state.pane);
+  const tool = useBoardStore((state) => state.tool);
   const renderVersion = useBoardStore((state) => state.renderVersion);
 
   const selectOnly = useBoardStore((state) => state.selectOnly);
@@ -130,8 +132,12 @@ export function Inspector() {
 
   const typingHere = Boolean(first && typing.id === first.id && typing.toggle);
 
-  // It opens only when asked for, from the bottom bar, and closes with its ×.
+  // Switched on and off from the controls (and by its ×). On, it appears when there is
+  // something to show: what is selected, the settings of the tool in hand, or the
+  // object list when that is switched on too.
   if (historyOpen || !editable || !open) return null;
+  const toolOptions = hasToolOptions(tool);
+  if (!first && !toolOptions && !showLayers) return null;
 
   return (
     <aside className={styles.panel} data-hud data-present-hide data-testid="inspector">
@@ -145,6 +151,7 @@ export function Inspector() {
       >
         ×
       </button>
+      {toolOptions ? <ToolOptions inPanel /> : null}
       {first ? (
         <>
           <div className={styles.section}>
@@ -355,6 +362,22 @@ export function Inspector() {
                   }
                 >
                   <u>U</u>
+                </button>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-pressed={typingHere ? Boolean(typing.active.strike) : first.style.strike}
+                  aria-label="Strikethrough"
+                  title="Strikethrough"
+                  data-testid="text-strike"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    typingHere
+                      ? typing.toggle?.('strike')
+                      : styleSelection({ strike: !first.style.strike })
+                  }
+                >
+                  <s>S</s>
                 </button>
                 {typingHere ? (
                   <button
@@ -772,9 +795,7 @@ export function Inspector() {
             </dl>
           </details>
         </>
-      ) : (
-        <p className={styles.hint}>Nothing selected. Draw a shape, or drag a box to select.</p>
-      )}
+      ) : null}
 
       {showLayers ? (
         <ul className={styles.layers} data-testid="layers">

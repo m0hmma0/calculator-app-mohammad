@@ -54,10 +54,9 @@ test.describe('text', () => {
     await expect(page.getByTestId('settings-status')).toHaveText('Saved in this browser');
     await setNumber(page, 'setting-font-size', 24);
     await setNumber(page, 'setting-box-chars', 20);
-    await setNumber(page, 'setting-box-lines', 3);
-    // The preview says how big that is on the board.
+    // The preview says how big a line of that is on the board.
     await expect(page.getByTestId('settings-text-size')).toContainText(
-      `× ${Math.round(24 * 1.35 * 3 + 4)} px`,
+      `× ${Math.round(24 * 1.35 + 4)} px`,
     );
     await closeSettings(page);
 
@@ -67,7 +66,8 @@ test.describe('text', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('font-size')).toHaveText('24px');
     const box = await geo(page);
-    expect(box.h).toBeCloseTo(3 * 24 * 1.35 + 4, -1);
+    // As tall as its one line of words.
+    expect(box.h).toBeCloseTo(24 * 1.35 + 4, -1);
     // Twenty characters of 24px type: far narrower than the 55 of 40px it was.
     expect(box.w).toBeGreaterThan(150);
     expect(box.w).toBeLessThan(400);
@@ -86,7 +86,7 @@ test.describe('text', () => {
     await page.reload();
     await openSettings(page);
     await expect(page.getByTestId('setting-font-size')).toHaveValue('24');
-    await expect(page.getByTestId('setting-box-lines')).toHaveValue('3');
+    await expect(page.getByTestId('setting-box-chars')).toHaveValue('20');
   });
 });
 

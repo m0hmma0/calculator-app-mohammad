@@ -1,13 +1,13 @@
 import type { TextMark } from '@/model/element';
 
 /**
- * Formatting on part of a text: bold, italic and underline, which are on or off, and
+ * Formatting on part of a text: bold, italic, underline and strikethrough, on or off, and
  * a colour, a highlight and a link, which carry a value. In the shared document they
  * are formatting on the text itself, so they move with the words as anyone types; in
  * the app they are a list of ranges, which is what drawing and editing need.
  */
-export type MarkName = 'bold' | 'italic' | 'underline';
-export const MARK_NAMES: readonly MarkName[] = ['bold', 'italic', 'underline'];
+export type MarkName = 'bold' | 'italic' | 'underline' | 'strike';
+export const MARK_NAMES: readonly MarkName[] = ['bold', 'italic', 'underline', 'strike'];
 
 export type ValuedMark = 'color' | 'highlight' | 'link';
 export const VALUED_MARKS: readonly ValuedMark[] = ['color', 'highlight', 'link'];
@@ -16,6 +16,7 @@ export interface MarkSet {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  strike?: boolean;
   color?: string;
   highlight?: string;
   link?: string;

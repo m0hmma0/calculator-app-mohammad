@@ -44,6 +44,33 @@ function newToken(): string {
     .replace(/=+$/, '');
 }
 
+/**
+ * A new board's link, on from the start: anyone who has it may answer in its
+ * placeholders. The owner turns it off, or changes who it admits, in Share.
+ */
+export function defaultLink(env: Env, boardId: string, account: Account): D1PreparedStatement[] {
+  const now = Date.now();
+  return [
+    env.DB.prepare(
+      `INSERT INTO shares (id, resource_type, resource_id, kind, token, role, audience, domain,
+                           expires_at, created_by, created_at)
+       VALUES (?1, 'board', ?2, 'link', ?3, 'answer', 'anyone', NULL, NULL, ?4, ?5)`,
+    ).bind(newId('shr'), boardId, newToken(), account.uid, now),
+    // In the activity log like any other change to sharing.
+    env.DB.prepare(
+      `INSERT INTO audit (id, resource_type, resource_id, actor_uid, actor_email, action, detail, at)
+       VALUES (?1, 'board', ?2, ?3, ?4, 'link on', ?5, ?6)`,
+    ).bind(
+      newId('aud'),
+      boardId,
+      account.uid,
+      account.email,
+      describeLink({ role: 'answer', audience: 'anyone', expiresInMinutes: null }),
+      now,
+    ),
+  ];
+}
+
 const thumbnailUrlFor = (id: string, key: string | null) =>
   key ? `/api/boards/${id}/thumbnail` : null;
 

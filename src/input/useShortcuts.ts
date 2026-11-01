@@ -7,6 +7,7 @@ import { toggleMinimap, togglePane } from '@/state/uiPrefs';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { openSettings, useSettingsDialog } from '@/settings/dialog';
 import { startPresentation, usePresentation } from '@/workshop/presentation';
+import { STAMPS } from '@/model/stamps';
 import { actionFor, isRecordingShortcut } from './shortcuts';
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -40,6 +41,19 @@ function run(id: string): boolean {
   const store = useBoardStore.getState();
   const owner = useBoardAccess.getState().role === 'owner';
 
+  // The stamp tool; asked for again while in hand, the next stamp.
+  if (id === 'tool.stamp') {
+    const at = STAMPS.indexOf(store.stamp as (typeof STAMPS)[number]);
+    const next = store.tool === 'stamp' ? STAMPS[(at + 1) % STAMPS.length] : store.stamp;
+    store.setStamp(next ?? STAMPS[0]);
+    return true;
+  }
+  if (id.startsWith('stamp.')) {
+    const stamp = STAMPS[Number(id.slice(6))];
+    if (!stamp) return false;
+    store.setStamp(stamp);
+    return true;
+  }
   if (id.startsWith('tool.')) {
     store.setTool(id.slice(5) as Tool);
     return true;

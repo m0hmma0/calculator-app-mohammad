@@ -34,6 +34,14 @@ import styles from './TextEditor.module.css';
  * formatting change, or someone else's typing — and the caret is put back where it
  * belongs each time. Typing itself goes straight into the box and is read back out.
  */
+/** The formatting each shortcut turns on and off while typing. */
+const TOGGLED_BY: Partial<Record<string, MarkName>> = {
+  'text.bold': 'bold',
+  'text.italic': 'italic',
+  'text.underline': 'underline',
+  'text.strike': 'strike',
+};
+
 export function RichTextEditor({
   element,
   style,
@@ -125,6 +133,7 @@ export function RichTextEditor({
             bold: rangeHas(marks, start, end, 'bold'),
             italic: rangeHas(marks, start, end, 'italic'),
             underline: rangeHas(marks, start, end, 'underline'),
+            strike: rangeHas(marks, start, end, 'strike'),
             color: rangeValue(marks, start, end, 'color'),
             highlight: rangeValue(marks, start, end, 'highlight'),
             link: rangeValue(marks, start, end, 'link'),
@@ -241,6 +250,7 @@ export function RichTextEditor({
         bold: Boolean(chosen.bold),
         italic: Boolean(chosen.italic),
         underline: Boolean(chosen.underline),
+        strike: Boolean(chosen.strike),
         color: chosen.color ?? null,
         highlight: chosen.highlight ?? null,
       });
@@ -302,13 +312,16 @@ export function RichTextEditor({
         case 'formatBold':
         case 'formatItalic':
         case 'formatUnderline':
+        case 'formatStrikeThrough':
           event.preventDefault();
           toggle(
             event.inputType === 'formatBold'
               ? 'bold'
               : event.inputType === 'formatItalic'
                 ? 'italic'
-                : 'underline',
+                : event.inputType === 'formatUnderline'
+                  ? 'underline'
+                  : 'strike',
           );
           return;
         case 'insertFromPaste':
@@ -385,9 +398,10 @@ export function RichTextEditor({
         // Only keys held with Ctrl, ⌘ or Alt can be shortcuts here; the rest type.
         if (!event.ctrlKey && !event.metaKey && !event.altKey) return;
         const id = actionFor(event.nativeEvent, 'typing') ?? actionFor(event.nativeEvent, 'board');
-        if (id === 'text.bold' || id === 'text.italic' || id === 'text.underline') {
+        const marked = id ? TOGGLED_BY[id] : undefined;
+        if (marked) {
           event.preventDefault();
-          toggle(id === 'text.bold' ? 'bold' : id === 'text.italic' ? 'italic' : 'underline');
+          toggle(marked);
         } else if (id === 'text.link') {
           // A link: the address field opens in the side panel, opening the panel if
           // it is shut — asked for, unlike opening it just because typing began.

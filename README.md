@@ -10,29 +10,29 @@ for Google sign-in.
 
 Built in phases. Each phase ends with a working, checkable deliverable.
 
-| Phase  | What it adds                                 | State       |
-| ------ | -------------------------------------------- | ----------- |
-| **0**  | Teardown, tooling, test harness, app shell   | ✅ done     |
-| **1**  | Infinite canvas — pan, zoom, minimap         | ✅ done     |
-| **2**  | Shapes, selection, transform handles         | ✅ done     |
-| **3**  | Freehand, text, images, laser pointer        | ✅ done     |
-| **4**  | Yjs document, per-user undo, offline, export | ✅ done     |
-| **5**  | Google sign-in, folders, boards (D1)         | ✅ done     |
-| **6**  | Image storage (R2)                           | built       |
-| **7**  | Real-time collaboration (Durable Objects)    | ✅ done     |
-| **8**  | Sharing, permissions, comments               | built       |
-| **9**  | Presentation mode, workshop tools, embeds    | built       |
-| **10** | Quick fixes and the text box                 | built       |
-| **11** | One control pane, and who sees what          | built       |
-| **12** | Settings and shortcuts                       | built       |
-| **13** | Presenting, frames, celebrations and media   | built       |
-| **14** | Classroom: placeholders, Answer role, locks  | built       |
-| 14.1   | Fixes: text boxes, eraser, side panel        | not started |
-| 14.2   | Pictures, locks and panning                  | not started |
-| 15     | Undo across sessions                         | not started |
-| 16     | Dashboard organisation                       | not started |
-| 17     | Keyboard use and visible focus               | not started |
-| 18     | Hardening, load testing, launch              | not started |
+| Phase    | What it adds                                 | State       |
+| -------- | -------------------------------------------- | ----------- |
+| **0**    | Teardown, tooling, test harness, app shell   | ✅ done     |
+| **1**    | Infinite canvas — pan, zoom, minimap         | ✅ done     |
+| **2**    | Shapes, selection, transform handles         | ✅ done     |
+| **3**    | Freehand, text, images, laser pointer        | ✅ done     |
+| **4**    | Yjs document, per-user undo, offline, export | ✅ done     |
+| **5**    | Google sign-in, folders, boards (D1)         | ✅ done     |
+| **6**    | Image storage (R2)                           | built       |
+| **7**    | Real-time collaboration (Durable Objects)    | ✅ done     |
+| **8**    | Sharing, permissions, comments               | built       |
+| **9**    | Presentation mode, workshop tools, embeds    | built       |
+| **10**   | Quick fixes and the text box                 | built       |
+| **11**   | One control pane, and who sees what          | built       |
+| **12**   | Settings and shortcuts                       | built       |
+| **13**   | Presenting, frames, celebrations and media   | built       |
+| **14**   | Classroom: placeholders, Answer role, locks  | built       |
+| **14.1** | Fixes: text boxes, eraser, side panel        | built       |
+| 14.2     | Pictures, locks and panning                  | not started |
+| 15       | Undo across sessions                         | not started |
+| 16       | Dashboard organisation                       | not started |
+| 17       | Keyboard use and visible focus               | not started |
+| 18       | Hardening, load testing, launch              | not started |
 
 Phases 10–16 were added from a list of requests after Phase 9, and 14.1 and 14.2 from a
 list after Phase 14; the original Phases 10 and 11 are now 17 and 18, and come last so
@@ -151,6 +151,24 @@ with range requests so a player can seek (50 MB for a video, 20 MB for a sound).
 signed-out board they stay in this browser's IndexedDB. Links to media files, to Vimeo,
 SoundCloud and Spotify, and to YouTube play in place; a link whose name does not say
 what it is becomes a player when the server finds a video or sound behind it.
+
+## Fixes after Phase 14
+
+A text box clicked into place keeps the width set in Settings and is only as tall as its
+text: it grows and shrinks as words come and go (`autoHeight`; a clicked placeholder
+fits its hint while empty, and pasted text fits too). A box dragged out to a size keeps
+it and only grows; dragging just the height of an automatic one makes it fixed. An
+emptied one-line box stays one line — the break a browser leaves behind for the caret
+is no longer read as a new line.
+
+The eraser rubs things out of the board itself, not just the screen, so they stay gone
+when drawing carries on. The side panel sits above everything laid over the board, and
+shows only when switched on and there is something for it: a selection, the pen's or
+highlighter's settings (now at its top), or the object list. Duplicates land directly
+below the original. Strikethrough joins bold, italic and underline (Ctrl/⌘ Shift X while
+typing). New shortcuts: Q for the placeholder tool, S for the stamp tool (S again for
+the next stamp, and each stamp can be given its own key), Ctrl/⌘ Enter to present. A new
+board's link is on from the start: anyone with it can answer.
 
 ## Placeholders, the Answer role and locks
 

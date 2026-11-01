@@ -69,21 +69,31 @@ test.describe('a wide screen', () => {
     expect(menu!.y + menu!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   });
 
-  test('the pen’s options stand beside the pane, and left of the side panel when open', async ({
+  test('the pen’s options sit in the side panel when it is on, and by the pane when off', async ({
     page,
   }) => {
     await open(page);
     await page.keyboard.press('KeyP');
     const stage = await box(page, 'stage');
     const panel = await box(page, 'inspector');
-    const options = await box(page, 'tool-options');
-    // Right-hand side of the board, upright, clear of the open side panel.
-    expect(options.x).toBeGreaterThan(stage.x + stage.width / 2);
-    expect(options.height).toBeGreaterThan(options.width);
-    expect(options.x + options.width).toBeLessThanOrEqual(panel.x);
+    // At the top of the panel, inside it.
+    expect(within(await box(page, 'tool-options'), panel)).toBe(true);
 
+    // A menu from the controls opens over the panel, not under it.
+    await page.getByTestId('tools-menu').click();
+    const item = (await page.getByTestId('toggle-layers').boundingBox())!;
+    const onTop = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.closest('[role="menu"]') !== null,
+      [item.x + item.width / 2, item.y + item.height / 2],
+    );
+    expect(onTop).toBe(true);
+    await page.getByTestId('tools-menu').click();
+
+    // Panel off: the options stand alone, upright, at the board's right edge.
     await page.getByTestId('close-pane').click();
     const alone = await box(page, 'tool-options');
+    expect(alone.x).toBeGreaterThan(stage.x + stage.width / 2);
+    expect(alone.height).toBeGreaterThan(alone.width);
     expect(stage.x + stage.width - (alone.x + alone.width)).toBeLessThan(30);
   });
 
@@ -115,6 +125,8 @@ test.describe('a tall screen', () => {
     expect(stage.y).toBeCloseTo(bar.y + bar.height, 0);
     expect(stage.y + stage.height).toBeCloseTo(1024, 0);
 
+    // With the side panel off, the pen's options stand top centre.
+    await page.getByTestId('toggle-pane').click();
     await page.keyboard.press('KeyP');
     const options = await box(page, 'tool-options');
     const centre = options.x + options.width / 2;

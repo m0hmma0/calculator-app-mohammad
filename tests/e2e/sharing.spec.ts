@@ -42,9 +42,16 @@ async function closeShare(page: Page) {
   await expect(page.getByTestId('share-dialog')).toHaveCount(0);
 }
 
-/** Turns the link on from the share dialog and returns it. */
-async function enableLink(page: Page) {
-  await page.getByTestId('link-enabled').click();
+/**
+ * Sets the board's link from the share dialog — on, for anyone, to view unless a role
+ * is given — and returns it. A new board's link is already on (for answering).
+ */
+async function enableLink(page: Page, role = 'viewer') {
+  const toggle = page.getByTestId('link-enabled');
+  await expect(toggle).toBeVisible();
+  if (!(await toggle.isChecked())) await toggle.click();
+  await page.getByTestId('link-role').selectOption(role);
+  await expect(page.getByTestId('link-role')).toHaveValue(role);
   const field = page.getByTestId('link-url');
   await expect(field).toHaveValue(/\/s\/[\w-]+$/);
   return field.inputValue();
@@ -113,6 +120,37 @@ async function ownerWithBoard(browser: Browser, label: string) {
 const close = async (...contexts: BrowserContext[]) => {
   for (const context of contexts) await context.close();
 };
+
+test.describe('a new board', () => {
+  // Phase 14.1, checklist item 9.
+  test('is shared for answering from the start, and its link still turns off', async ({
+    browser,
+  }) => {
+    const owner = await ownerWithBoard(browser, 'answerdefault');
+    await openShare(owner.page);
+    const toggle = owner.page.getByTestId('link-enabled');
+    await expect(toggle).toBeChecked();
+    await expect(owner.page.getByTestId('link-audience')).toHaveValue('anyone');
+    await expect(owner.page.getByTestId('link-role')).toHaveValue('answer');
+    await expect(owner.page.getByTestId('audit-log')).toContainText(
+      'link on: anyone with the link can answer',
+    );
+    const url = await owner.page.getByTestId('link-url').inputValue();
+    await closeShare(owner.page);
+
+    // Whoever has it may answer, and nothing more.
+    const visitor = await guest(browser);
+    await followAsGuest(visitor.page, url, 'Ada');
+    await expect(visitor.page.getByText('Can answer')).toBeVisible();
+
+    // Off, as before: the link stops working.
+    await openShare(owner.page);
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    await expect(visitor.page.getByTestId('board-missing')).toBeVisible({ timeout: 5000 });
+    await close(owner.context, visitor.context);
+  });
+});
 
 test.describe('a link anyone can view', () => {
   // Checklist items 1 and 2 — item 2 is the gate.

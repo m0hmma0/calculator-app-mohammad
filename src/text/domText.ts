@@ -24,15 +24,16 @@ export function renderInto(root: HTMLElement, text: string, marks: readonly Text
   const nodes: Node[] = [];
   for (const run of runsOf(marks, 0, text.length)) {
     const piece = document.createTextNode(text.slice(run.from, run.to));
-    const { bold, italic, underline, color, highlight, link } = run.marks;
-    if (!bold && !italic && !underline && !color && !highlight && !link) {
+    const { bold, italic, underline, strike, color, highlight, link } = run.marks;
+    if (!bold && !italic && !underline && !strike && !color && !highlight && !link) {
       nodes.push(piece);
       continue;
     }
     const span = document.createElement('span');
     if (bold) span.style.fontWeight = '700';
     if (italic) span.style.fontStyle = 'italic';
-    if (underline) span.style.textDecoration = 'underline';
+    const lines = [underline ? 'underline' : '', strike ? 'line-through' : ''].filter(Boolean);
+    if (lines.length > 0) span.style.textDecoration = lines.join(' ');
     if (color) {
       span.setAttribute(VALUE_ATTRIBUTE.color, color);
       span.style.color = color;
@@ -73,6 +74,8 @@ function formattingOf(element: Element, inherited: MarkSet): MarkSet {
   if (style?.fontWeight === 'bold') own.bold = true;
   if (tag === 'I' || tag === 'EM' || style?.fontStyle === 'italic') own.italic = true;
   if (tag === 'U' || style?.textDecoration?.includes('underline')) own.underline = true;
+  const struck = tag === 'S' || tag === 'STRIKE' || tag === 'DEL';
+  if (struck || style?.textDecoration?.includes('line-through')) own.strike = true;
   for (const [name, attribute] of Object.entries(VALUE_ATTRIBUTE) as Array<
     [keyof typeof VALUE_ATTRIBUTE, string]
   >) {
@@ -104,17 +107,23 @@ export function readBox(root: HTMLElement): { text: string; marks: TextMark[]; p
     if (marks.bold) attributes.bold = true;
     if (marks.italic) attributes.italic = true;
     if (marks.underline) attributes.underline = true;
+    if (marks.strike) attributes.strike = true;
     if (marks.color) attributes.color = marks.color;
     if (marks.highlight) attributes.highlight = marks.highlight;
     if (marks.link) attributes.link = marks.link;
     delta.push(Object.keys(attributes).length ? { insert: value, attributes } : { insert: value });
   };
+  // A break that is the very last thing in the box is where a browser stands the caret
+  // — in a box it has just emptied, say — and never a new line: Enter is handled by the
+  // editor, which writes "\n". Read as one, it made an emptied one-line box two lines.
+  let last: Node | null = root;
+  while (last?.lastChild) last = last.lastChild;
   const walk = (node: Node, marks: MarkSet) => {
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
         add((child as Text).data, marks, child);
       } else if (child instanceof HTMLBRElement) {
-        if (!child.hasAttribute(TAIL)) add('\n', marks, child);
+        if (!child.hasAttribute(TAIL) && child !== last) add('\n', marks, child);
       } else if (child instanceof Element) {
         // A browser that wraps a line in its own block: a new line before it.
         if (BLOCKS.has(child.tagName) && text !== '' && !text.endsWith('\n')) {

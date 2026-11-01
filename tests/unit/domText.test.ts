@@ -21,6 +21,20 @@ describe('the rich text box', () => {
     expect(read.marks).toEqual(marks);
   });
 
+  it('a break a browser leaves at the very end is not a new line', () => {
+    const root = box();
+    // What a browser leaves in a box after everything in it is deleted.
+    root.innerHTML = '<br>';
+    expect(readBox(root).text).toBe('');
+    root.innerHTML = 'word<br>';
+    expect(readBox(root).text).toBe('word');
+    // A break before it is a line, and the last one stands the caret on the next.
+    root.innerHTML = 'word<br><br>';
+    expect(readBox(root).text).toBe('word\n');
+    root.innerHTML = '<div>word</div><div><br></div>';
+    expect(readBox(root).text).toBe('word\n');
+  });
+
   it('an empty box, or one ending on a new line, still reads as its text', () => {
     const root = box();
     renderInto(root, '');

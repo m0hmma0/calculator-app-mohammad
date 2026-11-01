@@ -51,7 +51,7 @@ function placeText(text: string, at: Point) {
     z: keyBetween(store.elements.at(-1)?.z ?? null, null),
     style: { fontSize: defaults.fontSize },
   });
-  const full = defaultTextBox(element.style, defaults);
+  const full = defaultTextBox(element.style, { chars: defaults.chars, lines: 1 });
   const widest = Math.max(
     0,
     ...text.split('\n').map((line) => textWidth(element.style, line) ?? full.w),
@@ -59,6 +59,8 @@ function placeText(text: string, at: Point) {
   element.w = Math.max(120, Math.min(full.w, widest + 4));
   element.text = text;
   element.h = textHeight(element, text) ?? full.h;
+  // Sized to what it holds, and it keeps fitting as it is edited.
+  element.autoHeight = true;
   store.addElement(element);
 }
 

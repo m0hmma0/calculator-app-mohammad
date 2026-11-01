@@ -89,6 +89,7 @@ export function toYElement(element: BoardElement): YElement {
   if (element.page !== undefined) map.set('page', element.page);
   if (element.slide !== undefined) map.set('slide', element.slide);
   if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
+  if (element.autoHeight) map.set('autoHeight', true);
   if (element.table) map.set('table', toYTable(element.table));
 
   const style = new Y.Map<unknown>();
@@ -122,6 +123,7 @@ export function fromYElement(map: YElement): BoardElement {
   if (typeof slide === 'string') element.slide = slide;
   const placeholder = map.get('placeholder');
   if (typeof placeholder === 'string') element.placeholder = placeholder;
+  if (map.get('autoHeight') === true) element.autoHeight = true;
   const table = map.get('table');
   if (table instanceof Y.Map) element.table = readTable(table);
   const text = map.get('text');
@@ -175,6 +177,7 @@ const attributesOf = (mark: MarkSet) => ({
   bold: mark.bold ? true : null,
   italic: mark.italic ? true : null,
   underline: mark.underline ? true : null,
+  strike: mark.strike ? true : null,
   color: mark.color ?? null,
   highlight: mark.highlight ?? null,
   link: mark.link ?? null,
@@ -184,6 +187,7 @@ const CLEARED = {
   bold: null,
   italic: null,
   underline: null,
+  strike: null,
   color: null,
   highlight: null,
   link: null,

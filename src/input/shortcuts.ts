@@ -1,3 +1,4 @@
+import { STAMPS } from '@/model/stamps';
 import { useSettings } from '@/settings/settings';
 import type { Settings } from '@shared/settings';
 
@@ -25,6 +26,7 @@ export const GROUPS = [
   'Board',
   'Presenting',
   'Celebrations',
+  'Stamps',
   'While typing',
 ] as const;
 export type ShortcutGroup = (typeof GROUPS)[number];
@@ -56,6 +58,7 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('tool.sticky', 'Sticky note', 'Tools', ['KeyN']),
   action('tool.frame', 'Frame', 'Tools', ['KeyF']),
   action('tool.laser', 'Laser pointer', 'Tools', ['KeyK']),
+  action('tool.placeholder', 'Placeholder', 'Tools', ['KeyQ']),
 
   action('tool.rect', 'Rectangle', 'Shapes', ['KeyR']),
   action('tool.ellipse', 'Ellipse', 'Shapes', ['KeyO']),
@@ -96,7 +99,7 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('chat', 'Cursor chat', 'Board', ['Slash']),
   action('settings', 'Settings', 'Board', []),
 
-  action('present', 'Start presenting', 'Presenting', []),
+  action('present', 'Start presenting', 'Presenting', ['Mod+Enter']),
   action(
     'present.next',
     'Next frame',
@@ -129,9 +132,15 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('celebrate.fanfare', 'Fanfare', 'Celebrations', ['NumpadDivide']),
   action('celebrate.womp', 'Womp womp', 'Celebrations', ['NumpadMultiply']),
 
+  action('tool.stamp', 'Stamp — again for the next one', 'Stamps', ['KeyS']),
+  // One each, with no key until one is given: every number key is taken (zoom) or
+  // switches tabs in some browsers.
+  ...STAMPS.map((stamp, index) => action(`stamp.${index}`, `Stamp ${stamp}`, 'Stamps', [])),
+
   action('text.bold', 'Bold', 'While typing', ['Mod+KeyB'], 'typing'),
   action('text.italic', 'Italic', 'While typing', ['Mod+KeyI'], 'typing'),
   action('text.underline', 'Underline', 'While typing', ['Mod+KeyU'], 'typing'),
+  action('text.strike', 'Strikethrough', 'While typing', ['Mod+Shift+KeyX'], 'typing'),
   action('text.link', 'Link the selected words', 'While typing', ['Mod+KeyK'], 'typing'),
 ];
 

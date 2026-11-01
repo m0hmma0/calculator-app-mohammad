@@ -1,6 +1,6 @@
 import { fontString } from '@/canvas/fonts';
 import { TEXT_PADDING } from '@/canvas/renderContent';
-import type { BoardElement, ElementStyle } from '@/model/element';
+import { DEFAULT_HINT, isPlaceholder, type BoardElement, type ElementStyle } from '@/model/element';
 import { layoutText } from '@/model/textLayout';
 import { runsOf } from './marks';
 
@@ -68,6 +68,34 @@ export function textHeight(element: BoardElement, text: string): number | null {
   };
   const layout = layoutText(text, Math.max(1, element.w - TEXT_PADDING * 2), style, measure);
   return Math.ceil(Math.max(1, layout.lines.length) * layout.lineHeight + TEXT_PADDING * 2);
+}
+
+/**
+ * A change to a text box whose height follows its text, with the height it now needs:
+ * its words, or its hint while a placeholder is empty. Unchanged for any other box —
+ * and when only its height is dragged, the box stops following its text.
+ */
+export function fitted(element: BoardElement, patch: Partial<BoardElement>): Partial<BoardElement> {
+  if (element.type !== 'text') return patch;
+  const next: BoardElement = {
+    ...element,
+    ...patch,
+    style: patch.style ? { ...element.style, ...patch.style } : element.style,
+  };
+  if (!next.autoHeight) return patch;
+  const onlyHeight =
+    patch.h !== undefined &&
+    Math.abs(patch.h - element.h) > 0.5 &&
+    (patch.w === undefined || Math.abs(patch.w - element.w) < 0.5) &&
+    patch.text === undefined &&
+    patch.style === undefined;
+  if (onlyHeight) return { ...patch, autoHeight: false };
+  const words = next.text ?? '';
+  const shown =
+    isPlaceholder(next) && words.trim() === '' ? next.placeholder || DEFAULT_HINT : words;
+  const h = textHeight(next, shown);
+  if (h === null || (patch.h === undefined && Math.abs(h - element.h) < 0.5)) return patch;
+  return { ...patch, h };
 }
 
 /** The width a line of text needs, for sizing pasted text to what it holds. */

@@ -10,9 +10,10 @@ describe('settings read back from anywhere', () => {
 
   it('keep sizes in range, as whole numbers', () => {
     const { text } = sanitiseSettings({
+      // A box's height follows its words now: a stored number of lines is dropped.
       text: { fontSize: 2, boxChars: 900, boxLines: 3.6, othersFontSize: 24.2 },
     });
-    expect(text).toEqual({ fontSize: 8, boxChars: 200, boxLines: 4, othersFontSize: 24 });
+    expect(text).toEqual({ fontSize: 8, boxChars: 200, othersFontSize: 24 });
   });
 
   it('keep "the same as mine" for others, and drop what they do not know', () => {

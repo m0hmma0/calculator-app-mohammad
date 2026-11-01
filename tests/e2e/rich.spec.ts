@@ -314,8 +314,11 @@ test.describe('a fresh browser', () => {
     await expect(page.getByTestId('layers')).toHaveCount(0);
     await expect(page.getByTestId('minimap')).toHaveCount(0);
 
-    // The panel opens from the controls and closes with its own ×.
+    // Switched on from the controls, it shows for what is selected, and closes with its ×.
     await page.getByTestId('toggle-pane').click();
+    await expect(page.getByTestId('toggle-pane')).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('KeyV');
+    await page.mouse.click(360, 340);
     await expect(page.getByTestId('inspector')).toBeVisible();
     await page.getByTestId('close-pane').click();
     await expect(page.getByTestId('inspector')).toHaveCount(0);

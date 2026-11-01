@@ -142,8 +142,8 @@ if (typeof window !== 'undefined') {
  * How a new text box starts here. On someone else's board the size is the one its
  * owner chose for everyone; the box's shape is always this person's own.
  */
-export function textDefaults(): { fontSize: number; chars: number; lines: number } {
+export function textDefaults(): { fontSize: number; chars: number } {
   const { text } = useSettings.getState().settings;
   const boardSize = useBoardAccess.getState().textSize;
-  return { fontSize: boardSize ?? text.fontSize, chars: text.boxChars, lines: text.boxLines };
+  return { fontSize: boardSize ?? text.fontSize, chars: text.boxChars };
 }

@@ -1,5 +1,8 @@
 .stage {
   position: relative;
+  /* Its layers stack among themselves: the side panel above what is laid over the
+     board, and the controls' menus, which open over it from outside, above them all. */
+  isolation: isolate;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;

@@ -81,7 +81,10 @@ function textElement(element: BoardElement, resolve: ColorResolver): string {
     })
     .join('');
 
-  const decoration = style.underline ? ' text-decoration="underline"' : '';
+  const decorations = [style.underline ? 'underline' : '', style.strike ? 'line-through' : ''];
+  const decoration = decorations.some(Boolean)
+    ? ` text-decoration="${decorations.filter(Boolean).join(' ')}"`
+    : '';
   const italic = style.italic ? ' font-style="italic"' : '';
 
   return `<text font-family="${escapeXml(fontStack(style.fontFamily))}" font-size="${round(style.fontSize)}" font-weight="${style.fontWeight}"${italic} fill="${colour}" text-anchor="${anchor}" direction="${direction}"${decoration}${transformAttribute(element)}>${rows}</text>`;
@@ -96,12 +99,13 @@ function markedRuns(element: BoardElement, line: WrappedLine, resolve: ColorReso
   return runsOf(element.marks, line.start, line.start + line.text.length)
     .map((run) => {
       const words = escapeXml(line.text.slice(run.from - line.start, run.to - line.start));
-      const { bold, italic, underline, color, link } = run.marks;
+      const { bold, italic, underline, strike, color, link } = run.marks;
+      const lines = [underline || link ? 'underline' : '', strike ? 'line-through' : ''];
       const colour = resolve(color ?? (link ? 'var(--accent)' : null));
       const attributes = [
         bold ? ' font-weight="700"' : '',
         italic ? ' font-style="italic"' : '',
-        underline || link ? ' text-decoration="underline"' : '',
+        lines.some(Boolean) ? ` text-decoration="${lines.filter(Boolean).join(' ')}"` : '',
         colour ? ` fill="${escapeXml(colour)}"` : '',
       ].join('');
       const piece = attributes ? `<tspan${attributes}>${words}</tspan>` : words;

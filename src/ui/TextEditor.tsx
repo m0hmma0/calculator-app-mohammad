@@ -131,7 +131,10 @@ export function TextEditor({ viewport }: { viewport: Viewport }) {
     lineHeight: element.style.lineHeight,
     letterSpacing: `${element.style.letterSpacing * viewport.zoom}px`,
     textAlign: label ? 'center' : element.style.align,
-    textDecoration: element.style.underline ? 'underline' : undefined,
+    textDecoration:
+      [element.style.underline ? 'underline' : '', element.style.strike ? 'line-through' : '']
+        .filter(Boolean)
+        .join(' ') || undefined,
     ...(ink ? { color: ink } : {}),
     transform: element.rotation ? `rotate(${element.rotation}rad)` : undefined,
     transformOrigin: 'center',

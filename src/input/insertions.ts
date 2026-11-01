@@ -6,7 +6,7 @@ import { showPane } from '@/state/uiPrefs';
 import { useBoardStore } from '@/state/boardStore';
 import { defaultTextBox, textHeight } from '@/text/measure';
 
-export const STAMPS = ['👍', '❤️', '⭐', '✅', '❓', '🎉', '🔥', '💡'] as const;
+export { STAMPS } from '@/model/stamps';
 
 const STAMP_SIZE = 72;
 
@@ -40,6 +40,9 @@ export function placePlaceholder(origin: Point, dragged: Rect | null) {
   };
   Object.assign(element, box, { w: Math.max(40, box.w) });
   element.h = Math.max(dragged?.h ?? 0, textHeight(element, DEFAULT_HINT) ?? box.h);
+  // Clicked, it fits its hint, then its answer, as either changes; dragged, it keeps the
+  // size it was given.
+  if (!dragged) element.autoHeight = true;
   // The tool is put down first: taking up another one clears the selection.
   store.setTool('select');
   store.addElement(element);

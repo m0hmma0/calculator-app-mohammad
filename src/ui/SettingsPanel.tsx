@@ -16,7 +16,7 @@ import { DEFAULT_STYLE, TEXT_STYLE } from '@/model/element';
 import type { SettingsSection } from '@/settings/dialog';
 import { updateSettings, useSettings, type SettingsStatus } from '@/settings/settings';
 import { defaultTextBox } from '@/text/measure';
-import { BOX_CHARS, BOX_LINES, FONT_SIZE, type Settings } from '@shared/settings';
+import { BOX_CHARS, FONT_SIZE, type Settings } from '@shared/settings';
 import styles from './Settings.module.css';
 
 const STATUS: Record<SettingsStatus, string> = {
@@ -88,23 +88,15 @@ function TextSection() {
             range={BOX_CHARS}
             onCommit={(boxChars) => setText({ boxChars })}
           />
-          characters wide, and
-          <NumberField
-            id="setting-box-lines"
-            label="Lines tall"
-            value={text.boxLines}
-            range={BOX_LINES}
-            onCommit={(boxLines) => setText({ boxLines })}
-          />
-          {text.boxLines === 1 ? 'line' : 'lines'} tall
+          characters wide
         </span>
       </div>
       <p className={styles.hint}>
-        Dragging with the text tool makes a box of any size; typing past the bottom makes a box
-        taller.
+        and as tall as its words, growing and shrinking as you type. Dragging with the text tool
+        makes a box of any size, which grows when typing passes its bottom.
       </p>
 
-      <TextPreview fontSize={text.fontSize} chars={text.boxChars} lines={text.boxLines} />
+      <TextPreview fontSize={text.fontSize} chars={text.boxChars} />
 
       <fieldset className={styles.choice}>
         <legend className={styles.label}>Others typing on your boards start at</legend>
@@ -208,18 +200,10 @@ function NumberField({
   );
 }
 
-/** The clicked box, drawn to scale, so "55 by 8 at 40 px" means something. */
-function TextPreview({
-  fontSize,
-  chars,
-  lines,
-}: {
-  fontSize: number;
-  chars: number;
-  lines: number;
-}) {
+/** A clicked box with a line in it, drawn to scale, so "55 at 40 px" means something. */
+function TextPreview({ fontSize, chars }: { fontSize: number; chars: number }) {
   const style = { ...DEFAULT_STYLE, ...TEXT_STYLE, fontSize };
-  const box = defaultTextBox(style, { chars, lines });
+  const box = defaultTextBox(style, { chars, lines: 1 });
   const scale = Math.min(1, 440 / box.w, 160 / box.h);
   return (
     <figure className={styles.preview} data-testid="settings-text-preview">

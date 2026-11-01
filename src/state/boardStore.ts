@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Transaction } from 'yjs';
 import type { MarkFormats } from '@/text/marks';
-import { textHeight } from '@/text/measure';
+import { fitted, textHeight } from '@/text/measure';
 import {
   addPage,
   applyPatches,
@@ -189,7 +189,11 @@ interface BoardState {
   patchElements: (patches: ReadonlyMap<ElementId, Partial<BoardElement>>) => void;
   replaceElements: (elements: BoardElement[]) => void;
   deleteSelection: () => void;
-  duplicateSelection: (offset?: number) => void;
+  /**
+   * Copies what is selected and selects the copy: directly below it, lined up, by
+   * default; in place for an Alt-drag, which then carries the copy away.
+   */
+  duplicateSelection: (placement?: 'below' | 'inPlace') => void;
   nudgeSelection: (dx: number, dy: number) => void;
 
   selectOnly: (ids: readonly ElementId[]) => void;
@@ -259,7 +263,32 @@ interface BoardState {
   resizeTable: (id: ElementId, change: { rows?: number; cols?: number }) => void;
 }
 
+/** What a change must touch before a box that follows its text needs measuring again. */
+const FIT_KEYS = ['w', 'h', 'text', 'style', 'placeholder', 'autoHeight'] as const;
+
+/**
+ * Changes about to be written, with the height worked out for every text box that
+ * follows its text. A move (x and y only, every frame of a drag) is passed through
+ * without looking anything up.
+ */
+function fitHeights(
+  elements: readonly BoardElement[],
+  patches: ReadonlyMap<ElementId, Partial<BoardElement>>,
+): ReadonlyMap<ElementId, Partial<BoardElement>> {
+  const touched = [...patches].filter(([, patch]) => FIT_KEYS.some((key) => key in patch));
+  if (touched.length === 0) return patches;
+  const byId = new Map(elements.map((element) => [element.id, element]));
+  const out = new Map(patches);
+  for (const [id, patch] of touched) {
+    const element = byId.get(id);
+    if (element?.type === 'text') out.set(id, fitted(element, patch));
+  }
+  return out;
+}
+
 const ZOOM_STEP = 1.25;
+/** How far below the original a duplicate lands, in board units. */
+export const DUPLICATE_GAP = 16;
 
 /** What a viewer may still pick up: looking around, and pointing. */
 /** Someone who can only look moves around the board and points: nothing to select. */
@@ -372,7 +401,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     commitUndoStep: () => board.undoManager.stopCapturing(),
 
     applyDiscrete: (patches) => {
-      applyPatches(board, patches);
+      applyPatches(board, fitHeights(get().elements, patches));
       board.undoManager.stopCapturing();
     },
 
@@ -472,7 +501,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       });
     },
 
-    patchElements: (patches) => applyPatches(board, patches),
+    patchElements: (patches) => applyPatches(board, fitHeights(get().elements, patches)),
 
     replaceElements: (elements) => replaceAll(board, elements),
 
@@ -495,16 +524,18 @@ export const useBoardStore = create<BoardState>((set, get) => {
       bump({ selection: get().selection.filter((id) => !ids.has(id)) });
     },
 
-    duplicateSelection: (offset = 16) => {
+    duplicateSelection: (placement = 'below') => {
       const chosen = selectedElements();
       if (chosen.length === 0) return;
 
+      // Below the whole selection, a little apart, left edges lined up: never on top of it.
+      const dy = placement === 'below' ? (selectionAABB(chosen)?.h ?? 0) + DUPLICATE_GAP : 0;
       const keys = keysBetween(topZ(), null, chosen.length);
       const copies = chosen.map((element, index) => ({
         ...element,
         id: createElementId(element.type),
-        x: element.x + offset,
-        y: element.y + offset,
+        x: element.x,
+        y: element.y + dy,
         z: keys[index]!,
         parentId: null,
       }));
@@ -770,14 +801,16 @@ export const useBoardStore = create<BoardState>((set, get) => {
     removeElements: (ids) => {
       if (ids.length === 0) return;
       const doomed = new Set(ids);
-      const selection = get().selection.filter((id) => !doomed.has(id));
-      bump({
-        elements: get().elements.filter(
-          (element) =>
-            !doomed.has(element.id) && !(element.parentId && doomed.has(element.parentId)),
-        ),
-        selection,
-      });
+      // Removed from the document, children of a group with it. Taking them out of this
+      // view alone (as the eraser once did) lasted only until the next change redrew
+      // the board from the document, and the erased thing came back.
+      const gone = get()
+        .elements.filter(
+          (element) => doomed.has(element.id) || (element.parentId && doomed.has(element.parentId)),
+        )
+        .map((element) => element.id);
+      deleteElements(board, gone);
+      bump({ selection: get().selection.filter((id) => !doomed.has(id)) });
     },
 
     /**
@@ -848,10 +881,15 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setElementText: (id, text) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       const element = get().elements.find((candidate) => candidate.id === id);
-      // A text box grows to hold what is typed, so nothing spills out of reach of a click.
-      const needed = element?.type === 'text' ? textHeight(element, text) : null;
-      const patch =
-        needed !== null && element && needed > element.h ? { text, h: needed } : { text };
+      // A text box grows to hold what is typed, so nothing spills out of reach of a click;
+      // one whose height follows its text shrinks back, too.
+      let patch: Partial<BoardElement> = { text };
+      if (element?.autoHeight) {
+        patch = fitted(element, patch);
+      } else if (element?.type === 'text') {
+        const needed = textHeight(element, text);
+        if (needed !== null && needed > element.h) patch = { text, h: needed };
+      }
       if (board.readOnly) {
         // An answer: its words and the box's height, through the one narrow door.
         const map = board.elements.get(id);
@@ -867,6 +905,10 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const map = board.elements.get(id);
       if (!map) return;
       transactAnswer(board, id, () => formatYText(map, from, to, formats));
+      // Bold is wider: a box that follows its text may now wrap onto another line.
+      const element = get().elements.find((candidate) => candidate.id === id);
+      const height = element?.autoHeight ? fitted(element, {}).h : undefined;
+      if (height !== undefined) transactAnswer(board, id, () => patchYElement(map, { h: height }));
     },
 
     formatSelectionText: (formats, style) => {
@@ -954,6 +996,11 @@ const DRAG_TOOLS = new Set<Tool>([...SHAPE_TOOLS, 'frame']);
 
 export function isShapeTool(tool: Tool): tool is DragTool {
   return DRAG_TOOLS.has(tool);
+}
+
+/** Whether the tool in hand has settings to show: the pen, the highlighter, the eraser. */
+export function hasToolOptions(tool: Tool): boolean {
+  return tool === 'pen' || tool === 'highlighter' || tool === 'eraser';
 }
 
 export function isContentTool(tool: Tool): tool is ContentTool {

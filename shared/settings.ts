@@ -7,10 +7,8 @@
 export interface TextSettings {
   /** The size, in board pixels, that new text starts at. */
   fontSize: number;
-  /** A clicked text box is this many characters wide… */
+  /** A clicked text box is this many characters wide; its height follows its words. */
   boxChars: number;
-  /** …and this many lines tall. Typing more makes it taller. */
-  boxLines: number;
   /** What others typing on this person's boards start at; null is the same as theirs. */
   othersFontSize: number | null;
 }
@@ -26,12 +24,10 @@ export interface Settings {
 
 export const FONT_SIZE = { min: 8, max: 200 } as const;
 export const BOX_CHARS = { min: 4, max: 200 } as const;
-export const BOX_LINES = { min: 1, max: 40 } as const;
 
 export const DEFAULT_TEXT: TextSettings = {
   fontSize: 40,
   boxChars: 55,
-  boxLines: 8,
   othersFontSize: null,
 };
 
@@ -74,7 +70,6 @@ export function sanitiseSettings(raw: unknown): Settings {
     text: {
       fontSize: clamp(text.fontSize, FONT_SIZE, DEFAULT_TEXT.fontSize),
       boxChars: clamp(text.boxChars, BOX_CHARS, DEFAULT_TEXT.boxChars),
-      boxLines: clamp(text.boxLines, BOX_LINES, DEFAULT_TEXT.boxLines),
       othersFontSize:
         text.othersFontSize === null || text.othersFontSize === undefined
           ? null

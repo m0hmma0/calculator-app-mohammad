@@ -84,6 +84,20 @@
   color: var(--on-accent);
 }
 
+/* At the top of the side panel: a row that wraps, inside the panel's own box. */
+.inPanel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 0 28px 10px 0; /* clear of the panel's close button */
+  border-bottom: 1px solid var(--border);
+}
+
+.inPanel .group {
+  flex-wrap: wrap;
+}
+
 /* A highlighter's width, shown as the flat band it draws. */
 .dot .stripe {
   border-radius: 2px;
@@ -100,16 +114,11 @@
     border-radius: 18px;
   }
 
-  /* The side panel is open at the right: the options stand just left of it. */
-  .bar[data-beside-panel] {
-    right: 250px;
-  }
-
-  .group {
+  .bar .group {
     flex-direction: column;
   }
 
-  .divider {
+  .bar .divider {
     width: 18px;
     height: 1px;
   }

@@ -5,7 +5,7 @@ import { atLeast, boardAccess } from '../access';
 import { BOARD_COLUMNS, boardFilesUpdate, getBoard, getFolder, toBoard } from '../db';
 import type { Env } from '../env';
 import { cleanName, fail, json, newId } from '../http';
-import { tellRooms, viewerOf } from './sharing';
+import { defaultLink, tellRooms, viewerOf } from './sharing';
 
 const snapshotKey = (id: string) => `boards/${id}/snapshot.bin`;
 const thumbnailKey = (id: string) => `boards/${id}/thumb.png`;
@@ -20,12 +20,13 @@ export async function createBoard(request: Request, env: Env, account: Account) 
 
   const now = Date.now();
   const id = newId('brd');
-  await env.DB.prepare(
-    `INSERT INTO boards (id, owner_id, folder_id, title, created_at, updated_at, opened_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?5)`,
-  )
-    .bind(id, account.uid, folderId, cleanName(body.title, 'Untitled board'), now)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO boards (id, owner_id, folder_id, title, created_at, updated_at, opened_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?5)`,
+    ).bind(id, account.uid, folderId, cleanName(body.title, 'Untitled board'), now),
+    ...defaultLink(env, id, account),
+  ]);
 
   return json({ board: toBoard((await getBoard(env, account.uid, id))!) }, 201);
 }
@@ -126,6 +127,8 @@ export async function duplicateBoard(env: Env, account: Account, id: string) {
     env.DB.prepare(
       'INSERT INTO board_files (board_id, hash) SELECT ?1, hash FROM board_files WHERE board_id = ?2',
     ).bind(copyId, id),
+    // A new board like any other: its own link, for answering.
+    ...defaultLink(env, copyId, account),
   ]);
 
   return json({ board: toBoard((await getBoard(env, account.uid, copyId))!) }, 201);

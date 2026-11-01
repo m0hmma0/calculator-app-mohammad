@@ -257,21 +257,35 @@ export function drawText(
             : x - width;
       ctx.fillRect(underlineX, y + fontSize * 0.42, width, Math.max(1, fontSize / 16));
     }
+    if (style.strike && text.trim() !== '') {
+      const width = ctx.measureText(text).width;
+      const strikeX =
+        ctx.textAlign === 'center'
+          ? x - width / 2
+          : (ctx.textAlign === 'start') === (layout.direction === 'ltr')
+            ? x
+            : x - width;
+      ctx.fillRect(strikeX, y - fontSize * STRIKE_RISE, width, Math.max(1, fontSize / 16));
+    }
   });
 
   ctx.restore();
   return { fontSize, lineCount: layout.lines.length };
 }
 
-/** The element's style with a run's own bold, italic and underline on top. */
+/** The element's style with a run's own bold, italic, underline and strike on top. */
 function markedStyle(style: ElementStyle, marks: MarkSet): ElementStyle {
   return {
     ...style,
     fontWeight: marks.bold ? Math.max(700, style.fontWeight) : style.fontWeight,
     italic: style.italic || Boolean(marks.italic),
     underline: style.underline || Boolean(marks.underline) || Boolean(marks.link),
+    strike: style.strike || Boolean(marks.strike),
   };
 }
+
+/** How far above the middle of a line its strikethrough runs, as a share of the type size. */
+const STRIKE_RISE = 0.06;
 
 interface PlacedPiece {
   text: string;
@@ -347,6 +361,10 @@ function drawMarkedLine(
     ctx.fillText(piece.text, piece.x, y);
     if (piece.style.underline && piece.text.trim() !== '') {
       ctx.fillRect(piece.x, y + fontSize * 0.42, piece.width, Math.max(1, fontSize / 16));
+    }
+    if (piece.style.strike && piece.text.trim() !== '') {
+      const rise = fontSize * STRIKE_RISE;
+      ctx.fillRect(piece.x, y - rise, piece.width, Math.max(1, fontSize / 16));
     }
   }
   ctx.fillStyle = ink;

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createElement, type BoardElement } from '@/model/element';
 import { keysBetween } from '@/model/zorder';
 import { useBoardAccess } from '@/sharing/boardAccess';
-import { useBoardStore } from '@/state/boardStore';
+import { DUPLICATE_GAP, useBoardStore } from '@/state/boardStore';
 
 const store = () => useBoardStore.getState();
 
@@ -265,16 +265,25 @@ describe('lock and hide', () => {
 });
 
 describe('duplicate and delete', () => {
-  it('offsets the copy and selects it', () => {
+  it('puts the copy directly below, lined up, and selects it', () => {
     seed([{ x: 10, y: 10 }]);
+    const original = byId('e0');
     store().selectOnly(['e0']);
-    store().duplicateSelection(16);
+    store().duplicateSelection();
 
     expect(store().elements).toHaveLength(2);
     const copy = byId(store().selection[0]!);
     expect(copy.id).not.toBe('e0');
-    expect(copy.x).toBe(26);
-    expect(copy.y).toBe(26);
+    expect(copy.x).toBe(original.x);
+    expect(copy.y).toBe(original.y + original.h + DUPLICATE_GAP);
+  });
+
+  it('copies in place for an Alt-drag, which carries the copy away', () => {
+    seed([{ x: 10, y: 10 }]);
+    store().selectOnly(['e0']);
+    store().duplicateSelection('inPlace');
+    const copy = byId(store().selection[0]!);
+    expect([copy.x, copy.y]).toEqual([10, 10]);
   });
 
   it('puts the copy on top', () => {

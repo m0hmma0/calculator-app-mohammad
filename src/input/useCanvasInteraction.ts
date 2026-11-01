@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import { recognizeShape } from '@/ink/recognize';
-import { defaultTextBox } from '@/text/measure';
+import { defaultTextBox, textHeight } from '@/text/measure';
 import { textDefaults } from '@/settings/settings';
 import { placePlaceholder, placeStamp } from './insertions';
 import { tableGrid } from '@/canvas/renderContent';
@@ -570,7 +570,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         if (!alreadySelected) store.selectOnly([targetId]);
 
         // Alt-drag leaves the original behind and moves a copy.
-        if (event.altKey) useBoardStore.getState().duplicateSelection(0);
+        if (event.altKey) useBoardStore.getState().duplicateSelection('inPlace');
         beginMove(event);
         return;
       }
@@ -892,12 +892,18 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
             z: keyBetween(store.elements.at(-1)?.z ?? null, null),
             style: { fontSize: defaults.fontSize },
           });
-          const size = box ?? defaultTextBox(element.style, defaults);
+          const size = box ?? defaultTextBox(element.style, { chars: defaults.chars, lines: 1 });
           Object.assign(element, box ?? { x: drag.origin.x, y: drag.origin.y }, {
             w: Math.max(40, size.w),
             h: Math.max(element.style.fontSize * element.style.lineHeight, size.h),
           });
           element.text = '';
+          // Clicked: the width is the one in Settings, and the height follows the text —
+          // one line to start, growing and shrinking as it is typed.
+          if (!box) {
+            element.autoHeight = true;
+            element.h = textHeight(element, '') ?? element.h;
+          }
           store.addElement(element);
           store.setTool('select');
           store.beginEditing(element.id);

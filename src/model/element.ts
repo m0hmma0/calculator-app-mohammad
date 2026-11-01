@@ -36,6 +36,8 @@ export interface TextMark {
   bold?: true;
   italic?: true;
   underline?: true;
+  /** A line through the words. */
+  strike?: true;
   /** The words' own colour, over the box's. */
   color?: string;
   /** A highlighter colour behind the words. */
@@ -104,6 +106,8 @@ export interface ElementStyle {
   fontWeight: number;
   italic: boolean;
   underline: boolean;
+  /** A line through every word in the box. */
+  strike: boolean;
   align: TextAlign;
   lineHeight: number;
   letterSpacing: number;
@@ -158,6 +162,13 @@ export interface BoardElement {
    * this hint while it is empty. Absent on an ordinary text box.
    */
   placeholder?: string | null;
+  /**
+   * A text box whose height follows its text — one clicked into place: it grows and
+   * shrinks to fit, never below a line, and a placeholder fits its hint while empty.
+   * Absent on a box dragged out to a size, which only grows. Dragging just its height
+   * takes it off.
+   */
+  autoHeight?: boolean;
   /** Bold, italic, underline, colours and links on parts of the text; absent when none. */
   marks?: TextMark[];
 
@@ -208,6 +219,7 @@ export const DEFAULT_STYLE: ElementStyle = {
   fontWeight: 400,
   italic: false,
   underline: false,
+  strike: false,
   align: 'start',
   lineHeight: 1.35,
   letterSpacing: 0,
