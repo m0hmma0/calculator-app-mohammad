@@ -21,8 +21,16 @@ The plan was renumbered after Phase 9: the user's list of requests became Phases
 presenting/frames/celebrations/media, 14 placeholders and the "Answer" role and owner
 locks, 15 undo across people and sessions, 16 dashboard organisation — and the
 original 10 (accessibility, Arabic and RTL) and 11 (hardening) are now **17** and
-**18**. The next phase is **15**. Parked by the user: student picture uploads,
-read4more.com, "see the stroke before it ends", Chrome zoom.
+**18**. After Phase 14 the user's next list became **14.1** (text box heights, the
+eraser, the side panel's layering and toggle, duplicates below, strikethrough, three
+shortcuts, boards shared for answering by default) and **14.2** (paste to fit the
+selection, cropping, the old lock plus "lock for others", panning while dragging). Phase
+15 now holds only undo that survives closing a board, and Phase 17 only keyboard use of
+the canvas and visible focus. The next phase is **14.1**. Parked by the user: student
+picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
+out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
+RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
+the accessibility audit.
 
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
 stored per page), presentation (`src/workshop/presentation.ts`, followers fit the

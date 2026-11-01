@@ -27,14 +27,17 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **12** | Settings and shortcuts                       | built       |
 | **13** | Presenting, frames, celebrations and media   | built       |
 | **14** | Classroom: placeholders, Answer role, locks  | built       |
-| 15     | Undo across people and sessions              | not started |
+| 14.1   | Fixes: text boxes, eraser, side panel        | not started |
+| 14.2   | Pictures, locks and panning                  | not started |
+| 15     | Undo across sessions                         | not started |
 | 16     | Dashboard organisation                       | not started |
-| 17     | Accessibility, Arabic and RTL, polish        | not started |
+| 17     | Keyboard use and visible focus               | not started |
 | 18     | Hardening, load testing, launch              | not started |
 
-Phases 10–16 were added from a list of requests after Phase 9; the original Phases 10
-and 11 are now 17 and 18, and come last so that they cover the finished layout and
-roles.
+Phases 10–16 were added from a list of requests after Phase 9, and 14.1 and 14.2 from a
+list after Phase 14; the original Phases 10 and 11 are now 17 and 18, and come last so
+that they cover the finished layout and roles. Phase 15 is now only undo that survives
+closing a board, and 17 only keyboard use and visible focus; the rest of both is parked.
 
 ## Getting started
 
