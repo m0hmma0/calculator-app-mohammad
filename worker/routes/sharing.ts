@@ -639,12 +639,14 @@ export async function folderContents(
     .first<{ id: string; name: string }>();
   const [{ results: folders }, { results: boards }] = await Promise.all([
     env.DB.prepare(
-      'SELECT id, name FROM folders WHERE parent_id = ?1 AND deleted_at IS NULL ORDER BY name COLLATE NOCASE',
+      `SELECT id, name FROM folders WHERE parent_id = ?1 AND deleted_at IS NULL AND archived_at IS NULL
+       ORDER BY pinned DESC, position IS NULL, position, name COLLATE NOCASE`,
     )
       .bind(id)
       .all<{ id: string; name: string }>(),
     env.DB.prepare(
-      `SELECT id, title, thumbnail_key FROM boards WHERE folder_id = ?1 AND deleted_at IS NULL
+      `SELECT id, title, thumbnail_key FROM boards
+       WHERE folder_id = ?1 AND deleted_at IS NULL AND archived_at IS NULL
        ORDER BY title COLLATE NOCASE`,
     )
       .bind(id)

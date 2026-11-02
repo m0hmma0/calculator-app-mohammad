@@ -7,6 +7,7 @@ export type Route =
   | { name: 'dashboard' }
   | { name: 'folder'; folderId: string }
   | { name: 'trash' }
+  | { name: 'archive' }
   | { name: 'shared' }
   | { name: 'settings' }
   | { name: 'board'; boardId: string }
@@ -24,6 +25,7 @@ export function parseRoute(pathname: string): Route {
   if (link) return { name: 'link', token: link[1]! };
 
   if (/^\/trash\/?$/.test(pathname)) return { name: 'trash' };
+  if (/^\/archive\/?$/.test(pathname)) return { name: 'archive' };
   if (/^\/shared\/?$/.test(pathname)) return { name: 'shared' };
   if (/^\/settings\/?$/.test(pathname)) return { name: 'settings' };
   return { name: 'dashboard' };
@@ -37,6 +39,8 @@ export function hrefFor(route: Route): string {
       return `/f/${route.folderId}`;
     case 'trash':
       return '/trash';
+    case 'archive':
+      return '/archive';
     case 'shared':
       return '/shared';
     case 'settings':

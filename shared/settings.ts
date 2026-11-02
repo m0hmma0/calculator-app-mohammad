@@ -13,8 +13,21 @@ export interface TextSettings {
   othersFontSize: number | null;
 }
 
+/** How the dashboard shows things: tiles or a compact list, and the order of boards. */
+export interface DashboardSettings {
+  view: 'tiles' | 'list';
+  /** Boards by when they were last opened, when they were made (either way), or name. */
+  sort: 'opened' | 'newest' | 'oldest' | 'name';
+}
+
+export const DASHBOARD_VIEWS = ['tiles', 'list'] as const;
+export const BOARD_SORTS = ['opened', 'newest', 'oldest', 'name'] as const;
+
+export const DEFAULT_DASHBOARD: DashboardSettings = { view: 'tiles', sort: 'opened' };
+
 export interface Settings {
   text: TextSettings;
+  dashboard: DashboardSettings;
   /**
    * Shortcuts changed from the defaults, by action: each is the whole list of keys for
    * it, so an empty list means "no key at all". Actions not here keep their defaults.
@@ -31,7 +44,11 @@ export const DEFAULT_TEXT: TextSettings = {
   othersFontSize: null,
 };
 
-export const DEFAULT_SETTINGS: Settings = { text: DEFAULT_TEXT, shortcuts: {} };
+export const DEFAULT_SETTINGS: Settings = {
+  text: DEFAULT_TEXT,
+  dashboard: DEFAULT_DASHBOARD,
+  shortcuts: {},
+};
 
 /** Plenty for every action there is, with room to grow; caps what one person can store. */
 const MAX_ACTIONS = 200;
@@ -55,6 +72,9 @@ export function sanitiseSettings(raw: unknown): Settings {
   const text = (value.text && typeof value.text === 'object' ? value.text : {}) as Partial<
     Record<keyof TextSettings, unknown>
   >;
+  const dashboard = (
+    value.dashboard && typeof value.dashboard === 'object' ? value.dashboard : {}
+  ) as Partial<Record<keyof DashboardSettings, unknown>>;
 
   const shortcuts: Record<string, string[]> = {};
   if (value.shortcuts && typeof value.shortcuts === 'object' && !Array.isArray(value.shortcuts)) {
@@ -74,6 +94,10 @@ export function sanitiseSettings(raw: unknown): Settings {
         text.othersFontSize === null || text.othersFontSize === undefined
           ? null
           : clamp(text.othersFontSize, FONT_SIZE, DEFAULT_TEXT.fontSize),
+    },
+    dashboard: {
+      view: DASHBOARD_VIEWS.find((each) => each === dashboard.view) ?? DEFAULT_DASHBOARD.view,
+      sort: BOARD_SORTS.find((each) => each === dashboard.sort) ?? DEFAULT_DASHBOARD.sort,
     },
     shortcuts,
   };

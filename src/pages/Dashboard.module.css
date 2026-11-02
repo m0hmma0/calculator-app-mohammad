@@ -329,6 +329,7 @@
 
 .cardActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 0 9px 9px;
 }
@@ -438,4 +439,200 @@
 
 .folderMenuPanel .danger {
   color: var(--danger);
+}
+
+/* Phase 16: arranging the dashboard. */
+
+.arrange {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewSwitch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.viewSwitch button {
+  border: 0;
+  background: var(--surface);
+  color: var(--text-2);
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.viewSwitch button + button {
+  border-left: 1px solid var(--border);
+}
+
+.viewSwitch button[aria-pressed='true'] {
+  background: var(--accent-soft, var(--surface-2));
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-3, var(--text-2));
+}
+
+.sort select {
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 5px 6px;
+}
+
+/* The compact list: rows, in as many columns as fit. */
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 4px 18px;
+  align-items: start;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.row:hover {
+  border-color: var(--border);
+}
+
+.row .cardFoot {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.row .cardTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Move to", opened from a row, takes a line of its own under it. */
+.row .moveTo {
+  flex-basis: 100%;
+}
+
+.rowIcon {
+  display: inline-flex;
+  color: var(--accent-ink);
+  flex: none;
+}
+
+/* Folders keep their tiles' colour. */
+[data-testid^='folder-card-'] .rowIcon {
+  color: var(--shape-3);
+}
+
+.rowMeta {
+  font-size: 11.5px;
+  color: var(--text-3, var(--text-2));
+  white-space: nowrap;
+}
+
+.rowMenu {
+  position: relative;
+  flex: none;
+}
+
+.rowMenuButton {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font: inherit;
+}
+
+.rowMenuButton[aria-expanded='true'],
+.rowMenuButton:hover {
+  background: var(--surface-2);
+}
+
+.rowMenuPanel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+}
+
+.rowMenuPanel button,
+.rowActions button {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rowMenuPanel button:hover,
+.rowActions button:hover {
+  background: var(--surface-2);
+  color: var(--accent-ink);
+}
+
+.rowActions {
+  flex: none;
+}
+
+.pin {
+  display: inline-flex;
+  color: var(--accent-ink);
+  margin-left: 4px;
+  flex: none;
+}
+
+/* A folder being dragged over another: it will take that one's place. */
+[data-drop-target='true'] {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+[draggable='true'] {
+  cursor: grab;
+}
+
+.notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13.5px;
 }

@@ -65,6 +65,8 @@ function Routes() {
       );
     case 'trash':
       return <Dashboard view={{ kind: 'trash' }} />;
+    case 'archive':
+      return <Dashboard view={{ kind: 'archive' }} />;
     case 'shared':
       return <Dashboard view={{ kind: 'shared' }} />;
     case 'settings':

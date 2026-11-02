@@ -30,7 +30,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **14.1** | Fixes: text boxes, eraser, side panel        | built       |
 | **14.2** | Pictures, locks and panning                  | built       |
 | **15**   | Undo across sessions                         | built       |
-| 16       | Dashboard organisation                       | not started |
+| **16**   | Dashboard organisation                       | built       |
 | 17       | Keyboard use and visible focus               | not started |
 | 18       | Hardening, load testing, launch              | not started |
 
@@ -447,6 +447,31 @@ within it while presenting.
   across, paths become ink along their outline (a path's fill is not kept), gradients
   and filters are dropped, and nothing in the file runs. PDF becomes one stored picture
   per page (up to 50), drawn by PDF.js, which loads only when a PDF is imported.
+
+## Organising the dashboard (Phase 16)
+
+- **Tiles or a list.** Two buttons by the search box switch between tiles (a picture of
+  each board) and a compact list: one row each, reading down a column and on into the
+  next, as many columns as fit; a row's actions are behind its "⋯". The choice is part
+  of your settings, so it is remembered here and on any device you sign in on.
+- **Boards by** last opened (as before), newest first, oldest first, or name — where
+  names compare as people read them, "Lesson 2" before "Lesson 10". Also remembered.
+  It orders the boards in every folder; folders keep their own order.
+- **Folders in the order you drag them.** Drag a folder onto another — its card, or its
+  line in the sidebar — and it takes that one's place among the folders beside it. The
+  order is saved on your account (`folders.position`, `POST /api/folders/order`), so it
+  is the same after a reload and on another device. Folders never dragged sort by name;
+  a folder moved into another one goes to the end there.
+- **Pinned folders** (Pin on the card, or the Folder menu) come first among the folders
+  beside them, whatever their order, and show a pin in the sidebar.
+- **Archive** a folder or a board to put it out of the way without deleting anything.
+  It leaves every list — the folders, the sidebar, search, Starred, and a shared
+  folder's contents for the people it is shared with — and waits under **Archive**.
+  A folder takes everything in it into the archive in the same moment
+  (`archived_at`, like the trash's `deleted_at`), so it all comes back together.
+  Archived things still open: a board by its link, a folder from the Archive page to
+  look through. Restore puts each back where it was, or at the top level if the folder
+  it was in is itself archived or deleted. Migration 0007 adds the columns.
 
 ## Accounts and storage
 

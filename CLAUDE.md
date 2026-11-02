@@ -13,8 +13,9 @@ rich content)**, **Phase 10 (quick fixes and the text box)**, **Phase 11 (one
 control pane, and who sees what)**, **Phase 12 (settings and shortcuts)**, **Phase 13
 (presenting, frames, celebrations and media)**, **Phase 14 (placeholders, the Answer
 role and locks)**, **14.1 (fixes)**, **14.2 (pictures, locks, panning)** and **Phase 15
-(undo after closing a board)** are built, tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0006 applied remotely) but not
+(undo after closing a board)** and **Phase 16 (dashboard organisation)** are built,
+tested and deployed at
+<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0007 applied remotely) but not
 yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
@@ -30,7 +31,7 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2 and 15 are built**; the next phase is **16**. Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the next phase is **17**. Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -124,6 +125,22 @@ confirmed. The store's `undo` uses Yjs's undo manager while it has steps, then
 `history.undo()`; `redo` tries `history.redo()` first. Replayed steps use
 `HISTORY_ORIGIN` (not tracked, but saved and sent to the room) and change a field only
 where it still reads as the step left it. No migration; nothing on the server.
+
+Phase 16 in one paragraph: the workspace response carries archived folders and boards
+too (`archivedAt`), and the dashboard filters them out of every view but Archive (and
+an archived folder opened from there); `listBoards`/`listFolders` still mean "not
+deleted". Archiving a folder (`POST /api/folders/:id/archive`) stamps it, its live
+subfolders and their boards with one `archived_at`; `DELETE` on the same path brings
+back what has that stamp, as the trash does with `deleted_at`. Boards: `POST`/`DELETE
+/api/boards/:id/archive`. Archive is the owner's tidying, not access: links and shares
+work as before, and a shared folder's contents leave archived things out. Folder order
+is `folders.position` (integers, set by `POST /api/folders/order` with a parent's whole
+order; null sorts after, by name; moving a folder to another parent clears it) and
+`folders.pinned`; `sortFolders` and `sortBoards` in `workspaceStore.ts` are the one
+place order is decided. Tiles/list and the board order are `settings.dashboard`
+(`view`, `sort`). Dragging is HTML drag and drop (`useFolderDrag`), siblings only; the
+list view's rows read down columns (`useListRows` sets the grid's row count from its
+width). Migration 0007.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -326,6 +343,12 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **The eraser starts in drawings mode** (`eraserMode: 'drawings'`): only `path`
   elements (pen, highlighter, and SVG-imported line art), whole. A test that erases a
   shape or a text box picks `eraser-object` or `eraser-stroke` first.
+- **"Archive" is a word on every card now** (Phase 16: the Archive button, and the
+  sidebar's Archive link), so a test that finds a folder by the text "Archive" finds them
+  all. The workspace tests' folder is called "Past terms" for that reason.
+- **A new spec that needs the backend goes in both regexes** in `playwright.config.ts`
+  (the canvas project's `testIgnore`, the workspace project's `testMatch`);
+  `dashboard.spec.ts` was added to both.
 - **Undo outlives the board now** (Phase 15). A test that reloads and expects a clean
   undo stack gets the earlier visit's steps; the signed-out board's history is
   `local` in IndexedDB, and a fresh Playwright context starts without it.

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api, ApiError } from '@/api/client';
 import type { AccountInfo, BoardRecord, FolderRecord } from '@shared/api';
+import type { DashboardSettings } from '@shared/settings';
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'signed-out' | 'error';
 
@@ -26,6 +27,11 @@ interface WorkspaceState {
   moveFolder: (id: string, parentId: string | null) => Promise<void>;
   trashFolder: (id: string) => Promise<void>;
   restoreFolder: (id: string) => Promise<void>;
+  pinFolder: (id: string, pinned: boolean) => Promise<void>;
+  archiveFolder: (id: string) => Promise<void>;
+  unarchiveFolder: (id: string) => Promise<void>;
+  /** The folders inside one parent, in this order from now on. */
+  orderFolders: (parentId: string | null, ids: string[]) => Promise<void>;
 
   createBoard: (title: string, folderId: string | null) => Promise<BoardRecord | null>;
   renameBoard: (id: string, title: string) => Promise<void>;
@@ -33,6 +39,8 @@ interface WorkspaceState {
   starBoard: (id: string, starred: boolean) => Promise<void>;
   duplicateBoard: (id: string) => Promise<void>;
   trashBoard: (id: string) => Promise<void>;
+  archiveBoard: (id: string) => Promise<void>;
+  unarchiveBoard: (id: string) => Promise<void>;
   /** Called after a board's content reaches the server. */
   markBoardSaved: (id: string) => void;
   restoreBoard: (id: string) => Promise<void>;
@@ -150,6 +158,37 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         await Promise.all([refresh(), get().loadTrash()]);
       }),
 
+    pinFolder: (id, pinned) =>
+      guard(async () => {
+        const { folder } = await api.updateFolder(id, { pinned });
+        set((current) => ({ folders: replace(current.folders, folder) }));
+      }),
+    // What goes with an archived folder is worked out by the server; the lists follow.
+    archiveFolder: (id) =>
+      guard(async () => {
+        await api.archiveFolder(id);
+        await refresh();
+      }),
+    unarchiveFolder: (id) =>
+      guard(async () => {
+        await api.unarchiveFolder(id);
+        await refresh();
+      }),
+    orderFolders: (parentId, ids) =>
+      guard(async () => {
+        // In order at once, so the folder lands where it was dropped; the server's
+        // positions replace these when they come back.
+        const place = new Map(ids.map((id, index) => [id, index]));
+        set((current) => ({
+          folders: current.folders.map((folder) =>
+            folder.parentId === parentId && place.has(folder.id)
+              ? { ...folder, position: place.get(folder.id)! }
+              : folder,
+          ),
+        }));
+        const { folders } = await api.orderFolders({ parentId, ids });
+        set({ folders });
+      }),
     createBoard: async (title, folderId) => {
       let created: BoardRecord | null = null;
       await guard(async () => {
@@ -198,6 +237,16 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         set((current) => ({ boards: current.boards.filter((board) => board.id !== id) }));
       }),
 
+    archiveBoard: (id) =>
+      guard(async () => {
+        const { board } = await api.archiveBoard(id);
+        set((current) => ({ boards: replace(current.boards, board) }));
+      }),
+    unarchiveBoard: (id) =>
+      guard(async () => {
+        const { board } = await api.unarchiveBoard(id);
+        set((current) => ({ boards: replace(current.boards, board) }));
+      }),
     restoreBoard: (id) =>
       guard(async () => {
         await api.restoreBoard(id);
@@ -221,4 +270,52 @@ export function folderPath(folders: readonly FolderRecord[], id: string | null):
     guard += 1;
   }
   return path;
+}
+
+/**
+ * Folders side by side in one place, in the order they show: pinned first, then the
+ * order they were dragged into, then — never dragged — by name.
+ */
+export function sortFolders(folders: readonly FolderRecord[]): FolderRecord[] {
+  const place = (folder: FolderRecord) => folder.position ?? Number.MAX_SAFE_INTEGER;
+  return [...folders].sort(
+    (a, b) =>
+      Number(b.pinned) - Number(a.pinned) ||
+      place(a) - place(b) ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
+  );
+}
+
+/** Boards in the order chosen on the dashboard. Names compare "Lesson 2" before "Lesson 10". */
+export function sortBoards(
+  boards: readonly BoardRecord[],
+  sort: DashboardSettings['sort'],
+): BoardRecord[] {
+  const byName = (a: BoardRecord, b: BoardRecord) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true });
+  return [...boards].sort((a, b) => {
+    switch (sort) {
+      case 'newest':
+        return b.createdAt - a.createdAt || byName(a, b);
+      case 'oldest':
+        return a.createdAt - b.createdAt || byName(a, b);
+      case 'name':
+        return byName(a, b) || b.createdAt - a.createdAt;
+      default:
+        return b.openedAt - a.openedAt || byName(a, b);
+    }
+  });
+}
+
+/**
+ * Where a dragged folder lands among its siblings: in the place of the one it was
+ * dropped on, the others closing up around it.
+ */
+export function droppedOrder(order: readonly string[], dragged: string, target: string): string[] {
+  const from = order.indexOf(dragged);
+  const to = order.indexOf(target);
+  if (from === -1 || to === -1 || from === to) return [...order];
+  const next = order.filter((id) => id !== dragged);
+  next.splice(to, 0, dragged);
+  return next;
 }

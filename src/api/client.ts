@@ -2,6 +2,7 @@ import type {
   BoardRecord,
   CreateBoardBody,
   CreateFolderBody,
+  FolderOrderBody,
   FolderRecord,
   TrashResponse,
   UpdateBoardBody,
@@ -91,6 +92,15 @@ export const api = {
     }),
 
   trashFolder: (id: string) => request<{ ok: true }>(`/api/folders/${id}`, { method: 'DELETE' }),
+  archiveFolder: (id: string) =>
+    request<{ folder: FolderRecord }>(`/api/folders/${id}/archive`, { method: 'POST' }),
+  unarchiveFolder: (id: string) =>
+    request<{ folder: FolderRecord }>(`/api/folders/${id}/archive`, { method: 'DELETE' }),
+  orderFolders: (body: FolderOrderBody) =>
+    request<{ folders: FolderRecord[] }>('/api/folders/order', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   restoreFolder: (id: string) =>
     request<{ folder: FolderRecord }>(`/api/folders/${id}/restore`, { method: 'POST' }),
 
@@ -104,6 +114,10 @@ export const api = {
     }),
 
   trashBoard: (id: string) => request<{ ok: true }>(`/api/boards/${id}`, { method: 'DELETE' }),
+  archiveBoard: (id: string) =>
+    request<{ board: BoardRecord }>(`/api/boards/${id}/archive`, { method: 'POST' }),
+  unarchiveBoard: (id: string) =>
+    request<{ board: BoardRecord }>(`/api/boards/${id}/archive`, { method: 'DELETE' }),
   restoreBoard: (id: string) =>
     request<{ board: BoardRecord }>(`/api/boards/${id}/restore`, { method: 'POST' }),
   duplicateBoard: (id: string) =>

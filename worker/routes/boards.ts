@@ -64,6 +64,33 @@ export async function trashBoard(env: Env, account: Account, id: string) {
   return json({ ok: true });
 }
 
+/** Archives a board: out of the dashboard's lists, nothing deleted, its link still works. */
+export async function archiveBoard(env: Env, account: Account, id: string) {
+  const row = await getBoard(env, account.uid, id);
+  if (!row || row.deleted_at !== null) return fail('That board does not exist', 404);
+  if (row.archived_at === null) {
+    await env.DB.prepare('UPDATE boards SET archived_at = ?1 WHERE id = ?2 AND owner_id = ?3')
+      .bind(Date.now(), id, account.uid)
+      .run();
+  }
+  return json({ board: toBoard((await getBoard(env, account.uid, id))!) });
+}
+
+/** Back from the archive: into its folder, or the top level if that is archived or gone. */
+export async function unarchiveBoard(env: Env, account: Account, id: string) {
+  const row = await getBoard(env, account.uid, id);
+  if (!row || row.deleted_at !== null) return fail('That board does not exist', 404);
+  const folder = row.folder_id ? await getFolder(env, account.uid, row.folder_id) : null;
+  const folderId =
+    folder && folder.deleted_at === null && folder.archived_at === null ? folder.id : null;
+  await env.DB.prepare(
+    'UPDATE boards SET archived_at = NULL, folder_id = ?1 WHERE id = ?2 AND owner_id = ?3',
+  )
+    .bind(folderId, id, account.uid)
+    .run();
+  return json({ board: toBoard((await getBoard(env, account.uid, id))!) });
+}
+
 export async function restoreBoard(env: Env, account: Account, id: string) {
   const row = await getBoard(env, account.uid, id);
   if (!row) return fail('That board does not exist', 404);
@@ -272,7 +299,7 @@ export async function searchBoards(env: Env, account: Account, query: string) {
   const term = `%${query.toLowerCase().slice(0, 100)}%`;
   const { results } = await env.DB.prepare(
     `SELECT ${BOARD_COLUMNS} FROM boards
-     WHERE owner_id = ?1 AND deleted_at IS NULL
+     WHERE owner_id = ?1 AND deleted_at IS NULL AND archived_at IS NULL
        AND (lower(title) LIKE ?2 OR search_text LIKE ?2)
      ORDER BY opened_at DESC LIMIT 50`,
   )

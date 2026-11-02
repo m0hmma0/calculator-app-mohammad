@@ -13,8 +13,14 @@ export interface FolderRecord {
   name: string;
   createdAt: number;
   updatedAt: number;
+  /** Its place among its siblings once dragged there; null until then (sorted by name). */
+  position: number | null;
+  /** Pinned folders come first among their siblings. */
+  pinned: boolean;
   /** Set only for folders in the trash. */
   deletedAt?: number;
+  /** Set only for archived folders: kept, out of the way, nothing deleted. */
+  archivedAt?: number;
 }
 
 export interface BoardRecord {
@@ -30,6 +36,8 @@ export interface BoardRecord {
   openedAt: number;
   /** Set only for boards in the trash. */
   deletedAt?: number;
+  /** Set only for archived boards: kept, out of the way, still opened by their link. */
+  archivedAt?: number;
 }
 
 export interface WorkspaceResponse {
@@ -51,6 +59,13 @@ export interface CreateFolderBody {
 export interface UpdateFolderBody {
   name?: string;
   parentId?: string | null;
+  pinned?: boolean;
+}
+
+/** The folders inside one parent, in the order they were dragged into. */
+export interface FolderOrderBody {
+  parentId: string | null;
+  ids: string[];
 }
 
 export interface CreateBoardBody {

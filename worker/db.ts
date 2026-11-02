@@ -12,6 +12,9 @@ interface FolderRow {
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
+  position: number | null;
+  pinned: number;
+  archived_at: number | null;
 }
 
 interface BoardRow {
@@ -27,6 +30,7 @@ interface BoardRow {
   updated_at: number;
   opened_at: number;
   deleted_at: number | null;
+  archived_at: number | null;
 }
 
 const toFolder = (row: FolderRow): FolderRecord => ({
@@ -35,7 +39,10 @@ const toFolder = (row: FolderRow): FolderRecord => ({
   name: row.name,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  position: row.position ?? null,
+  pinned: row.pinned === 1,
   ...(row.deleted_at ? { deletedAt: row.deleted_at } : {}),
+  ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
 });
 
 const toBoard = (row: BoardRow): BoardRecord => ({
@@ -49,6 +56,7 @@ const toBoard = (row: BoardRow): BoardRecord => ({
   updatedAt: row.updated_at,
   openedAt: row.opened_at,
   ...(row.deleted_at ? { deletedAt: row.deleted_at } : {}),
+  ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
 });
 
 /**

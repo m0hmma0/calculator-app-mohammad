@@ -61,14 +61,14 @@ test.describe('managing folders', () => {
     await page.getByTestId(`folder-rename-${units}`).click();
     await expect(folderCard(page, 'Unit 1')).toBeVisible();
 
-    answer('Archive');
+    answer('Past terms');
     await page.getByTestId('new-folder').click();
-    await expect(folderCard(page, 'Archive')).toBeVisible();
-    const archive = await idOf(page, 'Archive');
+    await expect(folderCard(page, 'Past terms')).toBeVisible();
+    const archive = await idOf(page, 'Past terms');
 
-    // Moved into Archive: gone from the top level, there inside Archive.
+    // Moved into Past terms: gone from the top level, there inside Past terms.
     await page.getByTestId(`folder-move-${units}`).click();
-    await page.getByTestId(`folder-move-to-${units}`).selectOption({ label: 'Archive' });
+    await page.getByTestId(`folder-move-to-${units}`).selectOption({ label: 'Past terms' });
     await expect(page.getByTestId(`folder-card-${units}`)).toHaveCount(0);
     await page.getByTestId(`folder-card-${archive}`).getByRole('link').first().click();
     await expect(page.getByTestId(`folder-card-${units}`)).toBeVisible();
@@ -79,13 +79,13 @@ test.describe('managing folders', () => {
     await page.getByTestId('back-to-boards').click();
     await expect(boardCards(page)).toHaveCount(1);
 
-    // Deleted from the folder's own menu: back up to Archive, and it is gone.
+    // Deleted from the folder's own menu: back up to Past terms, and it is gone.
     page.removeAllListeners('dialog');
     page.on('dialog', (dialog) => void dialog.accept());
     await page.getByTestId('folder-menu').click();
     await page.getByTestId('folder-menu-delete').click();
     await expect(page.getByTestId('breadcrumb')).not.toContainText('Unit 1');
-    await expect(page.getByTestId('breadcrumb')).toContainText('Archive');
+    await expect(page.getByTestId('breadcrumb')).toContainText('Past terms');
     await expect(page.getByTestId(`folder-card-${units}`)).toHaveCount(0);
 
     // In the trash as one folder, its board with it rather than loose.
@@ -93,7 +93,7 @@ test.describe('managing folders', () => {
     await expect(page.getByTestId(`folder-card-${units}`)).toBeVisible();
     await expect(boardCards(page)).toHaveCount(0);
 
-    // Restored: the folder, back in Archive, with its board.
+    // Restored: the folder, back in Past terms, with its board.
     await page.getByTestId(`restore-folder-${units}`).click();
     await expect(page.getByTestId(`folder-card-${units}`)).toHaveCount(0);
     await page.getByTestId(`folder-${archive}`).click();
@@ -216,12 +216,12 @@ test.describe('folders and boards', () => {
     await expect(page.getByText('Roadmap copy')).toBeVisible();
 
     page.removeAllListeners('dialog');
-    page.on('dialog', (dialog) => void dialog.accept('Archive'));
+    page.on('dialog', (dialog) => void dialog.accept('Past terms'));
     await page.getByTestId('new-folder').click();
-    await expect(page.getByRole('complementary').getByText('Archive')).toBeVisible();
+    await expect(page.getByRole('complementary').getByText('Past terms')).toBeVisible();
 
     await page.getByTestId(`move-${id}`).click();
-    await page.getByTestId(`move-to-${id}`).selectOption({ label: 'Archive' });
+    await page.getByTestId(`move-to-${id}`).selectOption({ label: 'Past terms' });
     await expect(page.getByTestId(`board-${id}`)).toHaveCount(0);
     await expect(boardCards(page)).toHaveCount(1);
 
@@ -230,7 +230,7 @@ test.describe('folders and boards', () => {
     await expect(boardCards(page)).toHaveCount(1);
     await expect(page.getByText('Roadmap copy')).toBeVisible();
 
-    await page.getByText('Archive').first().click();
+    await page.getByRole('complementary').getByText('Past terms').click();
     await expect(page.getByTestId(`board-${id}`)).toBeVisible();
     await expect(page.getByText('Roadmap', { exact: true })).toBeVisible();
   });

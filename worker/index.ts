@@ -1,6 +1,7 @@
 import type { ApiErrorResponse, HealthResponse } from '@shared/types';
 import { AuthError, optionalAccount, shareKeyFrom, type Account } from './auth';
 import {
+  archiveBoard,
   createBoard,
   duplicateBoard,
   getSnapshot,
@@ -10,10 +11,19 @@ import {
   restoreBoard,
   searchBoards,
   trashBoard,
+  unarchiveBoard,
   updateBoard,
 } from './routes/boards';
 import { attachFile, getFile, putFile } from './routes/files';
-import { createFolder, restoreFolder, trashFolder, updateFolder } from './routes/folders';
+import {
+  archiveFolder,
+  createFolder,
+  orderFolders,
+  restoreFolder,
+  trashFolder,
+  unarchiveFolder,
+  updateFolder,
+} from './routes/folders';
 import { addComment, listComments, listPeople, resolveThread } from './routes/comments';
 import {
   folderContents,
@@ -186,19 +196,24 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   }
 
   if (pathname === '/api/folders' && method === 'POST') return createFolder(request, env, account);
+  if (pathname === '/api/folders/order' && method === 'POST') {
+    return orderFolders(request, env, account);
+  }
 
-  const folder = /^\/api\/folders\/([\w-]+)(\/restore)?$/.exec(pathname);
+  const folder = /^\/api\/folders\/([\w-]+)(?:\/(restore|archive))?$/.exec(pathname);
   if (folder) {
     const id = folder[1]!;
-    if (folder[2] && method === 'POST') return restoreFolder(env, account, id);
-    if (method === 'PATCH') return updateFolder(request, env, account, id);
-    if (method === 'DELETE') return trashFolder(env, account, id);
+    if (folder[2] === 'restore' && method === 'POST') return restoreFolder(env, account, id);
+    if (folder[2] === 'archive' && method === 'POST') return archiveFolder(env, account, id);
+    if (folder[2] === 'archive' && method === 'DELETE') return unarchiveFolder(env, account, id);
+    if (!folder[2] && method === 'PATCH') return updateFolder(request, env, account, id);
+    if (!folder[2] && method === 'DELETE') return trashFolder(env, account, id);
   }
 
   if (pathname === '/api/boards' && method === 'POST') return createBoard(request, env, account);
 
   const board =
-    /^\/api\/boards\/([\w-]+)(?:\/(restore|duplicate|snapshot|thumbnail|settings|transfer))?$/.exec(
+    /^\/api\/boards\/([\w-]+)(?:\/(restore|archive|duplicate|snapshot|thumbnail|settings|transfer))?$/.exec(
       pathname,
     );
   if (board) {
@@ -206,6 +221,10 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
     switch (board[2]) {
       case 'restore':
         if (method === 'POST') return restoreBoard(env, account, id);
+        break;
+      case 'archive':
+        if (method === 'POST') return archiveBoard(env, account, id);
+        if (method === 'DELETE') return unarchiveBoard(env, account, id);
         break;
       case 'duplicate':
         if (method === 'POST') return duplicateBoard(env, account, id);
