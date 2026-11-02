@@ -248,6 +248,14 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
   open (moving inline images, resuming uploads) must wait for the room's first sync,
   not just IndexedDB — on a device that never opened the board, IndexedDB is empty.
 - `test-backend.mjs` builds `dist-test/` once at startup; restart it to see UI changes.
+- **wrangler dev sometimes exits mid-suite** ("Network connection lost" from the local
+  runtime, then its proxy gives up): three times on 2 November and once on CI, deep into
+  a full run, near the 5,000-shapes test. Every later test then failed to connect.
+  `test-backend.mjs` now starts it again (up to 5 times, logged as `[test-backend]
+wrangler dev exited`), so only the tests caught at that moment fail and CI retries
+  them. The cause is not pinned down; the local runtime grows to about 500 MB over a
+  full run, so memory is the first suspect. A real crash of the Worker would still show
+  as that message — look for it before calling a failure flaky.
 - **A control inside the stage needs `data-hud`** on it or an ancestor, or the canvas
   takes the pointer on pointerdown and the click never arrives.
 - **Tests that open one board in two windows as the same person** share that

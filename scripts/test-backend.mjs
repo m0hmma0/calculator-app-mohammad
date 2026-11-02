@@ -179,37 +179,62 @@ const keyServer = createServer(async (request, response) => {
 await new Promise((resolve) => keyServer.listen(KEY_PORT, resolve));
 console.log(`keys on http://localhost:${KEY_PORT}`);
 
-const worker = spawn(
-  'npx',
-  [
-    'wrangler',
-    'dev',
-    '--local',
-    '--port',
-    String(WORKER_PORT),
-    '--var',
-    `FIREBASE_PROJECT_ID:${PROJECT_ID}`,
-    '--var',
-    `FIREBASE_JWKS_URL:http://localhost:${KEY_PORT}/jwks`,
-    // The link-preview test page is served by the key server, on localhost.
-    '--var',
-    'UNFURL_ALLOW_LOCAL:1',
-    // A window that vanished is dropped after 45 seconds here, not 3 minutes.
-    '--var',
-    'PEER_STALE_MS:45000',
-    '--assets',
-    ASSETS,
-  ],
-  { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CI: '1' } },
-);
+const WRANGLER_ARGS = [
+  'wrangler',
+  'dev',
+  '--local',
+  '--port',
+  String(WORKER_PORT),
+  '--var',
+  `FIREBASE_PROJECT_ID:${PROJECT_ID}`,
+  '--var',
+  `FIREBASE_JWKS_URL:http://localhost:${KEY_PORT}/jwks`,
+  // The link-preview test page is served by the key server, on localhost.
+  '--var',
+  'UNFURL_ALLOW_LOCAL:1',
+  // A window that vanished is dropped after 45 seconds here, not 3 minutes.
+  '--var',
+  'PEER_STALE_MS:45000',
+  '--assets',
+  ASSETS,
+];
+
+/*
+ * wrangler dev's own proxy sometimes gives up on an error from the local runtime and
+ * exits — intermittently, deep into the full suite (three times on 2 November, and
+ * once on CI). Every test after that failed to connect, which said nothing about the
+ * app. So it is started again: the tests caught in that moment still fail (and CI
+ * retries them), the rest run against a working Worker, and the restart is logged.
+ * A Worker that cannot stay up at all still ends the run, after a few tries.
+ */
+const MAX_RESTARTS = 5;
+let restarts = 0;
+let stopping = false;
+let worker;
+
+function startWorker() {
+  worker = spawn('npx', WRANGLER_ARGS, {
+    stdio: ['ignore', 'inherit', 'inherit'],
+    env: { ...process.env, CI: '1' },
+  });
+  worker.on('exit', (code) => {
+    if (stopping || restarts >= MAX_RESTARTS) {
+      keyServer.close();
+      process.exit(code ?? 0);
+    }
+    restarts += 1;
+    console.error(
+      `\n[test-backend] wrangler dev exited (${code}); starting it again (${restarts}/${MAX_RESTARTS})\n`,
+    );
+    setTimeout(startWorker, 500);
+  });
+}
+startWorker();
 
 const shutdown = () => {
+  stopping = true;
   worker.kill('SIGTERM');
   keyServer.close();
 };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
-worker.on('exit', (code) => {
-  keyServer.close();
-  process.exit(code ?? 0);
-});
