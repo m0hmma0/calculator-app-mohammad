@@ -190,6 +190,58 @@ test.describe('presenting', () => {
 });
 
 test.describe('numbered frames', () => {
+  test('"Number frames automatically" gives every frame its place back, in one undo step', async ({
+    page,
+  }) => {
+    await threeFrames(page);
+    const [left, middle, right] = await frameIds(page);
+    await numberOf(page, right!).selectOption('1');
+    await expect(numberOf(page, right!)).toHaveValue('1');
+    await expect(numberOf(page, left!)).toHaveValue('2');
+
+    await page.getByTestId('insert-menu').click();
+    await page.getByTestId('frames-auto-number').click();
+    await expect(numberOf(page, left!)).toHaveValue('1');
+    await expect(numberOf(page, middle!)).toHaveValue('2');
+    await expect(numberOf(page, right!)).toHaveValue('3');
+    // No frame has a number of its own now, so the entry has nothing left to do.
+    await page.getByTestId('insert-menu').click();
+    await expect(page.getByTestId('frames-auto-number')).toBeDisabled();
+    await page.keyboard.press('Escape');
+
+    // One undo gives the chosen number back.
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(numberOf(page, right!)).toHaveValue('1');
+  });
+
+  test('presenting starts from the selected frame', async ({ page }) => {
+    await threeFrames(page);
+    await frameIds(page);
+    // The middle frame, clicked where nothing is on it.
+    await page.mouse.click(500, 300);
+    await expect(page.getByTestId('geo-x')).toHaveText('380');
+    await page.getByTestId('insert-menu').click();
+    await expect(page.getByTestId('present-start')).toHaveText('Present from frame 2');
+    await page.getByTestId('present-start').click();
+    await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+    await page.getByTestId('present-stop').click();
+
+    // From the keyboard too, and from the frame holding what is selected: the
+    // rectangle in the right-hand frame. With nothing selected, from the first.
+    await layerItems(page).filter({ hasText: 'rect' }).click();
+    await expect(page.getByTestId('geo-x')).toHaveText('700');
+    await page.keyboard.press('ControlOrMeta+Enter');
+    await expect(page.getByTestId('presentation-counter')).toHaveText('3 / 3');
+    await page.getByTestId('present-stop').click();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('insert-menu').click();
+    await expect(page.getByTestId('present-start')).toHaveText('Present frames');
+    await page.getByTestId('present-start').click();
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+  });
+
   test('are numbered down the first column, then down the next', async ({ page }) => {
     // Four frames in two columns, drawn row by row.
     for (const [x, y] of [
@@ -299,7 +351,9 @@ test.describe('numbered frames', () => {
     );
     expect(order).toEqual(['2', '3']);
 
-    // Presenting reaches the first page as slide 2.
+    // Presenting reaches the first page as slide 2. (The pages are still selected from
+    // the import, and presenting would start from them: put them down first.)
+    await page.keyboard.press('Escape');
     await present(page);
     await page.getByTestId('slide-next').click();
     await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');

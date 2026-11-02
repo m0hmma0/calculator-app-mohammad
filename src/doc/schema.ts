@@ -88,7 +88,7 @@ export function toYElement(element: BoardElement): YElement {
     map.set('text', text);
   }
   if (element.page !== undefined) map.set('page', element.page);
-  if (element.slide !== undefined) map.set('slide', element.slide);
+  if (typeof element.slide === 'string') map.set('slide', element.slide);
   if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
   if (element.lockMode === 'others') map.set('lockMode', 'others');
   if (element.crop) map.set('crop', { ...element.crop });

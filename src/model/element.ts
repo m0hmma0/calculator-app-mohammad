@@ -158,8 +158,9 @@ export interface BoardElement {
   /**
    * A frame's place in the presentation, as a fractional key. Frames without one come
    * after those with one, in column order — which is every frame on an older board.
+   * Null takes a number away again ("Number frames automatically").
    */
-  slide?: string;
+  slide?: string | null;
   style: ElementStyle;
 
   /**

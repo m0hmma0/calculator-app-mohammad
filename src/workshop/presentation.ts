@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { fitToRect } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
+import { selectionAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
 import { keysBetween } from '@/model/zorder';
 import { useBoardStore } from '@/state/boardStore';
@@ -73,6 +74,52 @@ export function slidePatches(order: readonly string[]): Map<string, Partial<Boar
   return new Map(order.map((id, index) => [id, { slide: keys[index]! }]));
 }
 
+/** Whether any frame on the page has a number of its own, rather than its place. */
+export function hasFrameNumbers(elements: readonly BoardElement[]): boolean {
+  return elements.some((element) => element.type === 'frame' && element.slide);
+}
+
+/**
+ * Takes every frame's number away, so all of them are numbered by where they are —
+ * down each column, then the next — and keep following that as they move, until
+ * someone chooses a number again. One step to undo.
+ */
+export function numberFramesAutomatically(): void {
+  const store = useBoardStore.getState();
+  const patches = new Map<string, Partial<BoardElement>>();
+  for (const element of store.elements) {
+    if (element.type === 'frame' && element.slide) patches.set(element.id, { slide: null });
+  }
+  if (patches.size > 0) store.applyDiscrete(patches);
+}
+
+/**
+ * The frame presenting would start from: a selected frame (the first in order, if
+ * several are), or else the frame holding what is selected — the one the middle of
+ * the selection sits in. Null when neither, and presenting starts from the first.
+ */
+export function selectedFrame(
+  elements: readonly BoardElement[],
+  selection: readonly string[],
+): BoardElement | null {
+  if (selection.length === 0) return null;
+  const frames = framesInOrder(elements);
+  const chosen = frames.find((frame) => selection.includes(frame.id));
+  if (chosen) return chosen;
+  const box = selectionAABB(elements.filter((element) => selection.includes(element.id)));
+  if (!box) return null;
+  const middle = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+  return (
+    frames.find(
+      (frame) =>
+        middle.x >= frame.x &&
+        middle.x <= frame.x + frame.w &&
+        middle.y >= frame.y &&
+        middle.y <= frame.y + frame.h,
+    ) ?? null
+  );
+}
+
 /** Gives a frame a new number (from 1); the others close up around it. */
 export function renumberFrame(frameId: string, number: number): void {
   const store = useBoardStore.getState();
@@ -94,15 +141,21 @@ function show(frameId: string | null) {
 
 let stopWatching: (() => void) | null = null;
 
+/**
+ * Starts presenting: from the selected frame, or the one holding what is selected
+ * (`selectedFrame`), otherwise from the first frame.
+ */
 export function startPresentation(): boolean {
-  const frames = framesInOrder(useBoardStore.getState().elements);
+  const { elements, selection } = useBoardStore.getState();
+  const frames = framesInOrder(elements);
   if (frames.length === 0) return false;
+  const first = selectedFrame(elements, selection) ?? frames[0]!;
   document.documentElement.dataset.presenting = '';
   // Presenting is spotlighting: everyone else on the board follows along.
   usePresence.setState({ spotlight: true, following: null });
   useBoardStore.getState().clearSelection();
   usePresentation.setState({ presenting: true });
-  show(frames[0]!.id);
+  show(first.id);
   // The chrome goes away, so the stage grows; the frame is refitted to the new size.
   stopWatching = useBoardStore.subscribe((state, previous) => {
     if (state.stageSize !== previous.stageSize) show(usePresentation.getState().frame);

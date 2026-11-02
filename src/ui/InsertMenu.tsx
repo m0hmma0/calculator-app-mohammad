@@ -13,7 +13,13 @@ import {
 import { celebrate, EFFECTS } from '@/fun/effects';
 import { shortcutLabel, withKey } from '@/input/shortcuts';
 import { useSettings } from '@/settings/settings';
-import { startPresentation } from '@/workshop/presentation';
+import {
+  frameNumbers,
+  hasFrameNumbers,
+  numberFramesAutomatically,
+  selectedFrame,
+  startPresentation,
+} from '@/workshop/presentation';
 import {
   clearVote,
   endVote,
@@ -57,6 +63,12 @@ export function InsertMenu() {
   const stamp = useBoardStore((state) => state.stamp);
   const setTool = useBoardStore((state) => state.setTool);
   const setStamp = useBoardStore((state) => state.setStamp);
+  const elements = useBoardStore((state) => state.elements);
+  const selection = useBoardStore((state) => state.selection);
+  // Presenting starts from the selected frame, if there is one.
+  const startFrame = selectedFrame(elements, selection);
+  const startNumber = startFrame ? frameNumbers(elements).get(startFrame.id) : undefined;
+  const numbered = hasFrameNumbers(elements);
   const minimap = useUiPrefs((state) => state.minimap);
   const sound = useUiPrefs((state) => state.sound);
   const recentTimers = useUiPrefs((state) => state.recentTimers);
@@ -285,7 +297,25 @@ export function InsertMenu() {
               }}
             >
               <PresentIcon />
-              <span>Present frames</span>
+              <span>{startNumber ? `Present from frame ${startNumber}` : 'Present frames'}</span>
+            </button>
+          ) : null}
+          {editable ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              disabled={!numbered}
+              title={
+                numbered
+                  ? 'Number every frame by where it is: down each column, then the next'
+                  : 'The frames are already numbered by where they are'
+              }
+              data-testid="frames-auto-number"
+              onClick={run(numberFramesAutomatically)}
+            >
+              <NumberIcon />
+              <span>Number frames automatically</span>
             </button>
           ) : null}
           {notice ? <p className={styles.hint}>{notice}</p> : null}
@@ -472,6 +502,8 @@ const ImportIcon = () => <Icon path="M8 2.5v7.5M5 7l3 3 3-3M3 11.5v2h10v-2" />;
 const PresentIcon = () => (
   <Icon path="M2.5 3h11v7.5h-11zM8 10.5V13M5.5 13.5h5M7 5.2v3.1l2.6-1.55Z" />
 );
+/** A "1" beside lines of a list: numbers given by place. */
+const NumberIcon = () => <Icon path="M3 4.3l1.3-.8v5.2M3 8.7h2.6M7.5 4.5h6M7.5 8h6M7.5 11.5h6" />;
 const TimerIcon = () => (
   <Icon path="M8 4.2a4.9 4.9 0 1 1 0 9.8 4.9 4.9 0 0 1 0-9.8ZM8 6.5v2.6l1.6 1M6.4 2h3.2" />
 );

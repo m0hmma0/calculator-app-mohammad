@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createElement, type BoardElement } from '@/model/element';
-import { frameNumbers, framesInOrder, slidePatches } from '@/workshop/presentation';
+import {
+  frameNumbers,
+  framesInOrder,
+  hasFrameNumbers,
+  selectedFrame,
+  slidePatches,
+} from '@/workshop/presentation';
 
 const frame = (id: string, x: number, y: number, w = 200, h = 140): BoardElement =>
   createElement({ type: 'frame', box: { x, y, w, h }, z: 'a0', id });
@@ -71,5 +77,42 @@ describe('numbered frames', () => {
       { ...frame('left', 0, 0), slide: 'a0' },
     ];
     expect(framesInOrder(frames).map((each) => each.id)).toEqual(['left', 'right']);
+  });
+});
+
+describe('where presenting starts', () => {
+  const frames = [frame('left', 0, 0), frame('right', 300, 0)];
+  const inRight = createElement({
+    type: 'rect',
+    box: { x: 340, y: 40, w: 40, h: 40 },
+    z: 'a1',
+    id: 'inside',
+  });
+  const outside = createElement({
+    type: 'rect',
+    box: { x: 0, y: 600, w: 40, h: 40 },
+    z: 'a1',
+    id: 'outside',
+  });
+  const board = [...frames, inRight, outside];
+
+  it('is the selected frame, the first in order if several are', () => {
+    expect(selectedFrame(board, ['right'])?.id).toBe('right');
+    expect(selectedFrame(board, ['right', 'left'])?.id).toBe('left');
+  });
+
+  it('is the frame holding what is selected', () => {
+    expect(selectedFrame(board, ['inside'])?.id).toBe('right');
+  });
+
+  it('is nowhere in particular with nothing selected, or nothing inside a frame', () => {
+    expect(selectedFrame(board, [])).toBeNull();
+    expect(selectedFrame(board, ['outside'])).toBeNull();
+  });
+
+  it('knows whether any frame has a number of its own', () => {
+    expect(hasFrameNumbers(board)).toBe(false);
+    expect(hasFrameNumbers([...board, { ...frame('n', 600, 0), slide: 'a0' }])).toBe(true);
+    expect(hasFrameNumbers([{ ...frame('n', 600, 0), slide: null }])).toBe(false);
   });
 });

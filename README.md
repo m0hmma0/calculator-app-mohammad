@@ -142,7 +142,11 @@ an older board, and new ones) come after, in column order: top to bottom down th
 leftmost column, then down the next column, and so on (frames side by side in one row
 are each a column, so a row still reads left to right). Choosing a number for one frame
 gives every frame on the page its number, so from then on the order stays as it is
-wherever the frames are moved. The order is a fractional key on each frame (`slide`). Presenting shows the frame and nothing else, on a dark
+wherever the frames are moved. Insert → **Number frames automatically** takes the
+chosen numbers away again (one step to undo), so every frame is numbered by where it
+is once more. **Present** starts from the selected frame — or the frame holding what
+is selected — and says so ("Present from frame 3"); with nothing selected, from frame 1.
+Ctrl/⌘ Enter does the same. The order is a fractional key on each frame (`slide`). Presenting shows the frame and nothing else, on a dark
 surround, without its outline or title, for the presenter and for everyone following;
 the control pane keeps the tools, Insert, undo and the slide controls (along the bottom
 on a tall screen). A PDF's pages come in as numbered frames, each holding its page.
