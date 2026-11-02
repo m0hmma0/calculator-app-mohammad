@@ -1,8 +1,10 @@
 import type { Point, Rect } from '@/geometry';
-import { elementCorners } from '@/model/bounds';
+import { elementCorners, localToWorld } from '@/model/bounds';
+import { wholePicture } from '@/model/crop';
+import { getImage } from '@/media/images';
 import type { BoardElement } from '@/model/element';
 import { frameCorners, handlePoint, type SelectionFrame } from '@/model/handles';
-import { HANDLES } from '@/model/transform';
+import { HANDLES, handleSign } from '@/model/transform';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 import type { CanvasColors } from './theme';
 import { boardToScreen, type Size, type Viewport } from './viewport';
@@ -20,6 +22,8 @@ export interface OverlayInput {
   lockedSelection: boolean;
   /** Locked, but not for this person — the owner: a padlock, and handles as usual. */
   lockedForOthers?: boolean;
+  /** A picture being cropped: its whole shown faded around the crop, and crop handles. */
+  cropping?: BoardElement | null;
 }
 
 /**
@@ -52,7 +56,9 @@ export function renderOverlay(
     ctx.globalAlpha = 1;
   }
 
-  if (input.frame) {
+  if (input.cropping) drawCropping(ctx, vp, input.cropping, toScreen, colors);
+
+  if (input.frame && !input.cropping) {
     const corners = frameCorners(input.frame).map(toScreen);
     ctx.strokeStyle = input.lockedSelection ? colors.dot : colors.accent;
     ctx.lineWidth = 1.5;
@@ -75,6 +81,95 @@ export function renderOverlay(
 
   ctx.restore();
 }
+
+/**
+ * Cropping: the rest of the picture, faded, around the part shown; a dashed outline of
+ * the whole; the crop's own outline; and its handles drawn as crop marks, unlike the
+ * squares that resize.
+ */
+function drawCropping(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  element: BoardElement,
+  toScreen: (p: Point) => Point,
+  colors: CanvasColors,
+): void {
+  const whole = wholePicture(element);
+  const bitmap = element.image?.src ? getImage(element.image.src) : null;
+
+  ctx.save();
+  // In the picture's own frame, on the board.
+  ctx.translate(-vp.x * vp.zoom, -vp.y * vp.zoom);
+  ctx.scale(vp.zoom, vp.zoom);
+  ctx.translate(element.x + element.w / 2, element.y + element.h / 2);
+  ctx.rotate(element.rotation);
+  ctx.translate(-element.w / 2, -element.h / 2);
+  ctx.beginPath();
+  ctx.rect(whole.x, whole.y, whole.w, whole.h);
+  ctx.rect(0, 0, element.w, element.h);
+  ctx.clip('evenodd');
+  ctx.globalAlpha = 0.35;
+  if (bitmap) {
+    ctx.drawImage(bitmap, whole.x, whole.y, whole.w, whole.h);
+  } else {
+    ctx.fillStyle = colors.byToken.get('--surface-2') ?? '#d9d9d9';
+    ctx.fillRect(whole.x, whole.y, whole.w, whole.h);
+  }
+  ctx.restore();
+
+  const corner = (x: number, y: number) => toScreen(localToWorld(element, { x, y }));
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = colors.accent;
+  ctx.setLineDash([4, 4]);
+  outline(ctx, [
+    corner(whole.x, whole.y),
+    corner(whole.x + whole.w, whole.y),
+    corner(whole.x + whole.w, whole.y + whole.h),
+    corner(whole.x, whole.y + whole.h),
+  ]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.5;
+  outline(ctx, elementCorners(element).map(toScreen));
+  ctx.stroke();
+
+  // Crop marks: a thick bar at each edge's middle, an L at each corner.
+  const frame = {
+    box: { x: element.x, y: element.y, w: element.w, h: element.h },
+    rotation: element.rotation,
+    single: true,
+  };
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = colors.accent;
+  for (const handle of HANDLES) {
+    const at = toScreen(handlePoint(frame, handle));
+    const { sx, sy } = handleSign(handle);
+    const turn = (dx: number, dy: number) => {
+      const cos = Math.cos(element.rotation);
+      const sin = Math.sin(element.rotation);
+      return { x: at.x + dx * cos - dy * sin, y: at.y + dx * sin + dy * cos };
+    };
+    ctx.beginPath();
+    if (sx !== 0 && sy !== 0) {
+      const a = turn(-sx * CROP_MARK, 0);
+      const b = turn(0, -sy * CROP_MARK);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(at.x, at.y);
+      ctx.lineTo(b.x, b.y);
+    } else {
+      const a = turn(sy !== 0 ? -CROP_MARK / 2 : 0, sx !== 0 ? -CROP_MARK / 2 : 0);
+      const b = turn(sy !== 0 ? CROP_MARK / 2 : 0, sx !== 0 ? CROP_MARK / 2 : 0);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+/** How long a crop mark's arms are, in screen px. */
+const CROP_MARK = 14;
 
 function outline(ctx: CanvasRenderingContext2D, corners: readonly Point[]): void {
   ctx.beginPath();

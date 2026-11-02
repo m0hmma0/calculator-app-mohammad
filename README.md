@@ -28,7 +28,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **13**   | Presenting, frames, celebrations and media   | built       |
 | **14**   | Classroom: placeholders, Answer role, locks  | built       |
 | **14.1** | Fixes: text boxes, eraser, side panel        | built       |
-| 14.2     | Pictures, locks and panning                  | not started |
+| **14.2** | Pictures, locks and panning                  | built       |
 | 15       | Undo across sessions                         | not started |
 | 16       | Dashboard organisation                       | not started |
 | 17       | Keyboard use and visible focus               | not started |
@@ -170,6 +170,24 @@ typing). New shortcuts: Q for the placeholder tool, S for the stamp tool (S agai
 the next stamp, and each stamp can be given its own key), Ctrl/⌘ Enter to present. A new
 board's link is on from the start: anyone with it can answer.
 
+## Pictures, locks and panning (Phase 14.2)
+
+A picture pasted while a text box, a placeholder, a picture — anything — is selected
+takes the selection's width and lands directly under it, 16 units below, left edges
+lined up and its proportions kept. It is then the one selected, so a second paste stacks
+under the first. With nothing selected, pasting places it where the pointer is, sized by
+its shape, as before.
+
+A double click on a picture crops it (`croppingId` in the board store): the whole
+picture shows faintly around the part kept, and its edges and corners drag in or out.
+Enter, Escape, a click away or another double click ends it. The crop is a window on
+the full picture, stored as fractions of it (`element.crop`, `src/model/crop.ts`), so
+cropping again later can bring back any part; an edge stops at the picture's side.
+Rotated pictures crop along their own sides. SVG export keeps the crop.
+
+Dragging something to within 40 pixels of the board's edge moves the board along with
+it, faster the closer it gets, for as long as it is held there.
+
 ## Placeholders, the Answer role and locks
 
 A placeholder is a text box with a hint (`element.placeholder`). Insert → Placeholder
@@ -190,10 +208,14 @@ deletion removes something from a placeholder's words. A placeholder turned back
 plain box stops taking answers at once. Migration 0006 rebuilds `shares` to allow the
 role.
 
-Locks bind everyone but the board's owner. Only the owner locks; anyone who may edit
-can unlock, on purpose — a locked item still selects (by a click or a drag box, which
-takes in locked items with the rest) and shows a padlock, but cannot be moved, resized,
-nudged, erased or deleted until it is unlocked. Several locked items unlock together.
+There are two kinds of lock (14.2). **Lock** stops everyone, the owner included, until
+it is unlocked; anyone who may edit sets it. **Lock for others**, the owner's alone
+(right-click, or a shortcut left unset until Settings gives it one), stops everyone but
+the owner (`element.lockMode: 'others'`, `lockedForMe`). One **Unlock** ends either, and
+anyone who may edit can press it, on purpose. A locked item still selects (by a click
+or a drag box, which takes in locked items with the rest) and shows a padlock, but
+cannot be moved, resized, nudged, erased, cropped or deleted while it binds you.
+Several locked items unlock together.
 
 ## The document
 
@@ -313,10 +335,12 @@ Writing and drawing:
 - **Pictures** pasted, dropped or imported are sized by their shape against the
   screen's height at 58% zoom: near square (up to 1.5 times as wide as tall) or tall,
   half that height; clearly wide (up to 3 times), a sixth; wider still, a ninth
-  (`pictureBox` in `src/media/images.ts`).
+  (`pictureBox` in `src/media/images.ts`). Pasted with something selected, a picture
+  takes its width and goes under it; a double click crops it.
 - **Picking up another tool** puts the selection down.
 - **The right-click menu** has copy, paste (which reads the clipboard, and may ask
-  first), duplicate, delete, lock, unlock, group, ungroup and the side panel, and
+  first), duplicate, delete, lock, lock for others (the owner's), unlock, group,
+  ungroup and the side panel, and
   turns left or up near an edge so none of it is off the board.
 - **A video that was played** has a strip along its top that the board answers to:
   press it to select the video, drag it to move. A press anywhere on the board takes

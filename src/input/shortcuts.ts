@@ -79,6 +79,7 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('group', 'Group', 'Editing', ['Mod+KeyG']),
   action('ungroup', 'Ungroup', 'Editing', ['Mod+Shift+KeyG']),
   action('lock', 'Lock or unlock', 'Editing', ['Mod+Shift+KeyL']),
+  action('lock-others', 'Lock for others (the owner)', 'Editing', []),
   action('hide', 'Hide or show', 'Editing', ['Mod+Shift+KeyH']),
   action('forward', 'Bring forward', 'Editing', ['BracketRight']),
   action('backward', 'Send backward', 'Editing', ['BracketLeft']),

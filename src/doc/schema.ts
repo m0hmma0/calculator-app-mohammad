@@ -1,3 +1,4 @@
+import { isCrop } from '@/model/crop';
 import * as Y from 'yjs';
 import { marksEqual, marksFromDelta, type MarkFormats, type MarkSet } from '@/text/marks';
 import type { BoardElement, ElementStyle, TableData, TextMark } from '@/model/element';
@@ -89,6 +90,8 @@ export function toYElement(element: BoardElement): YElement {
   if (element.page !== undefined) map.set('page', element.page);
   if (element.slide !== undefined) map.set('slide', element.slide);
   if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
+  if (element.lockMode === 'others') map.set('lockMode', 'others');
+  if (element.crop) map.set('crop', { ...element.crop });
   if (element.autoHeight) map.set('autoHeight', true);
   if (element.table) map.set('table', toYTable(element.table));
 
@@ -119,6 +122,9 @@ export function fromYElement(map: YElement): BoardElement {
   }
   const page = map.get('page');
   if (typeof page === 'string') element.page = page;
+  if (map.get('lockMode') === 'others') element.lockMode = 'others';
+  const crop = map.get('crop');
+  if (isCrop(crop)) element.crop = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
   const slide = map.get('slide');
   if (typeof slide === 'string') element.slide = slide;
   const placeholder = map.get('placeholder');

@@ -54,7 +54,7 @@ import { simplify, strokeBounds, toFlat, translatePoints, type InkPoint } from '
 import { scaleBoxInto } from '@/model/transform';
 import { keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/zorder';
 import { generateDemoElements } from '@/scene/demoElements';
-import { lockedForMe, mayLock } from '@/sharing/boardAccess';
+import { lockedForMe, mayLockForOthers } from '@/sharing/boardAccess';
 import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
@@ -166,6 +166,10 @@ interface BoardState {
   markerColor: string;
   /** Element currently open in the text overlay, if any. */
   editingId: ElementId | null;
+  /** The picture being cropped, if any: its box is the crop, its whole shown faded. */
+  croppingId: ElementId | null;
+  beginCrop: (id: ElementId) => void;
+  endCrop: () => void;
 
   setViewport: (viewport: Viewport) => void;
   setStageSize: (size: Size) => void;
@@ -210,7 +214,8 @@ interface BoardState {
   ungroupSelection: () => void;
   toggleLockSelection: () => void;
   /** Locks, or unlocks, everything selected — whatever each was before. */
-  setSelectionLocked: (locked: boolean) => void;
+  /** Locks what is selected — for everyone, or for everyone but the owner — or unlocks it. */
+  setSelectionLocked: (locked: boolean, mode?: 'all' | 'others') => void;
   toggleHiddenSelection: () => void;
   reorderSelection: (command: ReorderCommand) => void;
   alignSelection: (edge: 'left' | 'hcentre' | 'right' | 'top' | 'vcentre' | 'bottom') => void;
@@ -420,6 +425,20 @@ export const useBoardStore = create<BoardState>((set, get) => {
     markerWidth: 20,
     markerColor: '#ffe14d',
     editingId: null,
+    croppingId: null,
+
+    beginCrop: (id) => {
+      const element = get().elements.find((candidate) => candidate.id === id);
+      if (board.readOnly || element?.type !== 'image' || lockedForMe(element)) return;
+      get().endEditing();
+      bump({ croppingId: id, selection: [id] });
+    },
+
+    endCrop: () => {
+      if (get().croppingId === null) return;
+      board.undoManager.stopCapturing();
+      bump({ croppingId: null });
+    },
 
     setViewport: (viewport) => {
       if (viewportsEqual(get().viewport, viewport)) return;
@@ -478,7 +497,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       // Picking up another tool puts down what was selected: drawing or erasing is
       // not done to the selection, and handles left on it only get in the way.
       const another = tool !== get().tool && tool !== 'select';
-      bump(another ? { tool, selection: [] } : { tool });
+      bump(another ? { tool, selection: [], croppingId: null } : { tool });
     },
     setStamp: (stamp) => {
       if (board.readOnly) return;
@@ -558,7 +577,13 @@ export const useBoardStore = create<BoardState>((set, get) => {
       get().applyDiscrete(patches);
     },
 
-    selectOnly: (ids) => bump({ selection: [...ids] }),
+    selectOnly: (ids) => {
+      const croppingId = get().croppingId;
+      bump({
+        selection: [...ids],
+        ...(croppingId && !ids.includes(croppingId) ? { croppingId: null } : {}),
+      });
+    },
 
     toggleSelected: (id) => {
       const selection = get().selection;
@@ -576,7 +601,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
           .map((element) => element.id),
       }),
 
-    clearSelection: () => bump({ selection: [] }),
+    clearSelection: () => bump({ selection: [], croppingId: null }),
 
     setDraft: (draft) => bump({ draft }),
     setMarquee: (marquee) => bump({ marquee }),
@@ -622,19 +647,18 @@ export const useBoardStore = create<BoardState>((set, get) => {
     toggleLockSelection: () => {
       const chosen = selectedElements();
       if (chosen.length === 0) return;
-      // Only the owner locks; anyone who edits may unlock, on purpose.
-      const locking = mayLock() && chosen.some((element) => !element.locked);
-      if (!locking && !chosen.some((element) => element.locked)) return;
-      const patches = new Map<ElementId, Partial<BoardElement>>();
-      for (const element of chosen) patches.set(element.id, { locked: locking });
-      get().applyDiscrete(patches);
+      // A mixed selection is locked rather than unlocked; unlocking takes either kind.
+      get().setSelectionLocked(chosen.some((element) => !element.locked));
     },
 
-    setSelectionLocked: (locked) => {
-      if (locked && !mayLock()) return;
+    setSelectionLocked: (locked, mode = 'all') => {
+      if (locked && mode === 'others' && !mayLockForOthers()) return;
+      const lockMode = locked && mode === 'others' ? 'others' : null;
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const element of selectedElements()) {
-        if (element.locked !== locked) patches.set(element.id, { locked });
+        if (element.locked !== locked || (element.lockMode ?? null) !== lockMode) {
+          patches.set(element.id, { locked, lockMode });
+        }
       }
       if (patches.size > 0) get().applyDiscrete(patches);
     },
@@ -1175,6 +1199,7 @@ export function openBoardDocument(boardId: string | null): BoardDoc {
   useBoardStore.setState({
     selection: [],
     editingId: null,
+    croppingId: null,
     draft: null,
     marquee: null,
     page: FIRST_PAGE,

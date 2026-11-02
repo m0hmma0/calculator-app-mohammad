@@ -278,29 +278,44 @@ test.describe('arranging', () => {
     expect(await layerCount(page)).toBe(3);
   });
 
-  // Checklist item 9 — since Phase 14 a lock binds everyone but the owner; this
-  // signed-out board is the owner's, so here it marks, and does not stop. sharing.spec
-  // covers the others' side.
-  test('locking marks a shape, and leaves the owner free to move it', async ({ page }) => {
+  // Checklist item 9, and Phase 14.2's items 3–5: a lock stops everyone, this board's
+  // owner included; "lock for others" leaves the owner free. classroom.spec covers the
+  // others' side.
+  test('a lock stops even the owner; a lock for others does not; one Unlock ends either', async ({
+    page,
+  }) => {
     await draw(page, 'KeyR', { x: 300, y: 250 }, { x: 460, y: 350 });
     await page.keyboard.press('KeyV');
     await page.mouse.click(380, 300);
+    const x = async () => Number(await page.getByTestId('geo-x').innerText());
+    const drag = async () => {
+      await page.mouse.move(380, 300);
+      await page.mouse.down();
+      await page.mouse.move(430, 320, { steps: 5 });
+      await page.mouse.up();
+    };
 
     await page.keyboard.press('Shift+ControlOrMeta+KeyL');
     await expect(page.getByTestId('layer-locked')).toBeVisible();
     await expect(page.getByTestId('toggle-lock')).toHaveText('unlock');
+    const before = await x();
+    await drag();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Delete');
+    expect(await x()).toBe(before);
+    await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
 
-    // The owner still moves it.
-    const before = Number(await page.getByTestId('geo-x').innerText());
-    await page.mouse.move(380, 300);
-    await page.mouse.down();
-    await page.mouse.move(430, 320, { steps: 5 });
-    await page.mouse.up();
-    await expect
-      .poll(async () => Number(await page.getByTestId('geo-x').innerText()))
-      .toBeCloseTo(before + 50, -1);
+    // Unlocked from the right-click menu, then locked for others: the owner is free.
+    await page.mouse.click(380, 300, { button: 'right' });
+    await page.getByTestId('menu-unlock').click();
+    await expect(page.getByTestId('layer-locked')).toHaveCount(0);
+    await page.mouse.click(380, 300, { button: 'right' });
+    await page.getByTestId('menu-lock-others').click();
+    await expect(page.getByTestId('layer-locked')).toBeVisible();
+    await drag();
+    await expect.poll(x).toBeCloseTo(before + 50, -1);
 
-    // And it unlocks again.
+    // The same Unlock takes it off.
     await page.getByTestId('toggle-lock').click();
     await expect(page.getByTestId('layer-locked')).toHaveCount(0);
   });

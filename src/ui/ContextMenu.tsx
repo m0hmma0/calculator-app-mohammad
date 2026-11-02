@@ -128,23 +128,32 @@ export function ContextMenu() {
           disabled: !hasSelection,
           run: () => store().deleteSelection(),
         },
-        // Only the owner locks — for everyone else; anyone who edits may unlock.
+        // A lock stops everyone, the owner included; a lock for others, everyone but
+        // the owner, who alone sets one. One Unlock takes off either.
+        {
+          id: 'lock',
+          label: 'Lock',
+          hint: key('lock'),
+          separated: true,
+          disabled: !chosen.some((element) => !element.locked || element.lockMode === 'others'),
+          run: () => store().setSelectionLocked(true),
+        },
         ...(owner
           ? [
               {
-                id: 'lock',
-                label: 'Lock',
-                hint: key('lock'),
-                separated: true,
-                disabled: !chosen.some((element) => !element.locked),
-                run: () => store().setSelectionLocked(true),
+                id: 'lock-others',
+                label: 'Lock for others',
+                hint: key('lock-others'),
+                disabled: !chosen.some(
+                  (element) => !element.locked || element.lockMode !== 'others',
+                ),
+                run: () => store().setSelectionLocked(true, 'others'),
               },
             ]
           : []),
         {
           id: 'unlock',
           label: 'Unlock',
-          separated: !owner,
           disabled: !chosen.some((element) => element.locked),
           run: () => store().setSelectionLocked(false),
         },

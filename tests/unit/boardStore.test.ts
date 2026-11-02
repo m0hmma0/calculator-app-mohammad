@@ -226,38 +226,58 @@ describe('lock and hide', () => {
     expect([byId('e0').locked, byId('e1').locked]).toEqual([true, true]);
   });
 
-  it('will not nudge a locked element for anyone but the owner, who moves it freely', () => {
+  it('a lock stops everyone, the owner included, until it is unlocked', () => {
     seed([{ x: 5, y: 5 }]);
     store().selectOnly(['e0']);
     store().toggleLockSelection();
     expect(byId('e0').locked).toBe(true);
+    store().nudgeSelection(10, 10);
+    store().deleteSelection();
+    expect(byId('e0').x).toBe(5);
+
+    store().toggleLockSelection();
+    store().nudgeSelection(10, 10);
+    expect(byId('e0').x).toBe(15);
+  });
+
+  it('a lock for others stops everyone but the owner', () => {
+    seed([{ x: 5, y: 5 }]);
+    store().selectOnly(['e0']);
+    store().setSelectionLocked(true, 'others');
+    expect(byId('e0').lockMode).toBe('others');
     store().nudgeSelection(10, 10);
     expect(byId('e0').x).toBe(15);
 
     useBoardAccess.setState({ role: 'editor' });
     try {
       store().nudgeSelection(10, 10);
-      expect(byId('e0').x).toBe(15);
       store().deleteSelection();
-      expect(byId('e0')).toBeDefined();
+      expect(byId('e0').x).toBe(15);
     } finally {
       useBoardAccess.setState({ role: 'owner' });
     }
   });
 
-  it('is locked only by the owner, and unlocked by anyone who edits', () => {
+  it('anyone who edits locks and unlocks; only the owner locks for others', () => {
     seed([{ x: 5, y: 5 }]);
     store().selectOnly(['e0']);
     useBoardAccess.setState({ role: 'editor' });
     try {
-      store().toggleLockSelection();
+      store().setSelectionLocked(true, 'others');
       expect(byId('e0').locked).toBe(false);
-      useBoardAccess.setState({ role: 'owner' });
       store().toggleLockSelection();
       expect(byId('e0').locked).toBe(true);
-      useBoardAccess.setState({ role: 'editor' });
+      expect(byId('e0').lockMode).toBeUndefined();
       store().toggleLockSelection();
       expect(byId('e0').locked).toBe(false);
+
+      // One Unlock takes off a lock for others too.
+      useBoardAccess.setState({ role: 'owner' });
+      store().setSelectionLocked(true, 'others');
+      useBoardAccess.setState({ role: 'editor' });
+      store().setSelectionLocked(false);
+      expect(byId('e0').locked).toBe(false);
+      expect(byId('e0').lockMode).toBeUndefined();
     } finally {
       useBoardAccess.setState({ role: 'owner' });
     }

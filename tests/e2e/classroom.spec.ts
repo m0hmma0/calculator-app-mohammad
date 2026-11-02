@@ -234,8 +234,10 @@ test.describe('locks', () => {
     const boardId = await createBoard(owner.page);
     await drawRect(owner.page, [300, 250], [400, 330]);
     await drawRect(owner.page, [500, 250], [600, 330]);
+    // Locked for others: everyone but the owner is stopped.
     await owner.page.keyboard.press('ControlOrMeta+KeyA');
-    await owner.page.keyboard.press('Shift+ControlOrMeta+KeyL');
+    await owner.page.mouse.click(350, 290, { button: 'right' });
+    await owner.page.getByTestId('menu-lock-others').click();
     await expect(owner.page.getByTestId('layer-locked')).toHaveCount(2);
 
     // The owner moves a locked one freely.
@@ -271,13 +273,15 @@ test.describe('locks', () => {
     await expect(layers(helper.page)).toHaveCount(2);
     await expect(helper.page.getByTestId('geo-x')).toHaveText(before);
 
-    // They may not lock — that is the owner's — but they may unlock, both at once.
+    // They may unlock, both at once.
     await helper.page.mouse.click(stage.x + stage.width / 2, stage.y + stage.height - 5, {
       button: 'right',
     });
     await expect(helper.page.getByTestId('context-menu')).toBeVisible();
     await expect(helper.page.getByTestId('menu-unlock')).toBeVisible();
-    await expect(helper.page.getByTestId('menu-lock')).toHaveCount(0);
+    // A lock for everyone they may set; a lock for others is the owner's.
+    await expect(helper.page.getByTestId('menu-lock')).toBeVisible();
+    await expect(helper.page.getByTestId('menu-lock-others')).toHaveCount(0);
     await helper.page.keyboard.press('Escape');
     await helper.page.mouse.move(stage.x + 2, stage.y + 2);
     await helper.page.mouse.down();
@@ -288,7 +292,7 @@ test.describe('locks', () => {
     await expect(helper.page.getByTestId('toggle-lock')).toHaveText('unlock');
     await helper.page.getByTestId('toggle-lock').click();
     await expect(owner.page.getByTestId('layer-locked')).toHaveCount(0);
-    await expect(helper.page.getByTestId('toggle-lock')).toHaveCount(0);
+    await expect(helper.page.getByTestId('toggle-lock')).toHaveText('lock');
 
     await close(owner.context, helper.context);
   });

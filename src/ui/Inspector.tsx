@@ -1,6 +1,6 @@
 import { FONT_LABELS, type FontKey } from '@/canvas/fonts';
 import { LANGUAGES } from '@/model/highlight';
-import { selectCanEdit, useBoardAccess, selectIsOwner } from '@/sharing/boardAccess';
+import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import {
   canHoldLabel,
   isTextual,
@@ -88,7 +88,6 @@ export function Inspector() {
   const showGeometry = useUiPrefs((state) => state.geometry);
   const reorderSelection = useBoardStore((state) => state.reorderSelection);
   const toggleLockSelection = useBoardStore((state) => state.toggleLockSelection);
-  const owner = useBoardAccess(selectIsOwner);
   const toggleHiddenSelection = useBoardStore((state) => state.toggleHiddenSelection);
   const groupSelection = useBoardStore((state) => state.groupSelection);
   const ungroupSelection = useBoardStore((state) => state.ungroupSelection);
@@ -728,19 +727,23 @@ export function Inspector() {
               </button>
             </div>
             <div className={styles.buttons}>
-              {/* The owner locks; anyone who edits may unlock what is locked. */}
-              {owner || anyLocked ? (
-                <button
-                  type="button"
-                  className={styles.button}
-                  aria-pressed={anyLocked}
-                  data-testid="toggle-lock"
-                  title={owner ? 'Locked for everyone but you' : 'Locked by the owner'}
-                  onClick={toggleLockSelection}
-                >
-                  {anyLocked ? 'unlock' : 'lock'}
-                </button>
-              ) : null}
+              {/* Locks for everyone; "lock for others" is in the right-click menu. */}
+              <button
+                type="button"
+                className={styles.button}
+                aria-pressed={anyLocked}
+                data-testid="toggle-lock"
+                title={
+                  !anyLocked
+                    ? 'Lock: nobody can move or change it, you included, until it is unlocked'
+                    : selected.every((element) => !element.locked || element.lockMode === 'others')
+                      ? 'Locked for everyone but the owner'
+                      : 'Locked for everyone'
+                }
+                onClick={toggleLockSelection}
+              >
+                {anyLocked ? 'unlock' : 'lock'}
+              </button>
               <button
                 type="button"
                 className={styles.button}

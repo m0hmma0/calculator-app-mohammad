@@ -88,6 +88,10 @@ function run(id: string): boolean {
     case 'lock':
       store.toggleLockSelection();
       return true;
+    case 'lock-others':
+      if (!owner) return false;
+      store.setSelectionLocked(true, 'others');
+      return true;
     case 'hide':
       store.toggleHiddenSelection();
       return true;
@@ -177,6 +181,13 @@ export function useShortcuts(): void {
       if (event.code === 'Space' && !mod && !event.altKey) {
         event.preventDefault(); // otherwise the page tries to scroll
         if (!store.spaceHeld) store.setSpaceHeld(true);
+        return;
+      }
+
+      // Cropping ends with Enter or Escape, the crop kept.
+      if (store.croppingId && (event.code === 'Escape' || event.code === 'Enter')) {
+        event.preventDefault();
+        store.endCrop();
         return;
       }
 

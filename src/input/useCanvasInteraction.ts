@@ -17,7 +17,8 @@ import {
   type Point,
   type Rect,
 } from '@/geometry';
-import { elementAABB, rotateAround } from '@/model/bounds';
+import { elementAABB, rotateAround, worldToLocal } from '@/model/bounds';
+import { recrop } from '@/model/crop';
 import {
   canHoldLabel,
   createElement,
@@ -62,6 +63,12 @@ import { openLink } from '@/text/marks';
 const PICK_SLOP = 6; // screen px of forgiveness when clicking thin shapes
 const SNAP_DISTANCE = 6; // screen px
 const DRAG_THRESHOLD = 3; // screen px before a click becomes a drag
+/** How near the board's edge, in screen px, a drag starts the board moving along. */
+const EDGE_PAN_ZONE = 40;
+/** The fastest the board moves under a drag at its very edge, in screen px a frame. */
+const EDGE_PAN_SPEED = 18;
+/** The smallest a crop leaves a picture, in screen px. */
+const MIN_CROP = 16;
 const DEFAULT_SHAPE = { width: 120, height: 90 }; // placed by a click with no drag
 const ERASER_RADIUS = 12; // screen px
 
@@ -96,6 +103,8 @@ type Drag =
       marker: boolean;
     }
   | { kind: 'erase'; pointerId: number }
+  /** A crop handle dragged: an edge of the picture's box moved over the picture. */
+  | { kind: 'crop'; pointerId: number; handle: HandleId; start: BoardElement }
   | {
       kind: 'textbox';
       pointerId: number;
@@ -283,6 +292,81 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       return true;
     };
 
+    /** Moves what is being dragged so it sits under the pointer, snapping as it goes. */
+    const moveTo = (event: Pick<PointerEvent, 'clientX' | 'clientY' | 'metaKey' | 'ctrlKey'>) => {
+      if (drag.kind !== 'move') return;
+      const store = useBoardStore.getState();
+      const point = board(event);
+      const dx = point.x - drag.origin.x;
+      const dy = point.y - drag.origin.y;
+      if (!drag.moved && Math.hypot(dx, dy) * store.viewport.zoom < DRAG_THRESHOLD) return;
+      drag.moved = true;
+
+      const start = drag.start;
+      const moved = transformTargets().map((element) => {
+        const origin = start.get(element.id);
+        return origin ? { ...element, x: origin.x + dx, y: origin.y + dy } : element;
+      });
+
+      const bounds = unionRects(moved.map(elementAABB));
+      let snap = EMPTY_SNAP;
+      if (bounds && store.snapEnabled && !event.metaKey && !event.ctrlKey) {
+        const excluded = new Set(moved.map((element) => element.id));
+        snap = snapMove(bounds, snapCandidates(excluded), SNAP_DISTANCE / store.viewport.zoom);
+      }
+
+      const patches = new Map<ElementId, Partial<BoardElement>>();
+      for (const element of moved) {
+        patches.set(element.id, { x: element.x + snap.dx, y: element.y + snap.dy });
+      }
+      store.patchElements(patches);
+      store.setSnapFeedback(snap.guides, snap.spacing);
+    };
+
+    /**
+     * Something dragged to the board's edge takes the board along: each frame the pointer
+     * stays near an edge, the view moves that way — faster the nearer it is — and what is
+     * dragged follows the pointer onto the newly shown part.
+     */
+    let edgePointer: Pick<PointerEvent, 'clientX' | 'clientY' | 'metaKey' | 'ctrlKey'> | null =
+      null;
+    let edgeFrame: number | null = null;
+    const edgePush = (event: { clientX: number; clientY: number }) => {
+      const rect = host.getBoundingClientRect();
+      // Past the edge (the pointer is captured, so it can leave the board) is the edge.
+      const along = (distance: number) =>
+        distance < EDGE_PAN_ZONE
+          ? ((EDGE_PAN_ZONE - Math.max(0, distance)) / EDGE_PAN_ZONE) * EDGE_PAN_SPEED
+          : 0;
+      return {
+        x: along(rect.right - event.clientX) - along(event.clientX - rect.left),
+        y: along(rect.bottom - event.clientY) - along(event.clientY - rect.top),
+      };
+    };
+    const edgeStep = () => {
+      edgeFrame = null;
+      if (drag.kind !== 'move' || !edgePointer) return;
+      const push = edgePush(edgePointer);
+      if (push.x === 0 && push.y === 0) return;
+      useBoardStore.getState().panBy(-push.x, -push.y);
+      moveTo(edgePointer);
+      edgeFrame = requestAnimationFrame(edgeStep);
+    };
+    const panAtEdge = (
+      event: Pick<PointerEvent, 'clientX' | 'clientY' | 'metaKey' | 'ctrlKey'>,
+    ) => {
+      edgePointer = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+      };
+      const push = edgePush(event);
+      if ((push.x !== 0 || push.y !== 0) && edgeFrame === null) {
+        edgeFrame = requestAnimationFrame(edgeStep);
+      }
+    };
+
     const pressureOf = (event: PointerEvent): number => {
       // A mouse reports 0 or a flat 0.5; only a stylus gives anything meaningful.
       if (event.pointerType === 'mouse') return 0.5;
@@ -388,6 +472,28 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       const store = useBoardStore.getState();
       const tool = effectiveTool(store);
+
+      // Cropping a picture: its handles move the crop's edges, a press on it keeps
+      // cropping, and a press anywhere else ends it (and does what it would have done).
+      if (store.croppingId) {
+        const cropping = store.elements.find((element) => element.id === store.croppingId);
+        if (cropping && event.button === 0) {
+          const point = board(event);
+          const hit = hitHandle(selectionFrame([cropping])!, point, store.viewport.zoom);
+          if (hit && !hit.rotate) {
+            host.setPointerCapture(event.pointerId);
+            drag = {
+              kind: 'crop',
+              pointerId: event.pointerId,
+              handle: hit.handle,
+              start: cropping,
+            };
+            return;
+          }
+          if (hitTestElement(cropping, point, PICK_SLOP / store.viewport.zoom)) return;
+        }
+        store.endCrop();
+      }
 
       // Someone who can only look moves the board with the hand, and a click on a
       // link in the words opens it.
@@ -647,6 +753,16 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (tool === 'placeholder') return setCursor('crosshair');
       if (!lastClient) return setCursor('default');
 
+      const cropping = store.croppingId
+        ? store.elements.find((element) => element.id === store.croppingId)
+        : undefined;
+      if (cropping) {
+        const hit = hitHandle(selectionFrame([cropping])!, board(lastClient), store.viewport.zoom);
+        return setCursor(
+          hit && !hit.rotate ? cursorForHandle(hit.handle, cropping.rotation) : 'default',
+        );
+      }
+
       const point = board(lastClient);
       const zoom = store.viewport.zoom;
       const selected = store.elements.filter((element) => store.selection.includes(element.id));
@@ -783,31 +899,16 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
           break;
         }
 
+        case 'crop': {
+          const local = worldToLocal(drag.start, point);
+          const patch = recrop(drag.start, drag.handle, local, MIN_CROP / store.viewport.zoom);
+          store.patchElements(new Map([[drag.start.id, patch]]));
+          break;
+        }
+
         case 'move': {
-          const dx = point.x - drag.origin.x;
-          const dy = point.y - drag.origin.y;
-          if (!drag.moved && Math.hypot(dx, dy) * store.viewport.zoom < DRAG_THRESHOLD) break;
-          drag.moved = true;
-
-          const targets = transformTargets();
-          const moved = targets.map((element) => {
-            const origin = drag.kind === 'move' ? drag.start.get(element.id) : undefined;
-            return origin ? { ...element, x: origin.x + dx, y: origin.y + dy } : element;
-          });
-
-          const bounds = unionRects(moved.map(elementAABB));
-          let snap = EMPTY_SNAP;
-          if (bounds && store.snapEnabled && !event.metaKey && !event.ctrlKey) {
-            const excluded = new Set(moved.map((element) => element.id));
-            snap = snapMove(bounds, snapCandidates(excluded), SNAP_DISTANCE / store.viewport.zoom);
-          }
-
-          const patches = new Map<ElementId, Partial<BoardElement>>();
-          for (const element of moved) {
-            patches.set(element.id, { x: element.x + snap.dx, y: element.y + snap.dy });
-          }
-          store.patchElements(patches);
-          store.setSnapFeedback(snap.guides, snap.spacing);
+          moveTo(event);
+          if (drag.kind === 'move' && drag.moved) panAtEdge(event);
           break;
         }
 
@@ -1090,6 +1191,10 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       } else if (target.type === 'embed' && target.embed && target.embed.kind !== 'link') {
         // A video or a sound plays in place; until then it is a card you can move.
         useEmbeds.setState({ playing: target.id });
+      } else if (target.type === 'image') {
+        // A picture is cropped; double-clicked again, it is done.
+        if (store.croppingId === target.id) store.endCrop();
+        else store.beginCrop(target.id);
       }
     };
 
@@ -1104,6 +1209,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     return () => {
       unsubscribe();
+      if (edgeFrame !== null) cancelAnimationFrame(edgeFrame);
       host.removeEventListener('contextmenu', onContextMenu);
       host.removeEventListener('dblclick', onDoubleClick);
       host.removeEventListener('wheel', onWheel);

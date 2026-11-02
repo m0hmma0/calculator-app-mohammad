@@ -30,15 +30,15 @@ export const selectIsOwner = (state: BoardAccessStore) => state.role === 'owner'
 export const selectCanComment = (state: BoardAccessStore) => canComment(state.role);
 
 /**
- * Locks guard against accidents, and bind everyone but the board's owner: the owner
- * moves and edits locked things freely; everyone else can select them, and unlock
- * them on purpose, but not move them by mistake.
+ * Whether a locked thing stops this person. A lock stops everyone, the board's owner
+ * included; a lock "for others" stops everyone but the owner. Either way it can be
+ * selected and unlocked on purpose, by anyone who edits.
  */
-export const lockedForMe = (element: { locked: boolean }) =>
-  element.locked && useBoardAccess.getState().role !== 'owner';
+export const lockedForMe = (element: { locked: boolean; lockMode?: 'others' | null }) =>
+  element.locked && !(element.lockMode === 'others' && useBoardAccess.getState().role === 'owner');
 
-/** Only the board's owner locks things; anyone who edits may unlock them. */
-export const mayLock = () => useBoardAccess.getState().role === 'owner';
+/** Only the board's owner locks things for others: the lock that leaves them free. */
+export const mayLockForOthers = () => useBoardAccess.getState().role === 'owner';
 
 /** Whether a click on a placeholder types into it here: anyone who edits, or answers. */
 export const canTypeInto = () => canAnswer(useBoardAccess.getState().role);

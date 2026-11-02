@@ -6,6 +6,7 @@ import type { BoardElement, ElementStyle, TextMark } from '@/model/element';
 import { fitFontSize, layoutText, type WrappedLine } from '@/model/textLayout';
 import { runsOf, type MarkSet } from '@/text/marks';
 import { getImage } from '@/media/images';
+import { cropOf, cropSource } from '@/model/crop';
 import { uploadStateOf, type UploadState } from '@/media/uploads';
 import { fontStack, fontString } from './fonts';
 import { resolveColor, type CanvasColors } from './theme';
@@ -417,13 +418,17 @@ export function drawImage(
     ctx.clip();
   }
 
+  // Only the part of the picture its crop shows, drawn into the box.
+  const crop = cropOf(element);
   if (bitmap) {
-    ctx.drawImage(bitmap, element.x, element.y, element.w, element.h);
+    const [sx, sy, sw, sh] = cropSource(crop, bitmap.naturalWidth, bitmap.naturalHeight);
+    ctx.drawImage(bitmap, sx, sy, sw, sh, element.x, element.y, element.w, element.h);
   } else if (preview) {
     // A 20px preview stretched with smoothing reads as a blur of the real picture.
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(preview, element.x, element.y, element.w, element.h);
+    const [sx, sy, sw, sh] = cropSource(crop, preview.naturalWidth, preview.naturalHeight);
+    ctx.drawImage(preview, sx, sy, sw, sh, element.x, element.y, element.w, element.h);
   } else {
     // Nothing to show yet, but the shape appears the instant it is dropped.
     ctx.fillStyle = colors.byToken.get('--surface-2') ?? '#e8e8e8';

@@ -162,3 +162,21 @@
 .stage[data-cursor='text'] {
   cursor: text;
 }
+
+/* While a picture is cropped: what to do, and how to stop. */
+.cropHint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  color: var(--text-2);
+  pointer-events: none;
+  z-index: 6;
+}

@@ -29,6 +29,14 @@ export interface TableData {
 
 export const cellKey = (row: number, col: number) => `${row},${col}`;
 
+/** Part of a picture: x and y from its top-left, w and h of its size, all fractions of it. */
+export interface ImageCrop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** Formatting on characters [from, to) of an element's text. */
 export interface TextMark {
   from: number;
@@ -134,7 +142,13 @@ export interface BoardElement {
   /** Radians, clockwise, about the box centre. */
   rotation: number;
   opacity: number;
+  /** Locked: it can be selected (to unlock it) but not moved or changed. */
   locked: boolean;
+  /**
+   * Whom a lock stops. Absent: everyone, the board's owner included. 'others':
+   * everyone but the owner, who set it.
+   */
+  lockMode?: 'others' | null;
   hidden: boolean;
   /** Fractional index — sorts as a plain string, and two people can reorder at once. */
   z: string;
@@ -172,6 +186,12 @@ export interface BoardElement {
   /** Bold, italic, underline, colours and links on parts of the text; absent when none. */
   marks?: TextMark[];
 
+  /**
+   * The part of a picture shown, as fractions of the whole one; absent shows it all.
+   * The box is that part: the whole picture is never lost, and a crop can be undone or
+   * widened again later.
+   */
+  crop?: ImageCrop | null;
   /** Image source: a stored file on an account board, a data URL on the local board. */
   image?: ImageRef;
 

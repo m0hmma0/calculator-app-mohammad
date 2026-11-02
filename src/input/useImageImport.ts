@@ -1,13 +1,14 @@
 import { useEffect, type RefObject } from 'react';
 import { screenToBoard } from '@/canvas/viewport';
-import type { Point } from '@/geometry';
+import type { Point, Rect } from '@/geometry';
+import { selectionAABB } from '@/model/bounds';
 import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
 import { imageBlobsFrom, pictureBox } from '@/media/images';
 import { storeImage } from '@/media/storeImage';
 import { importFile, isPdfFile, startImportBatch, useImport } from '@/importers/importFile';
 import { insertMedia, isMediaFile } from '@/media/mediaFiles';
-import { boardDoc, useBoardStore } from '@/state/boardStore';
+import { boardDoc, DUPLICATE_GAP, useBoardStore } from '@/state/boardStore';
 
 /**
  * Images arrive two ways, and both are browser-only APIs — which is exactly the part
@@ -17,7 +18,8 @@ import { boardDoc, useBoardStore } from '@/state/boardStore';
  *   drop   a file dragged from the desktop onto the canvas
  *
  * Each image lands where it was dropped (or under the pointer when pasted), sized so
- * it is visible without swallowing the board.
+ * it is visible without swallowing the board — or, pasted while something is
+ * selected, directly under that, at its width, its own proportions kept.
  */
 /** Space between pictures placed together. */
 const IMAGE_GAP = 40;
@@ -34,7 +36,7 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
       lastPointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
     };
 
-    const placeAt = async (blobs: Blob[], screenPoint: Point) => {
+    const placeAt = async (blobs: Blob[], screenPoint: Point, under?: Rect) => {
       // A viewer's paste would only be refused; do not upload anything for it.
       if (boardDoc().readOnly) return;
       const store = useBoardStore.getState();
@@ -47,8 +49,15 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
         try {
           const imported = await storeImage(blob);
           const current = useBoardStore.getState();
-          const box = pictureBox(imported, current.stageSize.height);
-          const at: Point = next ?? { x: centre.x - box.w / 2, y: centre.y - box.h / 2 };
+          const ratio = imported.naturalWidth / (imported.naturalHeight || 1);
+          const box = under
+            ? { w: under.w, h: Math.max(1, Math.round(under.w / ratio)) }
+            : pictureBox(imported, current.stageSize.height);
+          const at: Point =
+            next ??
+            (under
+              ? { x: under.x, y: under.y + under.h + DUPLICATE_GAP }
+              : { x: centre.x - box.w / 2, y: centre.y - box.h / 2 });
 
           const element = createElement({
             type: 'image',
@@ -57,7 +66,7 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
           });
           element.image = imported;
           current.addElement(element);
-          next = { x: at.x, y: at.y + box.h + IMAGE_GAP };
+          next = { x: at.x, y: at.y + box.h + (under ? DUPLICATE_GAP : IMAGE_GAP) };
         } catch {
           // A file that will not decode is skipped; the rest still land.
         }
@@ -77,7 +86,10 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
 
       event.preventDefault();
       const centre = { x: host.clientWidth / 2, y: host.clientHeight / 2 };
-      void placeAt(blobs, lastPointer ?? centre);
+      // Something selected: the picture goes under it, at its width.
+      const store = useBoardStore.getState();
+      const chosen = store.elements.filter((element) => store.selection.includes(element.id));
+      void placeAt(blobs, lastPointer ?? centre, selectionAABB(chosen) ?? undefined);
     };
 
     const onDragOver = (event: DragEvent) => {

@@ -60,6 +60,7 @@ export function CanvasStage() {
   const viewport = useBoardStore((state) => state.viewport);
   const isEmpty = useBoardStore((state) => state.elements.length === 0);
   const stamp = useBoardStore((state) => state.stamp);
+  const cropping = useBoardStore((state) => state.croppingId !== null);
   const minimap = useUiPrefs((state) => state.minimap);
   // The minimap is the owner's: on someone else's board it stays away.
   const owner = useBoardAccess(selectIsOwner);
@@ -137,6 +138,9 @@ export function CanvasStage() {
         // view): handles, and a padlock to say so.
         lockedSelection: selected.some(lockedForMe),
         lockedForOthers: selected.some((element) => element.locked && !lockedForMe(element)),
+        cropping: preview
+          ? null
+          : (elements.find((element) => element.id === store.croppingId) ?? null),
       },
       colors,
     );
@@ -316,6 +320,11 @@ export function CanvasStage() {
       <SettingsDialog />
       <CommandPalette />
       <ContextMenu />
+      {cropping ? (
+        <p className={styles.cropHint} data-hud data-present-hide data-testid="crop-hint">
+          Cropping — drag an edge or a corner. Enter, or a click away, when done.
+        </p>
+      ) : null}
       <StatusBar />
       {devPanelOpen ? <DevPanel /> : null}
     </div>

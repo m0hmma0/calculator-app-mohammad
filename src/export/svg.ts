@@ -1,3 +1,4 @@
+import { cropSource } from '@/model/crop';
 import getStroke from 'perfect-freehand';
 import { expandRect, type Rect } from '@/geometry';
 import { fromFlat } from '@/ink/stroke';
@@ -174,6 +175,16 @@ function shapeElement(element: BoardElement, resolve: ColorResolver): string {
         stored.startsWith('/') && typeof location !== 'undefined'
           ? new URL(stored, location.origin).href
           : stored;
+      const natural = element.image;
+      if (element.crop && natural?.naturalWidth && natural.naturalHeight) {
+        // Cropped: the whole picture inside a window onto the part shown.
+        const [sx, sy, sw, sh] = cropSource(
+          element.crop,
+          natural.naturalWidth,
+          natural.naturalHeight,
+        );
+        return `<g${transform}><svg x="${round(element.x)}" y="${round(element.y)}" width="${round(element.w)}" height="${round(element.h)}" viewBox="${round(sx)} ${round(sy)} ${round(sw)} ${round(sh)}" preserveAspectRatio="none"><image href="${escapeXml(source)}" width="${natural.naturalWidth}" height="${natural.naturalHeight}" preserveAspectRatio="none"/></svg></g>`;
+      }
       return `<image href="${escapeXml(source)}" x="${round(element.x)}" y="${round(element.y)}" width="${round(element.w)}" height="${round(element.h)}" preserveAspectRatio="none"${transform}/>`;
     }
 

@@ -11,8 +11,8 @@ Phases 0–5 and 7 are verified by the user; Phase 6 was deployed and not report
 back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools and
 rich content)**, **Phase 10 (quick fixes and the text box)**, **Phase 11 (one
 control pane, and who sees what)**, **Phase 12 (settings and shortcuts)**, **Phase 13
-(presenting, frames, celebrations and media)** and **Phase 14 (placeholders, the Answer
-role and locks)** are built, tested and deployed at
+(presenting, frames, celebrations and media)**, **Phase 14 (placeholders, the Answer
+role and locks)**, **14.1 (fixes)** and **14.2 (pictures, locks, panning)** are built, tested and deployed at
 <https://sabboura.mh-hamad.workers.dev> (migrations 0001–0006 applied remotely) but not
 yet checked by the user.
 
@@ -26,7 +26,7 @@ eraser, the side panel's layering and toggle, duplicates below, strikethrough, t
 shortcuts, boards shared for answering by default) and **14.2** (paste to fit the
 selection, cropping, the old lock plus "lock for others", panning while dragging). Phase
 15 now holds only undo that survives closing a board, and Phase 17 only keyboard use of
-the canvas and visible focus. **14.1 is built**; the next phase is **14.2**. Parked by the user: student
+the canvas and visible focus. **14.1 and 14.2 are built**; the next phase is **15**. Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -74,10 +74,9 @@ The Answer role (`'answer'`, between commenter and editor) may type in placehold
 only: the board stays read-only for them (`board.answers`), and their typing goes
 through `transactAnswer`. The room judges each update from them with `isOnlyAnswers`
 (`shared/answers.ts`), which decodes it without applying it and allows only text and
-formatting in a placeholder's `text` and a new `h`. Locks bind everyone but the owner
-(`lockedForMe`, `mayLock` in `src/sharing/boardAccess.ts`): only the owner locks, any
-editor unlocks, and locked items select (a drag box takes them in) but do not move,
-nudge, erase or delete. Migration 0006 rebuilds `shares` for the new role.
+formatting in a placeholder's `text` and a new `h`. Locked items select (a drag box
+takes them in) but do not move, nudge, erase or delete; 14.2 changed who they bind.
+Migration 0006 rebuilds `shares` for the new role.
 
 Phase 14.1 in one paragraph: `element.autoHeight` marks a text box whose height follows
 its text (clicked boxes, clicked placeholders, pasted text); `fitted` (src/text/measure.ts)
@@ -91,6 +90,20 @@ settings at its top. `duplicateSelection('below' | 'inPlace')`. A `strike` mark 
 Shortcuts `tool.placeholder` (Q), `tool.stamp` (S; again cycles), `stamp.N` (unset),
 `present` (Mod+Enter), `text.strike` (Mod+Shift+X). New boards and duplicates get a link
 (`defaultLink`): anyone, answer, logged as "link on".
+
+Phase 14.2 in one paragraph: two locks (`setSelectionLocked(locked, 'all' | 'others')`).
+A plain lock (`locked`, no `lockMode`) binds everyone, the owner too, and any editor sets
+it; "Lock for others" (`lockMode: 'others'`, `mayLockForOthers`: the owner only) binds
+all but the owner. `lockedForMe` in `src/sharing/boardAccess.ts` decides; one Unlock
+clears both. A picture pasted with a selection takes `selectionAABB`'s width and goes
+`DUPLICATE_GAP` below it (`placeAt(..., under)` in `useImageImport.ts`). Cropping:
+`element.crop` is a window on the whole picture in fractions of it (`src/model/crop.ts`:
+`recrop`, `wholePicture`, `cropSource`), `x/y/w/h` stay the box shown; `croppingId` in
+the store is crop mode (double-click; Enter, Escape, a click away or a tool change end
+it), `drawCropping` in `renderOverlay.ts` shows the ghost and crop marks. Edge panning is
+an rAF loop in `useCanvasInteraction.ts` (`panAtEdge`, 40 px zone, up to 18 px a
+frame) that runs only during a move drag. No migration: `crop` and `lockMode` are
+document fields.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -284,8 +297,14 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **A board opens fitted only until you change something.** The room's first sync can
   arrive after the page has drawn; it used to refit the view then, under a drag in
   progress. Any local change now cancels the pending fit (`attachDocument`).
-- **Locks do not stop the owner**, including on the signed-out board, where you are
-  the owner. A test of a lock blocking a move needs a second account.
+- **A plain lock stops the owner too; a lock for others does not** — including on the
+  signed-out board, where you are the owner. A test of a lock for others blocking a
+  move needs a second account.
+- **A pasted picture lands under whatever is selected**, at its width, and is then
+  selected itself, so a test that pastes twice in a row stacks them; click empty board
+  first to paste where the pointer is.
+- **A board reopened is fitted to its contents**, so world coordinates read from the
+  inspector are screen pixels only before a reload (at 100% and the starting camera).
 - **An Answer person's board is read-only** (`board.readOnly`); their typing is the
   one exception, through `transactAnswer`. Anything new they should be able to change
   needs a place in `isOnlyAnswers` too, or the room refuses it.
