@@ -106,7 +106,7 @@ test.describe('presentation', () => {
     };
     await expect.poll(() => colourFraction(page, '--shape-1', centre)).toBeGreaterThan(0.9);
 
-    // Next frame: the empty one to the right.
+    // Next frame: the empty one below it, down the first column before the next.
     await page.keyboard.press('ArrowRight');
     await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
     await expect.poll(() => colourFraction(page, '--shape-1', centre)).toBeLessThan(0.01);

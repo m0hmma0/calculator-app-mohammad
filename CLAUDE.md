@@ -57,7 +57,8 @@ presenting, typing); the handlers call `actionFor(event, scope)`. Settings is a 
 
 Phase 13 in one paragraph: a frame's place in the presentation is `element.slide`, a
 fractional key (`framesInOrder`, `renumberFrame`, `slidePatches` in
-`src/workshop/presentation.ts`); numbered frames first, the rest in reading order.
+`src/workshop/presentation.ts`); numbered frames first, the rest in column order (`columnOrder`: down a column, then the
+next to the right; asked for on 2 November instead of rows).
 `FrameNumbers` draws the number badges (a select for editors). The frame on show
 (`src/workshop/onShow.ts` — presenting, or following a presenter) is drawn bare and
 clipped on a dark surround; embeds and vote dots are clipped to it too. While

@@ -157,7 +157,7 @@ export interface BoardElement {
   page?: string;
   /**
    * A frame's place in the presentation, as a fractional key. Frames without one come
-   * after those with one, in reading order — which is every frame on an older board.
+   * after those with one, in column order — which is every frame on an older board.
    */
   slide?: string;
   style: ElementStyle;

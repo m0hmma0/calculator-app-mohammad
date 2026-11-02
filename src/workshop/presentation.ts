@@ -20,29 +20,34 @@ export const usePresentation = create<PresentationStore>(() => ({
 }));
 
 /**
- * Frames in reading order: top to bottom in rows, left to right within a row. Frames
- * whose tops are within half the shorter one's height share a row, so a hand-placed
- * row that is a few pixels off still reads left to right.
+ * Frames in column order: top to bottom down a column, then the next column to the
+ * right, top to bottom again. Frames whose left edges are within half the narrower
+ * one's width share a column, so a hand-placed column that is a few pixels off still
+ * reads top to bottom. Frames side by side in a single row are each a column of
+ * their own, so a row still reads left to right.
  */
-function readingOrder(frames: readonly BoardElement[]): BoardElement[] {
-  const byTop = [...frames].sort((a, b) => a.y - b.y || a.x - b.x);
-  const rows: BoardElement[][] = [];
-  for (const frame of byTop) {
-    const row = rows.at(-1);
-    const anchor = row?.[0];
-    if (row && anchor && frame.y - anchor.y < Math.min(anchor.h, frame.h) / 2) row.push(frame);
-    else rows.push([frame]);
+function columnOrder(frames: readonly BoardElement[]): BoardElement[] {
+  const byLeft = [...frames].sort((a, b) => a.x - b.x || a.y - b.y);
+  const columns: BoardElement[][] = [];
+  for (const frame of byLeft) {
+    const column = columns.at(-1);
+    const anchor = column?.[0];
+    if (column && anchor && frame.x - anchor.x < Math.min(anchor.w, frame.w) / 2) {
+      column.push(frame);
+    } else {
+      columns.push([frame]);
+    }
   }
-  return rows.flatMap((row) => row.sort((a, b) => a.x - b.x));
+  return columns.flatMap((column) => column.sort((a, b) => a.y - b.y));
 }
 
 /**
  * The page's frames in presentation order: the ones given a number first, by it;
- * then any never numbered — every frame on an older board, and new ones — in reading
- * order. Two with the same key (a duplicated frame) also fall back to reading order.
+ * then any never numbered — every frame on an older board, and new ones — in column
+ * order. Two with the same key (a duplicated frame) also fall back to column order.
  */
 export function framesInOrder(elements: readonly BoardElement[]): BoardElement[] {
-  const reading = readingOrder(
+  const reading = columnOrder(
     elements.filter((element) => element.type === 'frame' && !element.hidden),
   );
   const place = new Map(reading.map((frame, index) => [frame.id, index]));

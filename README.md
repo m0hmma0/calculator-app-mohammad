@@ -138,8 +138,11 @@ board's open response carries its owner's size for others, `textSize`.
 
 Frames are slides. Each has a number before its title — a drop-down for anyone who can
 edit — and the presentation follows the numbers; frames never numbered (every frame on
-an older board, and new ones) come after, in reading order. The order is a fractional
-key on each frame (`slide`). Presenting shows the frame and nothing else, on a dark
+an older board, and new ones) come after, in column order: top to bottom down the
+leftmost column, then down the next column, and so on (frames side by side in one row
+are each a column, so a row still reads left to right). Choosing a number for one frame
+gives every frame on the page its number, so from then on the order stays as it is
+wherever the frames are moved. The order is a fractional key on each frame (`slide`). Presenting shows the frame and nothing else, on a dark
 surround, without its outline or title, for the presenter and for everyone following;
 the control pane keeps the tools, Insert, undo and the slide controls (along the bottom
 on a tall screen). A PDF's pages come in as numbered frames, each holding its page.
@@ -415,8 +418,8 @@ within it while presenting.
 - **Pages.** A board has pages along the bottom; each keeps its own content and its
   own camera. Elements carry a `page` field — absent means the first page, so every
   board from before pages still opens unchanged.
-- **Presentation.** Workshop → Present frames. Frames play in reading order (rows top
-  to bottom, left to right in a row); arrow keys, Space and Page Up/Down move, Escape
+- **Presentation.** Workshop → Present frames. Frames play in their numbers' order (see
+  "Presenting, frames and media" above: down each column, then the next); arrow keys, Space and Page Up/Down move, Escape
   leaves. Presenting is spotlighting: everyone else on the board follows, and each
   follower's screen fits the same frame.
 - **Timer and dot voting.** The timer takes any length in minutes and seconds and offers

@@ -190,6 +190,36 @@ test.describe('presenting', () => {
 });
 
 test.describe('numbered frames', () => {
+  test('are numbered down the first column, then down the next', async ({ page }) => {
+    // Four frames in two columns, drawn row by row.
+    for (const [x, y] of [
+      [80, 80],
+      [400, 80],
+      [80, 380],
+      [400, 380],
+    ] as const) {
+      await drag(page, 'KeyF', [x, y], [x + 240, y + 180]);
+    }
+    await page.keyboard.press('Escape');
+    const badges = page.locator('[data-testid^="frame-number-"]');
+    await expect(badges).toHaveCount(4);
+    const numbers = await badges.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const box = node.getBoundingClientRect();
+        const value = node.querySelector('select')?.value;
+        return { column: box.x < 300 ? 'left' : 'right', top: box.y < 300, value };
+      }),
+    );
+    const at = (column: string, top: boolean) =>
+      numbers.find((each) => each.column === column && each.top === top)?.value;
+    expect([at('left', true), at('left', false), at('right', true), at('right', false)]).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+    ]);
+  });
+
   // Checklist item 3 — the gate.
   test('a frame’s number is chosen from its drop-down, and the presentation follows', async ({
     page,

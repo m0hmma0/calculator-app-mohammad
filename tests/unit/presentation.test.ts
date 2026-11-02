@@ -6,14 +6,35 @@ const frame = (id: string, x: number, y: number, w = 200, h = 140): BoardElement
   createElement({ type: 'frame', box: { x, y, w, h }, z: 'a0', id });
 
 describe('presentation order', () => {
-  it('reads frames left to right, then top to bottom', () => {
+  it('reads frames down a column, then down the next column to the right', () => {
     const frames = [frame('c', 0, 400), frame('b', 300, 0), frame('a', 0, 0)];
-    expect(framesInOrder(frames).map((each) => each.id)).toEqual(['a', 'b', 'c']);
+    expect(framesInOrder(frames).map((each) => each.id)).toEqual(['a', 'c', 'b']);
   });
 
-  it('keeps a hand-placed row together even when it is a little uneven', () => {
-    const frames = [frame('right', 300, 0), frame('left', 0, 30), frame('below', 0, 300)];
-    expect(framesInOrder(frames).map((each) => each.id)).toEqual(['left', 'right', 'below']);
+  it('numbers a grid column by column', () => {
+    const grid = [
+      ['1', '4'],
+      ['2', '5'],
+      ['3', '6'],
+    ].flatMap((row, y) => row.map((id, x) => frame(id, x * 300, y * 200)));
+    expect(framesInOrder(grid.reverse()).map((each) => each.id)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+    ]);
+  });
+
+  it('keeps a hand-placed column together even when it is a little uneven', () => {
+    const frames = [frame('right', 300, 0), frame('below', 30, 300), frame('top', 0, 0)];
+    expect(framesInOrder(frames).map((each) => each.id)).toEqual(['top', 'below', 'right']);
+  });
+
+  it('still reads a single row left to right', () => {
+    const frames = [frame('c', 600, 20), frame('a', 0, 0), frame('b', 300, -10)];
+    expect(framesInOrder(frames).map((each) => each.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('skips hidden frames and everything that is not a frame', () => {
@@ -26,7 +47,7 @@ describe('presentation order', () => {
 });
 
 describe('numbered frames', () => {
-  it('puts numbered frames first, by number, then the rest in reading order', () => {
+  it('puts numbered frames first, by number, then the rest in column order', () => {
     const frames = [
       frame('a', 0, 0),
       { ...frame('b', 300, 0), slide: 'a2' },
@@ -44,7 +65,7 @@ describe('numbered frames', () => {
     expect(framesInOrder(keyed).map((each) => each.id)).toEqual(['c', 'a', 'b']);
   });
 
-  it('falls back to reading order for two frames with the same number', () => {
+  it('falls back to column order for two frames with the same number', () => {
     const frames = [
       { ...frame('right', 300, 0), slide: 'a0' },
       { ...frame('left', 0, 0), slide: 'a0' },
