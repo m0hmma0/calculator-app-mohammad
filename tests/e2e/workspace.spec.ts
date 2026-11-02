@@ -131,6 +131,41 @@ test.describe('opening a board', () => {
     await page.keyboard.press('Shift+Digit1');
     await expect(page.getByTestId('zoom-readout')).toHaveText(opened);
   });
+
+  // Phase 15, checklist item 1.
+  test('closed and opened again, undo walks back the steps from before', async ({ page }) => {
+    const layers = page.getByTestId('layers').locator('li');
+    await signIn(page, newAccount('undolater'));
+    await createBoard(page);
+    await drawRectangle(page, [300, 300], [400, 380]);
+    await drawRectangle(page, [600, 300], [700, 380]);
+    await expect(layers).toHaveCount(2);
+    // Moved, so there is a step that is not a shape being made.
+    await page.keyboard.press('ArrowDown');
+    const moved = await page.getByTestId('geo-y').innerText();
+
+    await page.getByTestId('back-to-boards').click();
+    await boardCards(page).first().getByRole('link').first().click();
+    await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    await expect(layers).toHaveCount(2);
+    await expect(page.getByTestId('undo')).toBeEnabled();
+
+    // The list puts the newest first: the one that was moved.
+    await layers.first().click();
+    await expect(page.getByTestId('geo-y')).toHaveText(moved);
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(page.getByTestId('geo-y')).toHaveText(String(Number(moved) - 1));
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(layers).toHaveCount(1);
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(layers).toHaveCount(0);
+    await expect(page.getByTestId('undo')).toBeDisabled();
+
+    // What was undone reached the board's room, so a reload shows it gone.
+    await page.reload();
+    await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
+    await expect(layers).toHaveCount(0);
+  });
 });
 
 test.describe('folders and boards', () => {

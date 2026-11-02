@@ -17,6 +17,7 @@ import {
   type BoardDoc,
 } from '@/doc/board';
 import { bindBoard } from '@/doc/binding';
+import { HISTORY_ORIGIN, trackHistory, type History } from '@/doc/history';
 import {
   formatYText,
   pagesOf,
@@ -56,6 +57,7 @@ import { keyBetween, keysBetween, reorder, type ReorderCommand } from '@/model/z
 import { generateDemoElements } from '@/scene/demoElements';
 import { lockedForMe, mayLockForOthers } from '@/sharing/boardAccess';
 import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
+import { useWorkspace } from './workspaceStore';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
 
 export type ContentTool =
@@ -388,14 +390,20 @@ export const useBoardStore = create<BoardState>((set, get) => {
     },
 
     // Someone who answers undoes their own typing: the only changes they have made.
+    // This visit's steps come first; then the ones written down on earlier visits.
     undo: () => {
       get().endEditing();
-      if (!board.readOnly || board.answers) board.undoManager.undo();
+      if (board.readOnly && !board.answers) return;
+      if (board.undoManager.canUndo()) board.undoManager.undo();
+      else history?.undo();
     },
 
+    // An earlier visit's step undone just now is the newest thing undone, so it comes
+    // back first.
     redo: () => {
       get().endEditing();
-      if (!board.readOnly || board.answers) board.undoManager.redo();
+      if (board.readOnly && !board.answers) return;
+      if (!history?.redo()) board.undoManager.redo();
     },
 
     /**
@@ -1050,6 +1058,19 @@ export type { ElementType };
  */
 let binding: ReturnType<typeof bindBoard> | null = null;
 
+/** The open board's undo, written down so that it outlives the visit. */
+let history: History | null = null;
+
+/**
+ * Where the open board's undo is kept in this browser: per board and per person, so
+ * someone else signing in here does not inherit it. The signed-out board has one.
+ */
+function historyKey(): string | null {
+  if (!canPersist) return null;
+  if (openBoardId === null) return 'local';
+  return `${useWorkspace.getState().account?.uid ?? 'guest'}/${openBoardId}`;
+}
+
 /** The server-side board being edited, or null for the signed-out local board. */
 let openBoardId: string | null = null;
 
@@ -1095,27 +1116,43 @@ export function onDocumentAttached(listener: (doc: BoardDoc) => void): () => voi
 
 function attachDocument(doc: BoardDoc): void {
   binding?.destroy();
+  history?.destroy();
   stopWatchingWork?.();
 
   // Once the person has started working on the board, a copy arriving later (the
   // room's, a moment after opening) leaves their view where it is.
   const onWork = (transaction: Transaction) => {
-    if (transaction.origin === LOCAL_ORIGIN && transaction.changed.size > 0) openFit.from = null;
+    const own = transaction.origin === LOCAL_ORIGIN || transaction.origin === HISTORY_ORIGIN;
+    if (own && transaction.changed.size > 0) openFit.from = null;
   };
   doc.doc.on('afterTransaction', onWork);
   stopWatchingWork = () => doc.doc.off('afterTransaction', onWork);
 
+  const syncUndoState = () =>
+    useBoardStore.getState().setUndoState({
+      canUndo: doc.undoManager.canUndo() || (history?.canUndo() ?? false),
+      canRedo: doc.undoManager.canRedo() || (history?.canRedo() ?? false),
+    });
+
+  // Before the binding, so it hears every change; before the listeners below, so a new
+  // change has already dropped the older steps it undid when they ask.
+  history = trackHistory(doc, historyKey(), syncUndoState);
+
   // The binding sees every page; the store, and so everything drawn and picked, only
   // the one in view.
-  binding = bindBoard(doc, (all) => {
-    const elements = all.filter((element) => pageOf(element) === doc.currentPage);
-    useBoardStore.setState((state) => ({
-      elements,
-      renderVersion: state.renderVersion + 1,
-      // Drop anything from the selection that no longer exists.
-      selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
-    }));
-  });
+  binding = bindBoard(
+    doc,
+    (all) => {
+      const elements = all.filter((element) => pageOf(element) === doc.currentPage);
+      useBoardStore.setState((state) => ({
+        elements,
+        renderVersion: state.renderVersion + 1,
+        // Drop anything from the selection that no longer exists.
+        selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
+      }));
+    },
+    history.noteChanges,
+  );
 
   // The page list is shared; if the page in view is deleted by someone, move off it.
   const syncPages = () => {
@@ -1127,11 +1164,6 @@ function attachDocument(doc: BoardDoc): void {
   };
   pagesOf(doc.doc).observe(syncPages);
   syncPages();
-
-  const syncUndoState = () =>
-    useBoardStore
-      .getState()
-      .setUndoState({ canUndo: doc.undoManager.canUndo(), canRedo: doc.undoManager.canRedo() });
 
   doc.undoManager.on('stack-item-added', syncUndoState);
   doc.undoManager.on('stack-item-popped', syncUndoState);

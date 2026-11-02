@@ -29,7 +29,7 @@ Built in phases. Each phase ends with a working, checkable deliverable.
 | **14**   | Classroom: placeholders, Answer role, locks  | built       |
 | **14.1** | Fixes: text boxes, eraser, side panel        | built       |
 | **14.2** | Pictures, locks and panning                  | built       |
-| 15       | Undo across sessions                         | not started |
+| **15**   | Undo across sessions                         | built       |
 | 16       | Dashboard organisation                       | not started |
 | 17       | Keyboard use and visible focus               | not started |
 | 18       | Hardening, load testing, launch              | not started |
@@ -227,6 +227,37 @@ state. Each element is its own map, so two people editing different fields of th
 same shape both keep their change. Undo is scoped to this tab's origin, which is what
 makes `⌘Z` walk back your own edits and leave everyone else's alone — the same
 mechanism that carries into real-time collaboration in Phase 7.
+
+## Undo after closing a board (Phase 15)
+
+Your last 100 steps on a board survive closing it: open it again — after a reload, from
+the dashboard, the next day — and undo carries on from where it was. They are kept in
+this browser (IndexedDB, `src/doc/history.ts`), per board and per account, so they do
+not follow you to another device or browser, and someone else signing in here does not
+get yours.
+
+Within a visit undo is still Yjs's own. Its steps name pieces of the document by their
+place in its history, which means nothing once the tab is gone, so each step is also
+written down as what it did: every element it touched, as it was before and after
+(only the fields that changed; all of it for something made or deleted), and the page
+list if that changed. The binding, which already knows which elements a change
+touched, reports them before and after; the undo manager's events say which step the
+change went into. When the board opens again, the steps written down earlier sit
+beneath the new visit's: undo takes this visit's first, then carries on into them, and
+redo brings them back in the same order.
+
+A step from an earlier visit puts back only what is still as it left it: a field
+someone else has changed since stays as they left it, a locked item stays where it is
+(unless the step is the lock), something deleted comes back only if it is missing, and
+the page list only if nobody has changed it. Those changes go to the board's room like
+any other. Someone who answers gets their own typing back the same way, and nothing
+else. Steps are written a second after the last change; a page that closes before
+then puts them in `localStorage`, which saves at once, and the next visit takes them
+from there.
+
+One thing to know: pictures nobody uses are removed when a trash is emptied, so a
+picture deleted, then brought back by undo after a trash was emptied, can come back
+without its image.
 
 Two things deliberately stay **out** of the shared document:
 

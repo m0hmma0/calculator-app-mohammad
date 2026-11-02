@@ -12,7 +12,8 @@ back on. **Phase 8 (sharing, permissions, comments)**, **Phase 9 (workshop tools
 rich content)**, **Phase 10 (quick fixes and the text box)**, **Phase 11 (one
 control pane, and who sees what)**, **Phase 12 (settings and shortcuts)**, **Phase 13
 (presenting, frames, celebrations and media)**, **Phase 14 (placeholders, the Answer
-role and locks)**, **14.1 (fixes)** and **14.2 (pictures, locks, panning)** are built, tested and deployed at
+role and locks)**, **14.1 (fixes)**, **14.2 (pictures, locks, panning)** and **Phase 15
+(undo after closing a board)** are built, tested and deployed at
 <https://sabboura.mh-hamad.workers.dev> (migrations 0001–0006 applied remotely) but not
 yet checked by the user.
 
@@ -29,7 +30,7 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1 and 14.2 are built**; the next phase is **15**. Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2 and 15 are built**; the next phase is **16**. Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -107,6 +108,19 @@ it), `drawCropping` in `renderOverlay.ts` shows the ghost and crop marks. Edge p
 an rAF loop in `useCanvasInteraction.ts` (`panAtEdge`, 40 px zone, up to 18 px a
 frame) that runs only during a move drag. No migration: `crop` and `lockMode` are
 document fields.
+
+Phase 15 in one paragraph: `src/doc/history.ts` writes each undo step down as what it
+did — per element touched, before and after (changed fields only; whole element for
+made or deleted, null for "absent"), plus the page list — so steps outlive the tab. The
+binding's third argument (`onTouched`) reports each transaction's elements before and
+after; `trackHistory` keeps them as `pending` until the undo manager's
+`stack-item-added`/`-updated` names the stack item, and stores them in its `meta`. The
+last 100 (`HISTORY_LIMIT`) go to IndexedDB (`sabboura-history`, key `uid/boardId`,
+`guest/…`, or `local`) a second after changes, to `localStorage` on `pagehide` if not yet
+confirmed. The store's `undo` uses Yjs's undo manager while it has steps, then
+`history.undo()`; `redo` tries `history.redo()` first. Replayed steps use
+`HISTORY_ORIGIN` (not tracked, but saved and sent to the room) and change a field only
+where it still reads as the step left it. No migration; nothing on the server.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
@@ -306,6 +320,12 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **A pasted picture lands under whatever is selected**, at its width, and is then
   selected itself, so a test that pastes twice in a row stacks them; click empty board
   first to paste where the pointer is.
+- **Undo outlives the board now** (Phase 15). A test that reloads and expects a clean
+  undo stack gets the earlier visit's steps; the signed-out board's history is
+  `local` in IndexedDB, and a fresh Playwright context starts without it.
+- **Closing a page cuts off an IndexedDB write started as it closes** — proven again
+  in Phase 15: without the `localStorage` copy on `pagehide`, a reload straight after a
+  change lost the last steps. Anything else that must survive a close needs the same.
 - **A board reopened is fitted to its contents**, so world coordinates read from the
   inspector are screen pixels only before a reload (at 100% and the starting camera).
 - **An Answer person's board is read-only** (`board.readOnly`); their typing is the

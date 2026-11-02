@@ -45,20 +45,28 @@ export interface BindingHandle {
   destroy: () => void;
 }
 
+/** One element a transaction touched: its id, as it was, and as it is now. */
+export type ElementTouch = [ElementId, BoardElement | undefined, BoardElement | undefined];
+
 /**
  * Materialises only the elements a transaction actually touched. Converting all
- * 5,000 on every frame of a drag would cost more than drawing them.
+ * 5,000 on every frame of a drag would cost more than drawing them. `onTouched` hears
+ * each transaction's elements before and after, which is how undo is written down.
  */
 export function bindBoard(
   board: BoardDoc,
   onChange: (elements: BoardElement[]) => void,
+  onTouched?: (transaction: Y.Transaction, touched: ElementTouch[]) => void,
 ): BindingHandle {
   const cache = new Map<ElementId, BoardElement>();
 
+  let touched: ElementTouch[] | null = null;
   const materialise = (id: ElementId) => {
+    const before = cache.get(id);
     const map = board.elements.get(id);
     if (map) cache.set(id, fromYElement(map));
     else cache.delete(id);
+    touched?.push([id, before, cache.get(id)]);
   };
 
   const emit = () => onChange(deriveView([...cache.values()]));
@@ -70,7 +78,8 @@ export function bindBoard(
   };
 
   // Yjs types the deep-observe callback loosely; the shape used here is stable.
-  const onDeep = (events: Array<Y.YEvent<Y.AbstractType<unknown>>>) => {
+  const onDeep = (events: Array<Y.YEvent<Y.AbstractType<unknown>>>, transaction: Y.Transaction) => {
+    touched = onTouched ? [] : null;
     for (const event of events) {
       if (event.path.length === 0) {
         // Elements added to or removed from the board.
@@ -81,6 +90,8 @@ export function bindBoard(
       const id = event.path[0];
       if (typeof id === 'string') materialise(id);
     }
+    if (touched && touched.length > 0) onTouched?.(transaction, touched);
+    touched = null;
     emit();
   };
 
