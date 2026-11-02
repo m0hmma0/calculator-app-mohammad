@@ -127,6 +127,16 @@ export function ToolOptions({ inPanel = false }: { inPanel?: boolean }) {
           <button
             type="button"
             className={styles.mode}
+            aria-pressed={eraserMode === 'drawings'}
+            title="Erases pen and highlighter strokes only, whole; everything else stays"
+            data-testid="eraser-drawings"
+            onClick={() => setEraserMode('drawings')}
+          >
+            drawings
+          </button>
+          <button
+            type="button"
+            className={styles.mode}
             aria-pressed={eraserMode === 'object'}
             data-testid="eraser-object"
             onClick={() => setEraserMode('object')}

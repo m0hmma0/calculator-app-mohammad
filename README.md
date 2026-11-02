@@ -165,7 +165,12 @@ emptied one-line box stays one line — the break a browser leaves behind for th
 is no longer read as a new line.
 
 The eraser rubs things out of the board itself, not just the screen, so they stay gone
-when drawing carries on. The side panel sits above everything laid over the board, and
+when drawing carries on. It has three modes, in this order: **drawings** (the default)
+takes every pen and highlighter stroke it touches, whole, and nothing else — a shape or
+text box under the ink, or drawn over it, stays; **whole object** takes whatever is on
+top under it; **part of a stroke** cuts ink where it passes (and takes any other object
+it touches). Pictures are never erased. Line art brought in from an SVG file is stored
+as strokes, so drawings mode takes it too. The side panel sits above everything laid over the board, and
 shows only when switched on and there is something for it: a selection, the pen's or
 highlighter's settings (now at its top), or the object list. Duplicates land directly
 below the original. Strikethrough joins bold, italic and underline (Ctrl/⌘ Shift X while

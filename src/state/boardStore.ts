@@ -73,7 +73,11 @@ export type ContentTool =
 
 export type Tool = 'select' | 'hand' | ShapeType | ContentTool;
 
-export type EraserMode = 'object' | 'stroke';
+/**
+ * What the eraser takes: whole pen and highlighter strokes and nothing else (the
+ * default), the whole object under it, or the part of a stroke it passes over.
+ */
+export type EraserMode = 'drawings' | 'object' | 'stroke';
 
 export const CONTENT_TOOLS: readonly ContentTool[] = [
   'pen',
@@ -427,7 +431,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     contextMenu: null,
     stats: { fps: 0, renderMs: 0, visible: 0 },
 
-    eraserMode: 'object',
+    eraserMode: 'drawings',
     inkWidth: 6,
     inkColor: 'var(--shape-1)',
     markerWidth: 20,

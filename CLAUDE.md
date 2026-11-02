@@ -320,6 +320,9 @@ Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 - **A pasted picture lands under whatever is selected**, at its width, and is then
   selected itself, so a test that pastes twice in a row stacks them; click empty board
   first to paste where the pointer is.
+- **The eraser starts in drawings mode** (`eraserMode: 'drawings'`): only `path`
+  elements (pen, highlighter, and SVG-imported line art), whole. A test that erases a
+  shape or a text box picks `eraser-object` or `eraser-stroke` first.
 - **Undo outlives the board now** (Phase 15). A test that reloads and expects a clean
   undo stack gets the earlier visit's steps; the signed-out board's history is
   `local` in IndexedDB, and a fresh Playwright context starts without it.

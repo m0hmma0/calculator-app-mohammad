@@ -149,11 +149,56 @@ test.describe('freehand ink', () => {
 
 // Checklist item 3.
 test.describe('eraser', () => {
+  test('drawings, first and on from the start, takes pen and highlighter strokes and nothing else', async ({
+    page,
+  }) => {
+    const drag = async (from: [number, number], to: [number, number]) => {
+      await page.mouse.move(from[0], from[1]);
+      await page.mouse.down();
+      await page.mouse.move(to[0], to[1], { steps: 8 });
+      await page.mouse.up();
+    };
+    // A rectangle and a text box, ink across both — pen over the one, highlighter over
+    // the other — and a second rectangle drawn on top of the ink.
+    await page.keyboard.press('KeyR');
+    await drag([300, 300], [500, 420]);
+    await page.keyboard.press('KeyT');
+    await drag([300, 460], [560, 500]);
+    await page.keyboard.type('Words');
+    await page.keyboard.press('Escape');
+    await drawStroke(page, [
+      [250, 360],
+      [450, 360],
+      [650, 360],
+    ]);
+    await page.keyboard.press('KeyI');
+    await drag([250, 480], [650, 480]);
+    await page.keyboard.press('KeyR');
+    await drag([560, 330], [640, 390]);
+    expect((await layerNames(page)).sort()).toEqual(['path', 'path', 'rect', 'rect', 'text']);
+
+    await page.keyboard.press('KeyE');
+    const drawings = page.getByTestId('eraser-drawings');
+    await expect(drawings).toHaveAttribute('aria-pressed', 'true');
+    expect(await drawings.evaluate((node) => node.parentElement?.firstElementChild === node)).toBe(
+      true,
+    );
+    await expect(page.getByTestId('eraser-object')).toHaveAttribute('aria-pressed', 'false');
+
+    // Rubbed through everything, and over the rectangle that sits on the ink.
+    await drag([400, 290], [400, 520]);
+    await drag([600, 320], [600, 400]);
+    await expect
+      .poll(async () => (await layerNames(page)).sort())
+      .toEqual(['rect', 'rect', 'text']);
+  });
+
   test('object mode removes the whole stroke', async ({ page }) => {
     await drawStroke(page, arc(300, 400));
     expect(await layerNames(page)).toHaveLength(1);
 
     await page.keyboard.press('KeyE');
+    await page.getByTestId('eraser-object').click();
     await page.mouse.move(300, 400);
     await page.mouse.down();
     await page.mouse.move(420, 340, { steps: 6 });

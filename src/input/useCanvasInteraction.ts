@@ -412,6 +412,20 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       // Pictures are never erased: rubbing out a mark on a photo must not delete the photo.
       const erasable = store.elements.filter((element) => element.type !== 'image');
 
+      // Drawings: every pen or highlighter stroke the eraser touches, whole, and nothing
+      // else — not a shape or a text box under the ink, nor one drawn over it.
+      if (store.eraserMode === 'drawings') {
+        const strokes = erasable.filter(
+          (element) =>
+            element.type === 'path' &&
+            !element.hidden &&
+            !lockedForMe(element) &&
+            hitTestElement(element, point, radius),
+        );
+        if (strokes.length > 0) store.removeElements(strokes.map((element) => element.id));
+        return;
+      }
+
       if (store.eraserMode === 'object') {
         const target = elementAt(
           erasable.filter((element) => !lockedForMe(element)),
