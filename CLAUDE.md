@@ -26,7 +26,10 @@ eraser, the side panel's layering and toggle, duplicates below, strikethrough, t
 shortcuts, boards shared for answering by default) and **14.2** (paste to fit the
 selection, cropping, the old lock plus "lock for others", panning while dragging). Phase
 15 now holds only undo that survives closing a board, and Phase 17 only keyboard use of
-the canvas and visible focus. **14.1 and 14.2 are built**; the next phase is **15**. Parked by the user: student
+the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
+17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
+work) and focus rings off the board (the board's 62 controls already show one); 18 no
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1 and 14.2 are built**; the next phase is **15**. Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and

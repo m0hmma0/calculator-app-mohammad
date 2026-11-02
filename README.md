@@ -38,6 +38,9 @@ Phases 10–16 were added from a list of requests after Phase 9, and 14.1 and 14
 list after Phase 14; the original Phases 10 and 11 are now 17 and 18, and come last so
 that they cover the finished layout and roles. Phase 15 is now only undo that survives
 closing a board, and 17 only keyboard use and visible focus; the rest of both is parked.
+Work already done was taken out of 17 and 18 on 2 November: moving and deleting with the
+keys, the board's focus rings, the end-to-end suite in CI, smooth panning at 5,000
+shapes, and the run and deploy instructions.
 
 ## Getting started
 
