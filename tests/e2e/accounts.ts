@@ -31,5 +31,9 @@ export const boardCards = (page: Page) => page.locator('[data-testid^="board-brd
 export async function createBoard(page: Page) {
   await page.getByTestId('new-board').click();
   await expect(page.getByTestId('board-canvas')).toBeVisible();
+  // The canvas shows a moment before its keys and pointer are listened to; a key
+  // pressed in between (R, then a drag) is lost, and the drag selects nothing instead
+  // of drawing. The room connects later than both are attached.
+  await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
   return new URL(page.url()).pathname.replace('/b/', '');
 }
