@@ -69,7 +69,13 @@ presenting, `BoardControls` shows only the slide controls, tools, Insert and ful
 screen. Celebrations carry `level` and `variant` (`src/fun/effects.ts`); several play at
 once. Media is an embed of kind `media` (a file: `fileId` when stored, `local-media:`
 on the signed-out board) or `player` (Vimeo, SoundCloud, Spotify); stored media counts
-in `fileIdsInDoc` like images, and `GET /api/files` answers range requests.
+in `fileIdsInDoc` like images, and `GET /api/files` answers range requests. Since 3
+November files are always-live players (`src/ui/MediaPlayers.tsx`: `SoundCard` with a
+waveform from `embed.peaks`, `VideoCard` with its own bar), laid out in board units and
+scaled by the layer; other sites' players start on one click (`startPlayer`, the
+`started` list in `embedStore.ts`) and stay. Their controls carry `data-hud`, which is
+what lets a viewer or a locked item play: without it the board's pan or select takes
+the press (a test as a viewer catches that; one as the owner does not).
 
 Phase 14 in one paragraph: a placeholder is a text box with `element.placeholder` (a
 hint; `isPlaceholder`), drawn faint while empty and kept when emptied. It is placed
@@ -312,6 +318,10 @@ wrangler dev exited`), so only the tests caught at that moment fail and CI retri
   `data-wheel-pans` (the text box being typed in).
 - **A played video holds the keyboard** (the iframe has focus); a press on the board
   blurs it. Tests focus `embed-player` to reproduce that.
+- **A media card lets the pointer through except at its controls**, so Playwright's
+  `locator.click()` on its title waits forever ("does not receive pointer events"); a
+  test that presses the card itself uses `page.mouse.click` at the spot. Its controls
+  are `media-play`, `media-wave`, `media-seek`, `media-toggle`, `media-fullscreen`.
 - **Ghost windows**: the room drops a socket that has not pinged for `PEER_STALE_MS`
   (3 minutes; 45 seconds on the test backend), and a page's reconnection replaces its
   own earlier socket (`tab` in the handshake). The tests route the WebSocket through

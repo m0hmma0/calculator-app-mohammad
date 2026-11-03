@@ -7,7 +7,9 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import * as Y from 'yjs';
+import { createHash } from 'node:crypto';
 import { API, createBoard, newAccount, signIn, tokenFor } from './accounts';
+import { toneWav } from './mediaFixtures';
 
 /**
  * Phase 14 with other people, on the real Worker and the board's real room: the
@@ -295,5 +297,46 @@ test.describe('locks', () => {
     await expect(helper.page.getByTestId('toggle-lock')).toHaveText('lock');
 
     await close(owner.context, helper.context);
+  });
+});
+
+test.describe('sounds and videos', () => {
+  test('someone who can only look plays a sound, locked as it is', async ({ browser }) => {
+    const owner = await person(browser, 'mediaowner');
+    const boardId = await createBoard(owner.page);
+    const sound = Buffer.concat([toneWav(3), Buffer.from(owner.account.uid)]);
+    await owner.page.getByTestId('insert-menu').click();
+    await owner.page.getByTestId('insert-import').click();
+    await owner.page
+      .getByTestId('import-file')
+      .setInputFiles({ name: 'Listen.wav', mimeType: 'audio/wav', buffer: sound });
+    await expect(layers(owner.page)).toHaveCount(1);
+    // Stored, so the viewer can play it from the server.
+    const hash = createHash('sha256').update(sound).digest('hex');
+    await expect
+      .poll(async () => (await fetch(`${API}/api/files/${hash}`)).status, { timeout: 20_000 })
+      .toBe(200);
+    // Locked for everyone.
+    await owner.page.keyboard.press('ControlOrMeta+KeyA');
+    await owner.page.keyboard.press('ControlOrMeta+Shift+KeyL');
+    await expect(owner.page.getByTestId('layer-locked')).toHaveCount(1);
+
+    const viewer = await person(browser, 'mediaviewer');
+    await shareWith(owner.page, viewer.account, 'viewer');
+    await openAs(viewer.page, boardId);
+    const card = viewer.page.locator('[data-testid="embed-media"][data-media="audio"]');
+    await card.getByTestId('media-play').click();
+    const audio = viewer.page.locator('audio[data-testid="embed-player"]');
+    await expect
+      .poll(() => audio.evaluate((node: HTMLMediaElement) => !node.paused && node.currentTime > 0))
+      .toBe(true);
+    // And seeks, too: the waveform is theirs to use.
+    const wave = (await card.getByTestId('media-wave').boundingBox())!;
+    await viewer.page.mouse.click(wave.x + wave.width * 0.8, wave.y + wave.height / 2);
+    await expect
+      .poll(() => audio.evaluate((node: HTMLMediaElement) => node.currentTime))
+      .toBeGreaterThanOrEqual(2.3);
+
+    await close(owner.context, viewer.context);
   });
 });

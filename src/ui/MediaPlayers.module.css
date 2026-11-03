@@ -1,0 +1,324 @@
+/*
+ * Players laid out in board units and scaled with the board (the transform comes from
+ * the layer). Only the controls take the pointer; the rest of each card lets presses
+ * through to the board, so the card is selected and moved like anything else.
+ */
+
+.sound,
+.video {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+
+.sound[data-selected],
+.video[data-selected] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ------------------------------ a sound ------------------------------ */
+
+.sound {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  color: var(--text);
+}
+
+.round {
+  pointer-events: auto;
+  flex: none;
+  align-self: flex-start;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ff5500;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(255 85 0 / 0.35);
+}
+
+.round svg {
+  width: 22px;
+  height: 22px;
+}
+
+.round:hover {
+  background: #f04f00;
+}
+
+.round:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.from {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wave {
+  pointer-events: auto;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 26px;
+  cursor: pointer;
+  outline-offset: 2px;
+}
+
+.wave svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rest {
+  fill: var(--text-muted);
+  opacity: 0.55;
+}
+
+.ahead {
+  fill: #ffb48f;
+}
+
+.played {
+  fill: #ff5500;
+}
+
+/* Where a click would play from: a line, and the time there above it. */
+.cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid #ff5500;
+  pointer-events: none;
+}
+
+.cursor span {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  transform: translate(-50%, -2px);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #ff5500;
+  color: #fff;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.time {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.72);
+  color: #fff;
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.length {
+  left: auto;
+  right: 0;
+  background: rgb(0 0 0 / 0.45);
+}
+
+/* ------------------------------ a video ------------------------------ */
+
+.video {
+  background: #0f0f12;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.bigPlay {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(15 15 18 / 0.6);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.85);
+}
+
+.bigPlay svg {
+  width: 30px;
+  height: 30px;
+  margin-left: 3px;
+}
+
+.bigPlay:hover {
+  background: rgb(15 15 18 / 0.8);
+}
+
+.bar {
+  pointer-events: auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0));
+  color: #fff;
+  transition: opacity 160ms ease;
+}
+
+/* Playing, the bar keeps out of the picture until the pointer comes to it. */
+.video[data-playing] .bar {
+  opacity: 0;
+}
+
+.video[data-playing] .bar:hover,
+.video[data-playing] .bar:focus-within {
+  opacity: 1;
+}
+
+.barButton {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.barButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.clock {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.seek {
+  position: relative;
+  flex: 1 1 auto;
+  height: 18px;
+  cursor: pointer;
+}
+
+.track,
+.trackHover,
+.trackPlayed {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+}
+
+.track {
+  right: 0;
+  background: rgb(255 255 255 / 0.3);
+}
+
+.trackHover {
+  background: rgb(255 255 255 / 0.5);
+}
+
+.trackPlayed {
+  background: #fff;
+}
+
+.seekTime {
+  position: absolute;
+  bottom: 100%;
+  transform: translateX(-50%);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.8);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* The upload under way, along the foot of either card. */
+.upload {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgb(127 127 127 / 0.35);
+}
+
+.upload span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.upload[data-rejected] span {
+  background: #d8375c;
+}

@@ -1,9 +1,12 @@
 import type { Page } from '@playwright/test';
 
-/** A second of a 440 Hz tone as a WAV file: 8 kHz, 16-bit mono. */
-export function toneWav(): Buffer {
+/**
+ * A 440 Hz tone as a WAV file (8 kHz, 16-bit mono): a second of it, or longer. A
+ * longer one swells and fades, so its waveform has a shape.
+ */
+export function toneWav(seconds = 1): Buffer {
   const rate = 8000;
-  const samples = rate;
+  const samples = rate * seconds;
   const buffer = Buffer.alloc(44 + samples * 2);
   buffer.write('RIFF', 0);
   buffer.writeUInt32LE(36 + samples * 2, 4);
@@ -18,7 +21,8 @@ export function toneWav(): Buffer {
   buffer.write('data', 36);
   buffer.writeUInt32LE(samples * 2, 40);
   for (let index = 0; index < samples; index += 1) {
-    const value = Math.round(Math.sin((index / rate) * 440 * Math.PI * 2) * 8000);
+    const swell = seconds > 1 ? 0.2 + 0.8 * Math.abs(Math.sin((index / rate) * 1.3)) : 1;
+    const value = Math.round(Math.sin((index / rate) * 440 * Math.PI * 2) * 8000 * swell);
     buffer.writeInt16LE(value, 44 + index * 2);
   }
   return buffer;

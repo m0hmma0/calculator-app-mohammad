@@ -3,23 +3,23 @@ import { embedImageHeight } from '@/canvas/renderContent';
 import { boardToScreen } from '@/canvas/viewport';
 import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
-import { useMediaSrc } from '@/media/mediaFiles';
-import type { EmbedData } from '@/model/element';
-import { useEmbeds } from '@/state/embedStore';
+import { startPlayer, useEmbeds } from '@/state/embedStore';
+import { SoundCard, VideoCard } from './MediaPlayers';
 import { useFrameOnShow } from '@/workshop/onShow';
 import styles from './EmbedLayer.module.css';
 
 /**
- * What a canvas cannot hold: a video that plays, and pictures from other sites. Each
- * sits over its card, following it as the board pans, zooms and rotates. Until a
- * video is played the layer lets every click through, so an embed is moved and
- * selected like anything else.
+ * What a canvas cannot hold: videos and sounds that play, and pictures from other
+ * sites. Each sits over its card, following it as the board pans, zooms and rotates.
+ * Only the players' own controls take the pointer; everything else here lets it
+ * through to the board, so an embed is selected and moved like anything else.
  */
 export function EmbedLayer() {
   const elements = useBoardStore((state) => state.elements);
   const viewport = useBoardStore((state) => state.viewport);
+  const selection = useBoardStore((state) => state.selection);
   const preview = useHistory((state) => state.preview);
-  const playing = useEmbeds((state) => state.playing);
+  const started = useEmbeds((state) => state.started);
   const onShow = useFrameOnShow();
 
   const embeds = (preview ?? elements).filter(
@@ -36,7 +36,7 @@ export function EmbedLayer() {
   }
 
   return (
-    <div className={styles.layer} style={{ clipPath }} aria-hidden={playing ? undefined : true}>
+    <div className={styles.layer} style={{ clipPath }}>
       {embeds.map((element) => {
         const embed = element.embed!;
         const topLeft = boardToScreen(viewport, { x: element.x, y: element.y });
@@ -51,12 +51,27 @@ export function EmbedLayer() {
           opacity: element.opacity,
           borderRadius: element.style.radius * viewport.zoom,
         };
+        // Laid out in board units, then scaled (and turned about its middle) with the board.
+        const half = { x: element.w / 2, y: element.h / 2 };
+        const scaled: CSSProperties = {
+          left: topLeft.x,
+          top: topLeft.y,
+          width: element.w,
+          height: element.h,
+          opacity: element.opacity,
+          transform:
+            `scale(${viewport.zoom})` +
+            (element.rotation
+              ? ` translate(${half.x}px, ${half.y}px) rotate(${element.rotation}rad) translate(${-half.x}px, ${-half.y}px)`
+              : ''),
+        };
+        const selected = selection.includes(element.id);
+        const isStarted = started.includes(element.id);
 
         if (embed.kind === 'video' && embed.videoId) {
-          const isPlaying = playing === element.id;
           return (
             <div key={element.id} className={styles.embed} style={box} data-testid="embed-video">
-              {isPlaying ? (
+              {isStarted ? (
                 <>
                   <Grip />
                   <iframe
@@ -67,7 +82,6 @@ export function EmbedLayer() {
                     allowFullScreen
                     data-testid="embed-player"
                   />
-                  <StopButton label="Stop the video" />
                 </>
               ) : (
                 <>
@@ -78,10 +92,11 @@ export function EmbedLayer() {
                     draggable={false}
                     loading="lazy"
                   />
-                  <span className={styles.play} aria-hidden="true">
-                    ▶
-                  </span>
-                  <span className={styles.hint}>Double-click to play</span>
+                  <PlayButton
+                    className={styles.play}
+                    label={`Play ${embed.title ?? 'the video'}`}
+                    onPlay={() => startPlayer(element.id)}
+                  />
                 </>
               )}
             </div>
@@ -89,29 +104,46 @@ export function EmbedLayer() {
         }
 
         if (embed.kind === 'media') {
-          return (
-            <MediaEmbed key={element.id} embed={embed} box={box} playing={playing === element.id} />
+          return embed.media === 'video' ? (
+            <VideoCard key={element.id} embed={embed} style={scaled} selected={selected} />
+          ) : (
+            <SoundCard key={element.id} embed={embed} style={scaled} selected={selected} />
           );
         }
 
-        if (embed.kind === 'player' && embed.player && playing === element.id) {
+        if (embed.kind === 'player' && embed.player) {
+          if (isStarted) {
+            return (
+              <div
+                key={element.id}
+                className={styles.embed}
+                style={box}
+                data-testid="embed-site-player"
+              >
+                <Grip />
+                <iframe
+                  className={styles.frame}
+                  src={autoplaying(embed.player)}
+                  title={embed.title ?? embed.site ?? 'Player'}
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
+                  allowFullScreen
+                  data-testid="embed-player"
+                />
+              </div>
+            );
+          }
+          // Over the round button the board draws on the card (renderContent's
+          // drawPlayable), in the same place.
+          const r = Math.min(element.h * 0.28, 30);
+          const top = Math.min(element.h / 2, 16 + r) - r;
           return (
-            <div
-              key={element.id}
-              className={styles.embed}
-              style={box}
-              data-testid="embed-site-player"
-            >
-              <Grip />
-              <iframe
-                className={styles.frame}
-                src={embed.player}
-                title={embed.title ?? embed.site ?? 'Player'}
-                allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
-                allowFullScreen
-                data-testid="embed-player"
+            <div key={element.id} className={styles.sitePlayer} style={scaled}>
+              <PlayButton
+                className={styles.siteButton}
+                style={{ left: 16, top, width: r * 2, height: r * 2 }}
+                label={`Play on ${embed.site ?? 'the site'}`}
+                onPlay={() => startPlayer(element.id)}
               />
-              <StopButton label="Stop playing" />
             </div>
           );
         }
@@ -129,6 +161,7 @@ export function EmbedLayer() {
                 borderBottomRightRadius: 0,
               }}
               data-testid="embed-card-image"
+              aria-hidden="true"
             >
               <img
                 className={styles.cover}
@@ -147,6 +180,46 @@ export function EmbedLayer() {
   );
 }
 
+/** Another site's player, asked to start playing as soon as it has loaded. */
+function autoplaying(address: string): string {
+  try {
+    const url = new URL(address);
+    url.searchParams.set('autoplay', url.hostname.includes('soundcloud') ? 'true' : '1');
+    return url.href;
+  } catch {
+    return address;
+  }
+}
+
+/** One click and it plays: the board leaves this button alone, whoever is looking. */
+function PlayButton({
+  className,
+  style,
+  label,
+  onPlay,
+}: {
+  className?: string;
+  style?: CSSProperties;
+  label: string;
+  onPlay: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      aria-label={label}
+      title={label}
+      data-hud
+      data-wheel-pans
+      data-testid="media-play"
+      onClick={onPlay}
+    >
+      <span aria-hidden="true">▶</span>
+    </button>
+  );
+}
+
 /**
  * The player takes every click, so the board gets this strip above it: press it to
  * select the video (and delete it), drag it to move the video.
@@ -155,95 +228,6 @@ function Grip() {
   return (
     <div className={styles.grip} title="Drag to move · click to select" data-testid="embed-grip">
       ⠿
-    </div>
-  );
-}
-
-function StopButton({ label }: { label: string }) {
-  return (
-    <button
-      type="button"
-      className={styles.stop}
-      aria-label={label}
-      data-testid="embed-stop"
-      onClick={() => useEmbeds.setState({ playing: null })}
-    >
-      ×
-    </button>
-  );
-}
-
-/**
- * A video or a sound file — uploaded, or linked from elsewhere — played by the
- * browser itself. A video shows its first picture until it is played; a sound is the
- * card the board draws, with the player in it once it plays.
- */
-function MediaEmbed({
-  embed,
-  box,
-  playing,
-}: {
-  embed: EmbedData;
-  box: CSSProperties;
-  playing: boolean;
-}) {
-  const src = useMediaSrc(embed);
-  const video = embed.media === 'video';
-
-  // A sound not playing is the card the board draws; this only marks where it is.
-  if (!video && !playing) {
-    return (
-      <div
-        className={styles.marker}
-        style={box}
-        data-testid="embed-media"
-        data-media="audio"
-        aria-hidden="true"
-      />
-    );
-  }
-  return (
-    <div
-      className={styles.embed}
-      style={box}
-      data-kind={video ? 'video' : 'audio'}
-      data-testid="embed-media"
-      data-media={embed.media}
-    >
-      {playing ? (
-        <>
-          <Grip />
-          {src ? (
-            video ? (
-              <video
-                className={styles.frame}
-                src={src}
-                controls
-                autoPlay
-                playsInline
-                data-testid="embed-player"
-              />
-            ) : (
-              <audio
-                className={styles.audio}
-                src={src}
-                controls
-                autoPlay
-                data-testid="embed-player"
-              />
-            )
-          ) : null}
-          <StopButton label={video ? 'Stop the video' : 'Stop the sound'} />
-        </>
-      ) : src ? (
-        <>
-          <video className={styles.cover} src={src} preload="metadata" muted playsInline />
-          <span className={styles.play} aria-hidden="true">
-            ▶
-          </span>
-          <span className={styles.hint}>Double-click to play</span>
-        </>
-      ) : null}
     </div>
   );
 }

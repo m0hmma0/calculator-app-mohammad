@@ -11,6 +11,7 @@ import type { Point } from '@/geometry';
 import type { BoardElement, EmbedData } from '@/model/element';
 import { currentBoardId, useBoardStore } from '@/state/boardStore';
 import { sha256Hex, uploadFile } from './uploads';
+import { encodePeaks, peaksOf } from './waveform';
 
 /**
  * Videos and sounds put on a board from a file. On an account board each is stored
@@ -142,17 +143,20 @@ export async function storeMedia(file: File): Promise<EmbedData> {
   const hash = await sha256Hex(blob);
   const title = file.name.replace(/\.[^.]+$/, '') || (kind === 'video' ? 'Video' : 'Sound');
   const boardId = currentBoardId();
+  // A sound's waveform, worked out here once, where the file already is.
+  const peaks = kind === 'audio' ? await peaksOf(blob) : null;
+  const shape = peaks ? { peaks: encodePeaks(peaks) } : {};
 
   if (!boardId) {
     const url = `${LOCAL_PREFIX}${hash}`;
     local.set(url, URL.createObjectURL(blob));
     await keepInBrowser(hash, blob);
-    return { kind: 'media', media: kind, url, title };
+    return { kind: 'media', media: kind, url, title, ...shape };
   }
 
   local.set(hash, URL.createObjectURL(blob));
   void uploadFile(hash, boardId, blob);
-  return { kind: 'media', media: kind, url: fileUrl(hash), fileId: hash, title };
+  return { kind: 'media', media: kind, url: fileUrl(hash), fileId: hash, title, ...shape };
 }
 
 /** A video's shape, read from the file itself; 16:9 if it will not say in time. */

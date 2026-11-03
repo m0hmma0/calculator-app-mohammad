@@ -77,6 +77,11 @@ export interface EmbedData {
   fileId?: string;
   /** For `player`: the address of the site's own player. */
   player?: string;
+  /**
+   * For a sound: its waveform, worked out from the file when it was added — one
+   * character per slice of loudness (`src/media/waveform.ts`).
+   */
+  peaks?: string;
 }
 
 export type ElementType = ShapeType | ContentType | 'group';

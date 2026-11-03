@@ -16,53 +16,118 @@ const layerItems = (page: Page) => page.getByTestId('layers').locator('li');
 const media = (page: Page, kind: 'video' | 'audio') =>
   page.locator(`[data-testid="embed-media"][data-media="${kind}"]`);
 
-/** Double-clicks a media card in the middle, and waits for it to be playing. */
+/** Presses a media card's play button — once, nothing else — and waits for it to play. */
 async function play(page: Page, kind: 'video' | 'audio') {
-  const box = (await media(page, kind).boundingBox())!;
-  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+  await media(page, kind).getByTestId('media-play').click();
   const player = page.locator(`${kind}[data-testid="embed-player"]`);
-  await expect(player).toBeVisible();
   await expect
     .poll(() => player.evaluate((node: HTMLMediaElement) => !node.paused && node.currentTime > 0))
     .toBe(true);
   return player;
 }
 
-// Checklist item 7, from files.
-test('a video and a sound from files play on the board, and after a reload', async ({ page }) => {
-  const video = await recordWebm(page);
+const paused = (page: Page, kind: 'video' | 'audio') =>
+  page
+    .locator(`${kind}[data-testid="embed-player"]`)
+    .evaluate((node: HTMLMediaElement) => node.paused);
+
+async function addFiles(
+  page: Page,
+  files: Array<{ name: string; mimeType: string; buffer: Buffer }>,
+) {
   await page.getByTestId('insert-menu').click();
   await page.getByTestId('insert-import').click();
-  await page.getByTestId('import-file').setInputFiles([
+  await page.getByTestId('import-file').setInputFiles(files);
+  await expect(layerItems(page)).toHaveCount(files.length);
+}
+
+// Checklist item 7, from files.
+test('a video and a sound from files play at once, one at a time, and after a reload', async ({
+  page,
+}) => {
+  const video = await recordWebm(page);
+  await addFiles(page, [
     { name: 'Clip.webm', mimeType: 'video/webm', buffer: video },
     { name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav() },
   ]);
-  await expect(layerItems(page)).toHaveCount(2);
-  await expect(media(page, 'video')).toBeVisible();
-  // The video shows its first picture, under a play button, until it is played.
+  // Both are players from the start: the video shows its first picture under a play
+  // button; nothing needs a double-click first.
   await expect(media(page, 'video').locator('video')).toHaveAttribute('src', /^blob:/);
+  await expect(page.getByTestId('media-play')).toHaveCount(2);
 
   await play(page, 'video');
   await play(page, 'audio');
-  // One plays at a time: the sound took over from the video.
-  await expect(page.locator('video[data-testid="embed-player"]')).toHaveCount(0);
+  // One plays at a time: the sound paused the video.
+  expect(await paused(page, 'video')).toBe(true);
+  // And nothing to close: the video's play button is back, ready.
+  await expect(media(page, 'video').getByTestId('media-play')).toBeVisible();
 
   await page.reload();
   await expect(layerItems(page)).toHaveCount(2);
   await play(page, 'video');
 });
 
-test('a played sound can still be selected by its strip and deleted', async ({ page }) => {
-  await page.getByTestId('insert-menu').click();
-  await page.getByTestId('insert-import').click();
-  await page
-    .getByTestId('import-file')
-    .setInputFiles({ name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav() });
-  await expect(layerItems(page)).toHaveCount(1);
-  await play(page, 'audio');
-  await page.getByTestId('embed-grip').click();
+test("a sound's waveform shows where a click plays from, and plays from there", async ({
+  page,
+}) => {
+  await addFiles(page, [{ name: 'Six seconds.wav', mimeType: 'audio/wav', buffer: toneWav(6) }]);
+  const wave = media(page, 'audio').getByTestId('media-wave');
+  // Its shape is the file's own, not the made-up one used when a file cannot be read.
+  await expect(wave).toHaveAttribute('data-real', 'true');
+  await expect(media(page, 'audio')).toContainText('Six seconds');
+
+  const box = (await wave.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+  await expect(page.getByTestId('media-hover-time')).toHaveText('0:03');
+  // Clicked four fifths of the way along: it plays from 0:04.8 — at once, well before
+  // playing from the start could have got there.
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height / 2);
+  const audio = page.locator('audio[data-testid="embed-player"]');
+  await expect
+    .poll(() => audio.evaluate((node: HTMLMediaElement) => !node.paused && node.currentTime), {
+      timeout: 1500,
+    })
+    .toBeGreaterThanOrEqual(4.5);
+  // The button pauses it, and the time shows where it stopped.
+  await media(page, 'audio').getByTestId('media-play').click();
+  expect(await paused(page, 'audio')).toBe(true);
+  await expect(media(page, 'audio').getByTestId('media-time')).toHaveText(/^0:0[4-6]$/);
+});
+
+test('a sound is selected and moved by its card, not its controls', async ({ page }) => {
+  await addFiles(page, [{ name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav() }]);
+  await page.mouse.click(1000, 650);
+  // A press on its title is a press on the card: the board's, to select. (The title
+  // lets the pointer through, so the press is made where it is, as a person would.)
+  const title = (await media(page, 'audio').getByText('Tone').boundingBox())!;
+  await page.mouse.click(title.x + title.width / 2, title.y + title.height / 2);
+  await expect(page.getByTestId('inspector')).toContainText(/embed/i);
+  expect(await paused(page, 'audio')).toBe(true);
+  // Dragged by its title, it moves; it did not start playing.
+  const x = Number(await page.getByTestId('geo-x').innerText());
+  await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(title.x + title.width / 2 + 120, title.y + title.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await page.getByTestId('geo-x').innerText())).toBe(x + 120);
+  expect(await paused(page, 'audio')).toBe(true);
   await page.keyboard.press('Delete');
   await expect(layerItems(page)).toHaveCount(0);
+});
+
+test('locked, a sound and a video still play', async ({ page }) => {
+  const video = await recordWebm(page);
+  await addFiles(page, [
+    { name: 'Clip.webm', mimeType: 'video/webm', buffer: video },
+    { name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav() },
+  ]);
+  // Locked for everyone, this person (the owner here) included.
+  await page.keyboard.press('ControlOrMeta+KeyA');
+  await page.keyboard.press('ControlOrMeta+Shift+KeyL');
+  await expect(page.getByTestId('layer-locked')).toHaveCount(2);
+  await page.mouse.click(1000, 650);
+  await play(page, 'video');
+  await play(page, 'audio');
 });
 
 test('a file too big for the board is refused, with a reason', async ({ page }) => {

@@ -4,7 +4,7 @@ import { defaultTextBox, textHeight } from '@/text/measure';
 import { textDefaults } from '@/settings/settings';
 import { placePlaceholder, placeStamp } from './insertions';
 import { tableGrid } from '@/canvas/renderContent';
-import { useEmbeds } from '@/state/embedStore';
+import { startPlayer } from '@/state/embedStore';
 import { useHistory } from '@/collab/history';
 import { screenToBoard, type Viewport } from '@/canvas/viewport';
 import { HANDLE_SIZE, ROTATE_ZONE } from '@/canvas/renderOverlay';
@@ -1202,9 +1202,13 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         const row = Math.min(rows - 1, Math.max(0, Math.floor((point.y - target.y) / rowHeight)));
         const col = Math.min(cols - 1, Math.max(0, Math.floor((point.x - target.x) / colWidth)));
         store.beginCellEdit(target.id, row, col);
-      } else if (target.type === 'embed' && target.embed && target.embed.kind !== 'link') {
-        // A video or a sound plays in place; until then it is a card you can move.
-        useEmbeds.setState({ playing: target.id });
+      } else if (
+        target.type === 'embed' &&
+        (target.embed?.kind === 'video' || target.embed?.kind === 'player')
+      ) {
+        // Another site's player starts on its own play button; a double-click on the
+        // card starts it too. Files play from their own controls, always there.
+        startPlayer(target.id);
       } else if (target.type === 'image') {
         // A picture is cropped; double-clicked again, it is done.
         if (store.croppingId === target.id) store.endCrop();

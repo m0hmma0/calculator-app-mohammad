@@ -162,6 +162,20 @@ signed-out board they stay in this browser's IndexedDB. Links to media files, to
 SoundCloud and Spotify, and to YouTube play in place; a link whose name does not say
 what it is becomes a player when the server finds a video or sound behind it.
 
+**Playing them (3 November).** A video or sound file is a player from the moment it is
+on the board — no double-click, nothing to close. A sound looks like SoundCloud's
+player: a round orange play button, its title, and its waveform, the part played in
+orange; hovering the waveform shows the time a click would play from, and a click plays
+from there. The waveform is worked out from the file when it is added and kept with it
+(`embed.peaks`, `src/media/waveform.ts`); one added by a link is worked out where it
+is shown, or drawn as an even made-up shape when the file cannot be read. A video
+shows its first picture with a play button, and a bar to play, pause, seek and fill
+the screen — always there while paused, on hover while playing. One plays at a time.
+YouTube, Vimeo, SoundCloud and Spotify start with one click on their play button and
+stay loaded. Only these controls take the pointer: a press elsewhere on a player
+selects and moves it like anything else. And everyone can use them — someone who can
+only look, someone who answers, and on a locked item — since playing changes nothing.
+
 ## Fixes after Phase 14
 
 A text box clicked into place keeps the width set in Settings and is only as tall as its
@@ -388,9 +402,11 @@ Writing and drawing:
   first), duplicate, delete, lock, lock for others (the owner's), unlock, group,
   ungroup and the side panel, and
   turns left or up near an edge so none of it is off the board.
-- **A video that was played** has a strip along its top that the board answers to:
-  press it to select the video, drag it to move. A press anywhere on the board takes
-  the keyboard back from the player, so Delete works again.
+- **Another site's player, once started** (YouTube, Vimeo, SoundCloud, Spotify), has a
+  strip along its top that the board answers to: press it to select the player, drag it
+  to move. A press anywhere on the board takes the keyboard back from the player, so
+  Delete works again. Video and sound files need no strip: only their controls take the
+  pointer.
 - **Celebrations** (Insert → Celebrate, or C, D, O, M, Q, U, A while presenting):
   confetti, drum roll, bubbles, mic drop, quiet, curtain call and applause, for
   everyone on the board at once (`src/fun/`). Sounds are synthesised with Web Audio,

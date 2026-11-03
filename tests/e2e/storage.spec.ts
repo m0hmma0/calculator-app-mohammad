@@ -464,11 +464,10 @@ test.describe('the file API', () => {
 });
 
 test.describe('video and sound', () => {
-  /** Double-clicks a media card in the middle, and waits for it to be playing. */
+  /** Presses a media card's play button — once — and waits for it to be playing. */
   async function play(page: Page, kind: 'video' | 'audio') {
     const card = page.locator(`[data-testid="embed-media"][data-media="${kind}"]`).first();
-    const box = (await card.boundingBox())!;
-    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    await card.getByTestId('media-play').click();
     const player = page.locator(`${kind}[data-testid="embed-player"]`);
     await expect
       .poll(() => player.evaluate((node: HTMLMediaElement) => !node.paused && node.currentTime > 0))

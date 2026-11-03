@@ -8,6 +8,7 @@ import { runsOf, type MarkSet } from '@/text/marks';
 import { getImage } from '@/media/images';
 import { cropOf, cropSource } from '@/model/crop';
 import { uploadStateOf, type UploadState } from '@/media/uploads';
+import { decodePeaks, placeholderPeaks } from '@/media/waveform';
 import { fontStack, fontString } from './fonts';
 import { resolveColor, type CanvasColors } from './theme';
 
@@ -526,6 +527,10 @@ function drawPlayable(
   zoom: number,
 ) {
   const { x, y, w, h } = element;
+  if (embed.kind === 'media' && embed.media === 'audio') {
+    drawSound(ctx, element, embed, colors, zoom);
+    return;
+  }
   const screen = embed.media === 'video' && embed.kind === 'media';
   if (screen) {
     const radius = Math.min(element.style.radius, w / 2, h / 2);
@@ -575,19 +580,84 @@ function drawPlayable(
     ctx.font = fontString(element.style, size * 0.78);
     ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
     const from = embed.site ?? (embed.media === 'audio' ? 'Sound' : 'Video');
-    ctx.fillText(fitLine(ctx, `${from} · double-click to play`, width), left, line);
+    ctx.fillText(fitLine(ctx, `${from} · click ▶ to play`, width), left, line);
   }
 
   const upload = uploadStateOf(embed.fileId);
-  if (upload) {
-    const done = upload.total > 0 ? upload.loaded / upload.total : 0;
-    const bar = 4 / zoom;
-    ctx.fillStyle = 'rgba(127,127,127,0.35)';
-    ctx.fillRect(x, y + h - bar, w, bar);
-    ctx.fillStyle =
-      upload.status === 'rejected' ? '#d8375c' : (colors.byToken.get('--accent') ?? '#3b45d8');
-    ctx.fillRect(x, y + h - bar, w * done, bar);
+  if (upload) drawUploadBar(ctx, element, upload, colors, zoom);
+}
+
+/**
+ * A sound as its player looks (src/ui/MediaPlayers.tsx), for thumbnails, exports and
+ * the moment before the player is laid over it: the orange button, the title, and the
+ * waveform in grey.
+ */
+function drawSound(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  embed: NonNullable<BoardElement['embed']>,
+  colors: CanvasColors,
+  zoom: number,
+) {
+  const { x, y, w, h } = element;
+  cardBox(ctx, element, colors, zoom);
+  const r = 24;
+  const cx = x + 14 + r;
+  const cy = y + 12 + r;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#ff5500';
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.28, cy - r * 0.42);
+  ctx.lineTo(cx + r * 0.46, cy);
+  ctx.lineTo(cx - r * 0.28, cy + r * 0.42);
+  ctx.fill();
+
+  const left = cx + r + 12;
+  const width = x + w - left - 14;
+  ctx.textBaseline = 'top';
+  ctx.font = fontString({ ...element.style, fontWeight: 650 }, 14);
+  ctx.fillStyle = resolveColor(element.style.textColor, colors) ?? '#222';
+  ctx.fillText(fitLine(ctx, embed.title || 'Sound', width), left, y + 12);
+  ctx.font = fontString(element.style, 11.5);
+  ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
+  ctx.fillText(fitLine(ctx, embed.site ?? 'Sound', width), left, y + 30);
+
+  const top = y + 52;
+  const bottom = y + h - 10;
+  if (bottom - top > 6 && width > 10) {
+    const peaks = decodePeaks(embed.peaks) ?? placeholderPeaks(embed.url);
+    const step = width / peaks.length;
+    const base = top + (bottom - top) * 0.66;
+    ctx.fillStyle = colors.byToken.get('--text-muted') ?? '#888';
+    ctx.globalAlpha *= 0.55;
+    peaks.forEach((peak, index) => {
+      const bar = Math.max(0.5, step * (2 / 3));
+      ctx.fillRect(left + index * step, base - peak * (base - top), bar, peak * (base - top));
+      ctx.fillRect(left + index * step, base + 1, bar, peak * (bottom - base - 1) * 0.9);
+    });
   }
+
+  const upload = uploadStateOf(embed.fileId);
+  if (upload) drawUploadBar(ctx, element, upload, colors, zoom);
+}
+
+function drawUploadBar(
+  ctx: CanvasRenderingContext2D,
+  element: BoardElement,
+  upload: UploadState,
+  colors: CanvasColors,
+  zoom: number,
+) {
+  const done = upload.total > 0 ? upload.loaded / upload.total : 0;
+  const bar = 4 / zoom;
+  ctx.fillStyle = 'rgba(127,127,127,0.35)';
+  ctx.fillRect(element.x, element.y + element.h - bar, element.w, bar);
+  ctx.fillStyle =
+    upload.status === 'rejected' ? '#d8375c' : (colors.byToken.get('--accent') ?? '#3b45d8');
+  ctx.fillRect(element.x, element.y + element.h - bar, element.w * done, bar);
 }
 
 /** Draws text cut to a width with an ellipsis, so it never spills out of its box. */

@@ -351,8 +351,8 @@ test.describe('pasted links', () => {
     await expect(video).toBeVisible();
     await expect(video.locator('img')).toHaveAttribute('src', /i\.ytimg\.com\/vi\/dQw4w9WgXcQ\//);
 
-    const box = (await video.boundingBox())!;
-    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    // One click on its play button, nothing more.
+    await video.getByTestId('media-play').click();
     await expect(page.getByTestId('embed-player')).toHaveAttribute(
       'src',
       /youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/,
@@ -364,8 +364,7 @@ test.describe('pasted links', () => {
     await createBoard(page);
     await pasteText(page, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     const video = page.getByTestId('embed-video');
-    const box = (await video.boundingBox())!;
-    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    await video.getByTestId('media-play').click();
 
     // Playing it hands the keyboard to the player.
     await page.getByTestId('embed-player').focus();
