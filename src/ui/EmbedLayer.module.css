@@ -4,6 +4,7 @@
   overflow: hidden;
   pointer-events: none;
   z-index: 1;
+  transition: opacity 0.25s ease-out;
 }
 
 .embed {

@@ -10,6 +10,14 @@ import { startPresentation, usePresentation } from '@/workshop/presentation';
 import { STAMPS } from '@/model/stamps';
 import { actionFor, isRecordingShortcut } from './shortcuts';
 
+/**
+ * A video playing full screen has the keyboard: Space plays and pauses it, the arrows
+ * move through it — the browser's own controls, not the board's shortcuts.
+ */
+export function mediaFullScreen(): boolean {
+  return typeof document !== 'undefined' && document.fullscreenElement instanceof HTMLMediaElement;
+}
+
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
@@ -159,7 +167,7 @@ function run(id: string): boolean {
 export function useShortcuts(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target) || isRecordingShortcut()) return;
+      if (isTypingTarget(event.target) || isRecordingShortcut() || mediaFullScreen()) return;
       const store = useBoardStore.getState();
       const mod = event.metaKey || event.ctrlKey;
 

@@ -205,6 +205,26 @@ microphone or tab recording, so recording.spec asks for `channel: 'chromium'` (t
 browser, headless) unless `PLAYWRIGHT_CHROMIUM_EXECUTABLE` is set; reproduce with
 `/opt/pw-browsers/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell`.
 
+Presenting, 11 November, third round: Space plays and pauses the slide's video or sound
+files (`present.media`, presenting scope; `toggleSlideMedia` in `src/workshop/slideMedia.ts`
+— media whose centre is in the frame, the last played or the first by reading order;
+other sites' players cannot be reached) and is no longer one of Next frame's keys.
+Presenter view has big previous/next buttons either side of the slide (`SlideArrows` in
+`WorkshopLayer.tsx`; the slide is fitted between them, `ARROW_ROOM` in `show()`) and the
+next slide drawn beside the notes (`NextSlide` in `PresenterNotes.tsx`, the board's own
+renderer). A video full screen gets the pointer and keys: `.screen:fullscreen` restores
+`pointer-events` (the card's `none` was inherited), and `mediaFullScreen()` keeps the
+board's keys and pointer handler out. Frame transitions: `element.transition` (a document
+field; "" or absent is none), chosen in the side panel for selected frames
+(`TransitionPicker`, tiles with a live preview on hover); seven effects in
+`src/workshop/transitions.ts` — shatter, portal, glitch, pixels, warp, blinds, ink — each a
+`makePlayer(kind, from, to, seed)` drawn at t in 0..1, seeded by the frame so every screen
+plays the same. `SlideTransition` (over the board, z-index 2) plays it in the presenter's
+stage, the audience window and followers' screens: it watches `frameOnShowId()`, copies the
+board canvas before it redraws (the old slide), waits `SETTLE_FRAMES` and copies again (the
+new one); `usePresentation.transitioning` hides the embed layer meanwhile. Reduced motion
+gets a cross-fade. Not into a presentation's first slide, nor out of one.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

@@ -24,6 +24,8 @@ export function EmbedLayer() {
   const onShow = useFrameOnShow();
   // Presenter view: other sites' players play in the audience window, not here too.
   const playsElsewhere = usePresentation((state) => state.audience);
+  // A transition is drawn over the board; the players come back when it is done.
+  const transitioning = usePresentation((state) => state.transitioning);
 
   const embeds = (preview ?? elements).filter(
     (element) => element.type === 'embed' && element.embed && !element.hidden,
@@ -39,7 +41,11 @@ export function EmbedLayer() {
   }
 
   return (
-    <div className={styles.layer} style={{ clipPath }}>
+    <div
+      className={styles.layer}
+      style={{ clipPath, opacity: transitioning ? 0 : 1 }}
+      data-transitioning={transitioning || undefined}
+    >
       {embeds.map((element) => {
         const embed = element.embed!;
         const topLeft = boardToScreen(viewport, { x: element.x, y: element.y });

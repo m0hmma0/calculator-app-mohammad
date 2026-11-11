@@ -218,3 +218,53 @@
   line-height: 1.2;
   padding: 4px 8px;
 }
+
+/* Presenter view: big previous and next buttons at the slide's sides. */
+.arrows {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  pointer-events: none;
+}
+
+.arrow {
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 50%;
+  background: rgb(16 18 23 / 0.72);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.3);
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+
+.arrow svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.arrow:hover:not(:disabled) {
+  background: rgb(16 18 23 / 0.92);
+  transform: scale(1.06);
+}
+
+.arrow:disabled {
+  opacity: 0.25;
+  cursor: default;
+}

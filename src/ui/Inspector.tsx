@@ -22,6 +22,7 @@ import { linkLabel, normaliseLink } from '@/text/marks';
 import { LinkField, LinkIcon } from './LinkField';
 import { HIGHLIGHTS, TEXT_COLOURS } from './palettes';
 import { ToolOptions } from './ToolOptions';
+import { TransitionPicker } from './TransitionPicker';
 import styles from './Inspector.module.css';
 
 const FILLS = [
@@ -195,6 +196,10 @@ export function Inspector() {
                 </button>
               </div>
             </div>
+          ) : null}
+
+          {selected.every((element) => element.type === 'frame') ? (
+            <TransitionPicker frames={selected} />
           ) : null}
 
           {first.type === 'code' && selected.length === 1 ? (

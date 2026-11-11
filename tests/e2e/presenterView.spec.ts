@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { toneWav } from './mediaFixtures';
+import { recordWebm, toneWav } from './mediaFixtures';
 
 /**
  * Presenter view on the signed-out board: a second window with only the slides, for
@@ -215,5 +215,165 @@ test.describe('presenter view', () => {
     await page.getByTestId('audience-close').click();
     await expect.poll(() => audience.isClosed()).toBe(true);
     expect(await here.evaluate((node: HTMLMediaElement) => node.muted)).toBe(false);
+  });
+});
+
+test.describe('presenter view, round two', () => {
+  test('big arrows either side of the slide, and the next slide drawn beside the notes', async ({
+    page,
+  }) => {
+    await threeFrames(page);
+    await openPresenterView(page);
+    const stage = (await page.getByTestId('stage').boundingBox())!;
+    const previous = (await page.getByTestId('slide-previous-big').boundingBox())!;
+    const next = (await page.getByTestId('slide-next-big').boundingBox())!;
+    expect(previous.x).toBeLessThan(stage.x + 80);
+    expect(next.x + next.width).toBeGreaterThan(stage.x + stage.width - 80);
+    expect(next.width).toBeGreaterThanOrEqual(48);
+    await expect(page.getByTestId('slide-previous-big')).toBeDisabled();
+
+    // Slide 1: the next slide (2) is empty; from slide 2, the next (3) has the rectangle.
+    const preview = page.getByTestId('presenter-next-preview').locator('canvas');
+    await expect(preview).toBeVisible();
+    await page.getByTestId('slide-next-big').click();
+    await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
+    await expect
+      .poll(() =>
+        preview.evaluate((node) => {
+          const canvas = node as HTMLCanvasElement;
+          const data = canvas
+            .getContext('2d')!
+            .getImageData(0, 0, canvas.width, canvas.height).data;
+          let blue = 0;
+          for (let index = 0; index < data.length; index += 4) {
+            if (data[index + 2]! > 180 && data[index]! < 140) blue += 1;
+          }
+          return blue / (data.length / 4);
+        }),
+      )
+      .toBeGreaterThan(0.2);
+
+    // The slide fits between the arrows, not under them.
+    const slideLeft = await page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
+      const context = canvas.getContext('2d')!;
+      const row = context.getImageData(0, Math.round(canvas.height / 3), canvas.width, 1).data;
+      for (let x = 0; x < canvas.width; x += 1) {
+        if (row[x * 4]! > 200 && row[x * 4 + 1]! > 200)
+          return x / (canvas.width / canvas.getBoundingClientRect().width);
+      }
+      return -1;
+    });
+    expect(slideLeft).toBeGreaterThan(previous.x + previous.width - stage.x - 1);
+
+    await page.getByTestId('slide-next-big').click();
+    await expect(page.getByTestId('presentation-counter')).toHaveText('3 / 3');
+    await expect(page.getByTestId('slide-next-big')).toBeDisabled();
+    await expect(page.getByTestId('presenter-next-preview')).toContainText('End of the slides');
+    await page.getByTestId('slide-previous-big').click();
+    await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
+  });
+
+  test('Space plays and pauses the slide’s sound; it no longer moves to the next slide', async ({
+    page,
+  }) => {
+    await page.getByTestId('insert-menu').click();
+    await page.getByTestId('insert-import').click();
+    await page
+      .getByTestId('import-file')
+      .setInputFiles({ name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav(4) });
+    await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
+    await page.mouse.click(1100, 690);
+    await drag(page, 'KeyF', [100, 150], [1000, 600]);
+    await drag(page, 'KeyF', [1010, 150], [1150, 300]);
+    await page.keyboard.press('Escape');
+    await page.getByTestId('insert-menu').click();
+    await page.getByTestId('present-start').click();
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 2');
+
+    const audio = page.locator('audio[data-testid="embed-player"]');
+    await page.keyboard.press('Space');
+    await expect.poll(() => audio.evaluate((node: HTMLMediaElement) => !node.paused)).toBe(true);
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 2');
+    await page.keyboard.press('Space');
+    await expect.poll(() => audio.evaluate((node: HTMLMediaElement) => node.paused)).toBe(true);
+    // The arrows still move on.
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 2');
+  });
+
+  test('a frame’s transition is chosen in the side panel and plays here and in the audience window', async ({
+    page,
+  }) => {
+    await threeFrames(page);
+    // Every frame gets a portal, picked one by one from the object list (the rectangle
+    // is not a frame: no transitions offered for it).
+    let frames = 0;
+    for (let index = 0; index < 4; index += 1) {
+      await page.getByTestId('layers').locator('li').nth(index).click();
+      if (!(await page.getByTestId('transition-picker').isVisible())) continue;
+      frames += 1;
+      await expect(page.getByTestId('transition-none')).toHaveAttribute('aria-checked', 'true');
+      await page.getByTestId('transition-portal').hover();
+      await page.getByTestId('transition-portal').click();
+      await expect(page.getByTestId('transition-portal')).toHaveAttribute('aria-checked', 'true');
+    }
+    expect(frames).toBe(3);
+    // Presenting starts from a selected frame: let go, so it starts from the first.
+    await page.keyboard.press('Escape');
+
+    const audience = await openPresenterView(page);
+    const here = page.getByTestId('slide-transition');
+    const there = audience.getByTestId('slide-transition');
+    await expect(here).toBeHidden();
+
+    // Moving to the next slide plays its transition, on both screens.
+    const seen = { here: false, there: false };
+    for (let step = 0; step < 1; step += 1) {
+      await page.getByTestId('slide-next-big').click();
+      for (let tries = 0; tries < 30 && !(seen.here && seen.there); tries += 1) {
+        if (await here.isVisible()) seen.here = true;
+        if (await there.isVisible()) seen.there = true;
+        await page.waitForTimeout(40);
+      }
+      // Done, it goes away.
+      await expect(here).toBeHidden({ timeout: 5000 });
+      await expect(there).toBeHidden({ timeout: 5000 });
+    }
+    expect(seen).toEqual({ here: true, there: true });
+  });
+
+  test('a video full screen answers its own controls and keys', async ({ page }) => {
+    await page.getByTestId('insert-menu').click();
+    await page.getByTestId('insert-import').click();
+    await page
+      .getByTestId('import-file')
+      .setInputFiles({ name: 'Clip.webm', mimeType: 'video/webm', buffer: await recordWebm(page) });
+    await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
+    const video = page.locator('video[data-testid="embed-player"]');
+    await page.locator('[data-media="video"]').hover();
+    await page.getByTestId('media-fullscreen').click();
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement?.tagName)).toBe('VIDEO');
+    expect(await video.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('auto');
+    // The press lands on the video, not the board behind it.
+    const box = (await video.boundingBox())!;
+    const target = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.tagName,
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(target).toBe('VIDEO');
+    // The board's own Space (pan) leaves the key to the video.
+    const prevented = await page.evaluate(() => {
+      const event = new KeyboardEvent('keydown', {
+        code: 'Space',
+        key: ' ',
+        bubbles: true,
+        cancelable: true,
+      });
+      document.fullscreenElement!.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(prevented).toBe(false);
+    await page.evaluate(() => document.exitFullscreen());
   });
 });

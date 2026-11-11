@@ -59,6 +59,7 @@ import { effectiveTool, isShapeTool, useBoardStore } from '@/state/boardStore';
 import { canTypeInto, lockedForMe, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { linkAt } from '@/text/links';
 import { openLink } from '@/text/marks';
+import { mediaFullScreen } from './useShortcuts';
 
 const PICK_SLOP = 6; // screen px of forgiveness when clicking thin shapes
 const SNAP_DISTANCE = 6; // screen px
@@ -457,6 +458,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     const onPointerDown = (event: PointerEvent) => {
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
+      // A video full screen is inside the stage, but presses on it are its own.
+      if (mediaFullScreen()) return;
       // A video that was played keeps the keyboard until something takes it back, and
       // the default is prevented below, so nothing would: Delete and every shortcut
       // would go to the player. A press on the board takes it back.

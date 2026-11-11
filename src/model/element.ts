@@ -168,6 +168,8 @@ export interface BoardElement {
   slide?: string | null;
   /** A frame's speaker notes, shown to the presenter in presenter view only. */
   notes?: string;
+  /** How a presentation arrives at this frame (`src/workshop/transitions.ts`). */
+  transition?: string;
   style: ElementStyle;
 
   /**

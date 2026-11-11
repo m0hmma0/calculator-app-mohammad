@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fitToRect } from '@/canvas/viewport';
+import { centerOn, fitToRect } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import { selectionAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
@@ -9,6 +9,9 @@ import { closeAudienceWindow, openAudienceWindow } from './audience';
 
 /** Margin around a frame in presentation, in screen pixels. */
 export const PRESENT_PADDING = 24;
+
+/** Room kept either side of the slide in presenter view for its big arrows. */
+const ARROW_ROOM = 56;
 
 interface PresentationStore {
   presenting: boolean;
@@ -22,6 +25,8 @@ interface PresentationStore {
   heardHere: readonly string[];
   /** The notes along the bottom in presenter view, in pixels: the slide fits above them. */
   notesInset: number;
+  /** A transition is playing over the board (`SlideTransition`); videos wait under it. */
+  transitioning: boolean;
 }
 
 export const usePresentation = create<PresentationStore>(() => ({
@@ -31,6 +36,7 @@ export const usePresentation = create<PresentationStore>(() => ({
   audienceSince: null,
   heardHere: [],
   notesInset: 0,
+  transitioning: false,
 }));
 
 /**
@@ -151,9 +157,20 @@ function show(frameId: string | null) {
   usePresence.setState({ present: frame ? { frame: frame.id } : null });
   if (!frame) return;
   // In presenter view the notes take the bottom of the stage; the slide fits above.
-  const inset = usePresentation.getState().audience ? usePresentation.getState().notesInset : 0;
+  const presenterView = usePresentation.getState().audience;
+  const inset = presenterView ? usePresentation.getState().notesInset : 0;
   const size = { width: store.stageSize.width, height: store.stageSize.height - inset };
-  store.setViewport(fitToRect(frame, size, PRESENT_PADDING));
+  if (!presenterView) {
+    store.setViewport(fitToRect(frame, size, PRESENT_PADDING));
+    return;
+  }
+  // In presenter view the big previous and next buttons sit either side: the slide
+  // fits between them, centred.
+  const room = { width: Math.max(1, size.width - 2 * ARROW_ROOM), height: size.height };
+  const { zoom } = fitToRect(frame, room, PRESENT_PADDING);
+  store.setViewport(
+    centerOn({ x: 0, y: 0, zoom }, size, { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 }),
+  );
 }
 
 let stopWatching: (() => void) | null = null;

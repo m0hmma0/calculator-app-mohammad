@@ -13,6 +13,7 @@ import { openAudienceDocument, useBoardStore } from '@/state/boardStore';
 import { useEmbeds } from '@/state/embedStore';
 import { EmbedLayer } from '@/ui/EmbedLayer';
 import { EffectsLayer } from '@/ui/EffectsLayer';
+import { SlideTransition } from '@/ui/SlideTransition';
 import type { AudienceHooks, FromAudience, ToAudience } from '@/workshop/audience';
 import { cameraRadius, cameraRect, type CameraLayout } from '@/recording/camera';
 import { usePresentation } from '@/workshop/presentation';
@@ -236,6 +237,7 @@ export function AudienceView({ channelName }: { channelName: string }) {
       <canvas ref={canvasRef} className={styles.canvas} data-testid="audience-canvas" />
       {/* Only over a slide: between slides there is nothing to clip them to. */}
       {onShow ? <EmbedLayer /> : null}
+      <SlideTransition source={canvasRef} />
       {onShow && camera && cameraStream ? (
         <AudienceCamera layout={camera} stream={cameraStream} />
       ) : null}

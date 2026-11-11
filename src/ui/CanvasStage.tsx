@@ -41,6 +41,7 @@ import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
 import { WorkshopLayer } from './WorkshopLayer';
 import { PresenterNotes } from './PresenterNotes';
+import { SlideTransition } from './SlideTransition';
 import { PresenterCamera } from './PresenterCamera';
 import { RecordingResult } from './RecordingResult';
 import { EffectsLayer } from './EffectsLayer';
@@ -311,6 +312,7 @@ export function CanvasStage() {
 
       <FrameNumbers />
       <EmbedLayer />
+      <SlideTransition source={canvasRef} />
       <PeersLayer hostRef={hostRef} />
       <CommentPins />
       <WorkshopLayer />

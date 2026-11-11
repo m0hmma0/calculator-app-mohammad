@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore } from '@/state/boardStore';
 import { closeAudienceWindow } from '@/workshop/audience';
 import { framesInOrder, usePresentation } from '@/workshop/presentation';
 import { RecordControls } from './RecordControls';
+import { boardToScreen, fitToRect } from '@/canvas/viewport';
+import { renderElements } from '@/canvas/renderElements';
+import { getCanvasColors } from '@/canvas/theme';
+import type { BoardElement } from '@/model/element';
 import styles from './PresenterNotes.module.css';
 
 /** Typing is written to the board this long after the last key, as one step. */
@@ -93,14 +97,17 @@ function Notes() {
         </button>
       </div>
       <RecordControls />
-      {frame ? (
-        <NoteField
-          key={frame.id}
-          frameId={frame.id}
-          saved={frame.notes ?? ''}
-          editable={editable}
-        />
-      ) : null}
+      <div className={styles.body}>
+        {frame ? (
+          <NoteField
+            key={frame.id}
+            frameId={frame.id}
+            saved={frame.notes ?? ''}
+            editable={editable}
+          />
+        ) : null}
+        <NextSlide frame={next} elements={elements} />
+      </div>
     </section>
   );
 }
@@ -167,3 +174,57 @@ function NoteField({
     />
   );
 }
+
+/**
+ * The next slide as it will look, small, beside the notes: drawn by the board's own
+ * renderer, the frame alone. "End" after the last one.
+ */
+const NextSlide = memo(function NextSlide({
+  frame,
+  elements,
+}: {
+  frame: BoardElement | null;
+  elements: readonly BoardElement[];
+}) {
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  const [, redraw] = useState(0);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !frame) return;
+    const box = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, box.width);
+    const height = Math.max(1, box.height);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    const ctx = canvas.getContext('2d')!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#101217';
+    ctx.fillRect(0, 0, width, height);
+    const size = { width, height };
+    const viewport = fitToRect(frame, size, 0);
+    const colors = getCanvasColors(canvas);
+    const corner = boardToScreen(viewport, { x: frame.x, y: frame.y });
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(corner.x, corner.y, frame.w * viewport.zoom, frame.h * viewport.zoom);
+    ctx.clip();
+    ctx.fillStyle = colors.background;
+    ctx.fillRect(0, 0, width, height);
+    // Pictures still loading draw again when they arrive.
+    renderElements(ctx, viewport, size, elements, colors, () => redraw((n) => n + 1), frame.id);
+    ctx.restore();
+  });
+
+  return (
+    <figure className={styles.upNext} data-testid="presenter-next-preview">
+      {frame ? (
+        <canvas ref={ref} className={styles.upNextCanvas} aria-label="The next slide" />
+      ) : (
+        <div className={styles.upNextEnd}>End of the slides</div>
+      )}
+      <figcaption className={styles.upNextLabel}>Next</figcaption>
+    </figure>
+  );
+});

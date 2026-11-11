@@ -181,6 +181,13 @@
   object-fit: contain;
 }
 
+/* Full screen, the video is all there is: its own controls take the pointer. On the
+   board it lets presses through (the card's pointer-events: none is inherited), which
+   left the controls dead in full screen. */
+.screen:fullscreen {
+  pointer-events: auto;
+}
+
 .bigPlay {
   pointer-events: auto;
   position: absolute;

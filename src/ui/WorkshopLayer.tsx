@@ -4,6 +4,7 @@ import { useHistory } from '@/collab/history';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore } from '@/state/boardStore';
 import { closeAudienceWindow } from '@/workshop/audience';
+import { toggleSlideMedia } from '@/workshop/slideMedia';
 import {
   framesInOrder,
   startPresenterView,
@@ -13,7 +14,7 @@ import {
 } from '@/workshop/presentation';
 import { castVote, serverNow, stopTimer, useWorkshop } from '@/workshop/workshop';
 import { actionFor, isRecordingShortcut } from '@/input/shortcuts';
-import { isTypingTarget } from '@/input/useShortcuts';
+import { isTypingTarget, mediaFullScreen } from '@/input/useShortcuts';
 import { rectsIntersect } from '@/geometry';
 import { useFrameOnShow } from '@/workshop/onShow';
 import { useSidePane } from './layout';
@@ -26,6 +27,7 @@ const PRESENTING: Record<string, () => void> = {
   'present.first': () => stepPresentation(-Infinity),
   'present.last': () => stepPresentation(Infinity),
   'present.stop': stopPresentation,
+  'present.media': () => void toggleSlideMedia(),
   'present.audience': () => {
     if (usePresentation.getState().audience) closeAudienceWindow();
     else startPresenterView();
@@ -172,7 +174,7 @@ function usePresentingKeys() {
     if (!presenting) return;
     const onKey = (event: KeyboardEvent) => {
       // Presenter view's notes take their own keys: arrows and Space are for typing.
-      if (isRecordingShortcut() || isTypingTarget(event.target)) return;
+      if (isRecordingShortcut() || isTypingTarget(event.target) || mediaFullScreen()) return;
       const id = actionFor(event, 'presenting');
       if (!id) return;
       PRESENTING[id]?.();
@@ -268,6 +270,53 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
   );
 }
 
+/**
+ * Presenter view's big way back and on: a button either side of the slide, above the
+ * notes — easier to hit than the small ones in the controls.
+ */
+function SlideArrows() {
+  const presenting = usePresentation((state) => state.presenting);
+  const audience = usePresentation((state) => state.audience);
+  const frame = usePresentation((state) => state.frame);
+  const notesInset = usePresentation((state) => state.notesInset);
+  const elements = useBoardStore((state) => state.elements);
+  if (!presenting || !audience) return null;
+  const frames = framesInOrder(elements);
+  const index = frames.findIndex((each) => each.id === frame);
+  return (
+    <div className={styles.arrows} style={{ bottom: notesInset }}>
+      <button
+        type="button"
+        className={styles.arrow}
+        aria-label="Previous slide"
+        title="Previous slide"
+        data-testid="slide-previous-big"
+        disabled={index <= 0}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => stepPresentation(-1)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 5l-7 7 7 7" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.arrow}
+        aria-label="Next slide"
+        title="Next slide"
+        data-testid="slide-next-big"
+        disabled={index >= frames.length - 1}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => stepPresentation(1)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function WorkshopLayer() {
   usePresentingKeys();
   return (
@@ -275,6 +324,7 @@ export function WorkshopLayer() {
       <VoteLayer />
       <TimerWidget />
       <SlideControls placement="bottom" />
+      <SlideArrows />
     </div>
   );
 }
