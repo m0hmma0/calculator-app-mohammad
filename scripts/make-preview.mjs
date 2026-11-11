@@ -19,8 +19,20 @@ const target = new URL('preview.html', root);
 
 const html = await readFile(source, 'utf8');
 
-const head = /<head>([\s\S]*?)<\/head>/i.exec(html)?.[1];
-const body = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html)?.[1];
+// The bundle's own strings may hold "<head>" or "<body>" (the web page script does), so
+// the document's real tags are found from the end: they are the last ones in the file.
+const bodyClose = html.toLowerCase().lastIndexOf('</body>');
+const bodyOpen = html.toLowerCase().lastIndexOf('<body', bodyClose);
+const headClose = html.toLowerCase().lastIndexOf('</head>', bodyOpen);
+const headOpen = html.toLowerCase().indexOf('<head>');
+const head =
+  headOpen !== -1 && headClose > headOpen
+    ? html.slice(headOpen + '<head>'.length, headClose)
+    : null;
+const body =
+  bodyOpen !== -1 && bodyClose > bodyOpen
+    ? html.slice(html.indexOf('>', bodyOpen) + 1, bodyClose)
+    : null;
 
 if (head == null || body == null) {
   throw new Error('Could not find <head> and <body> — did `vite build --mode preview` run?');

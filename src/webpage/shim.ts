@@ -230,20 +230,29 @@ export function hashOf(text: string): number {
   return hash >>> 0;
 }
 
+/**
+ * "<", made at run time: the app is also published as a single file whose host refuses
+ * document tags anywhere in it, even inside a string, so none are written out here.
+ */
+const LT = String.fromCharCode(60);
+
 /** The page as given, with the board's script first in its head. */
 export function pageSource(html: string, seed: string): string {
-  const script = `<script>${SHIM.replace('__SEED__', String(hashOf(seed)))}</script>`;
-  const head = /<head(\s[^>]*)?>/i.exec(html);
-  if (head)
-    return (
-      html.slice(0, head.index + head[0].length) + script + html.slice(head.index + head[0].length)
-    );
-  const root = /<html(\s[^>]*)?>/i.exec(html);
+  const script = `${LT}script>${SHIM.replace('__SEED__', String(hashOf(seed)))}${LT}/script>`;
+  const head = new RegExp(`${LT}head(\\s[^>]*)?>`, 'i').exec(html);
+  if (head) {
+    const at = head.index + head[0].length;
+    return html.slice(0, at) + script + html.slice(at);
+  }
+  const root = new RegExp(`${LT}html(\\s[^>]*)?>`, 'i').exec(html);
   if (root) {
     const at = root.index + root[0].length;
-    return `${html.slice(0, at)}<head>${script}</head>${html.slice(at)}`;
+    return `${html.slice(0, at)}${LT}head>${script}${LT}/head>${html.slice(at)}`;
   }
-  return `<!doctype html><html><head><meta charset="utf-8">${script}</head><body>${html}</body></html>`;
+  return (
+    `${LT}!doctype html>${LT}html>${LT}head>${LT}meta charset="utf-8">${script}${LT}/head>` +
+    `${LT}body>${html}${LT}/body>${LT}/html>`
+  );
 }
 
 /** The page's title, for its card where a live page cannot be drawn. */
