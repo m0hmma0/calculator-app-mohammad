@@ -739,7 +739,7 @@ export class BoardRoom extends DurableObject<Env> {
         // The gate. Hiding the toolbar from a viewer is a courtesy; this is the rule.
         // Their change is not applied, not stored and not passed on, and they are told.
         // Someone who answers gets through only with words typed in placeholders.
-        const answering = role === 'answer' && isOnlyAnswers(this.doc, payload);
+        const answering = role === 'answer' && isOnlyAnswers(this.doc, payload, user?.uid ?? null);
         if (!atLeast(role, 'editor') && !answering) {
           this.sendJson(ws, {
             t: 'error',

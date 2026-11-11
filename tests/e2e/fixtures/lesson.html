@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Fractions quiz</title>
+    <style>
+      body {
+        font:
+          20px system-ui,
+          sans-serif;
+        margin: 24px;
+      }
+      button {
+        font: inherit;
+        margin: 4px;
+        padding: 8px 16px;
+      }
+      .chosen {
+        background: gold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Fractions</h1>
+    <p id="question">What is 1/2 + 1/4?</p>
+    <div id="choices"></div>
+    <p id="result"></p>
+    <label><input type="checkbox" id="sure" /> I'm sure</label>
+    <p><input id="name" placeholder="Your name" /></p>
+    <p id="saved"></p>
+    <p id="order"></p>
+    <script>
+      // Shuffled, as AI-made quizzes often are: the same order in every copy.
+      const choices = ['3/4', '2/6', '1/8'].sort(() => Math.random() - 0.5);
+      document.getElementById('order').textContent = 'Order: ' + choices.join(' ');
+      const box = document.getElementById('choices');
+      for (const choice of choices) {
+        const button = document.createElement('button');
+        button.textContent = choice;
+        button.onclick = () => {
+          document
+            .querySelectorAll('#choices button')
+            .forEach((each) => each.classList.remove('chosen'));
+          button.classList.add('chosen');
+          document.getElementById('result').textContent =
+            choice === '3/4' ? 'Correct!' : 'Try again';
+          localStorage.setItem('answer', choice);
+        };
+        box.appendChild(button);
+      }
+      document.getElementById('saved').textContent =
+        'Saved: ' + (localStorage.getItem('answer') || 'none');
+    </script>
+  </body>
+</html>

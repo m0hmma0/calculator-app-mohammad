@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { API, createBoard, KEYS, newAccount, signIn, tokenFor } from './accounts';
 
 /**
@@ -608,4 +609,109 @@ test('a celebration plays for everyone on the board, and ends by itself', async 
   } finally {
     await close();
   }
+});
+
+// Web pages, shared: a student uses the page; the teacher watches their page, then
+// leads, and the student's page follows the teacher's.
+test.describe('web pages with a class', () => {
+  const lessonHtml = readFileSync(new URL('./fixtures/lesson.html', import.meta.url));
+  const frameOf = (page: Page) => page.frameLocator('[data-testid="web-page"]');
+
+  /** A real click at a thing's place on screen: the page is scaled with the board. */
+  async function clickIn(page: Page, selector: string) {
+    const frame = (await page.getByTestId('web-page').boundingBox())!;
+    const inner = await frameOf(page)
+      .locator(selector)
+      .evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2, width: innerWidth };
+      });
+    const scale = frame.width / inner.width;
+    await page.mouse.click(frame.x + inner.x * scale, frame.y + inner.y * scale);
+  }
+
+  test('the teacher watches a student’s page, and the student follows the teacher’s', async ({
+    browser,
+  }) => {
+    test.slow();
+    const teacherAccount = newAccount('teacher');
+    const studentAccount = newAccount('student');
+    const teacherContext = await browser.newContext();
+    const studentContext = await browser.newContext();
+    try {
+      const teacher = await teacherContext.newPage();
+      const student = await studentContext.newPage();
+      await signIn(teacher, teacherAccount);
+      const boardId = await createBoard(teacher);
+      const shared = await fetch(`${API}/api/shares/board/${boardId}/people`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${await tokenFor(teacherAccount)}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ email: `${studentAccount.uid}@example.test`, role: 'answer' }),
+      });
+      expect(shared.ok).toBe(true);
+
+      await teacher.getByTestId('insert-menu').click();
+      await teacher.getByTestId('insert-import').click();
+      await teacher
+        .getByTestId('import-file')
+        .setInputFiles({ name: 'lesson.html', mimeType: 'text/html', buffer: lessonHtml });
+      await expect(frameOf(teacher).locator('h1')).toHaveText('Fractions');
+
+      await signIn(student, studentAccount);
+      await student.goto(`/b/${boardId}`);
+      await expect(student.getByTestId('connection-status')).toHaveAttribute(
+        'data-status',
+        'connected',
+      );
+      // A student uses the page straight away, and the room keeps what they do.
+      await expect(student.getByTestId('web-page')).toHaveAttribute('data-usable', 'true');
+      await expect(frameOf(student).locator('h1')).toHaveText('Fractions');
+      await clickIn(student, '#choices button:text-is("3/4")');
+      await expect(frameOf(student).locator('#result')).toHaveText('Correct!');
+      await clickIn(student, '#name');
+      await student.keyboard.type('Sam');
+
+      // The teacher watches: their page is the student's, live.
+      await teacher.getByTestId('layers').locator('li').first().click();
+      const watch = teacher.getByTestId('web-page-watch');
+      await expect(watch.locator('option')).toHaveCount(2);
+      await watch.selectOption(studentAccount.uid);
+      await expect(teacher.getByTestId('web-page-watching')).toContainText('Watching');
+      await expect(frameOf(teacher).locator('#result')).toHaveText('Correct!');
+      await expect(frameOf(teacher).locator('#name')).toHaveValue('Sam');
+      await clickIn(student, '#choices button:text-is("1/8")');
+      await expect(frameOf(teacher).locator('#result')).toHaveText('Try again');
+      await watch.selectOption('');
+
+      // The teacher leads: the student's page follows the teacher's, and is not theirs
+      // to use meanwhile.
+      await teacher.getByTestId('web-page-use').click();
+      await clickIn(teacher, '#choices button:text-is("2/6")');
+      await expect(frameOf(teacher).locator('#result')).toHaveText('Try again');
+      await teacher.getByTestId('web-page-lead').click();
+      await expect(student.getByTestId('web-page-following')).toBeVisible();
+      await expect(student.getByTestId('web-page')).not.toHaveAttribute('data-usable', 'true');
+      await expect(frameOf(student).locator('#choices .chosen')).toHaveText('2/6');
+      await clickIn(teacher, '#choices button:text-is("3/4")');
+      await expect(frameOf(student).locator('#choices .chosen')).toHaveText('3/4');
+
+      // Leading ends: the student's own page is back, as they left it.
+      await teacher.getByTestId('web-page-lead').click();
+      await expect(student.getByTestId('web-page-following')).toHaveCount(0);
+      await expect(frameOf(student).locator('#choices .chosen')).toHaveText('1/8');
+      await expect(frameOf(student).locator('#name')).toHaveValue('Sam');
+
+      // And after a reload, from the room.
+      await student.waitForTimeout(1500);
+      await student.reload();
+      await expect(frameOf(student).locator('#name')).toHaveValue('Sam');
+      await expect(frameOf(student).locator('#choices .chosen')).toHaveText('1/8');
+    } finally {
+      await teacherContext.close();
+      await studentContext.close();
+    }
+  });
 });

@@ -10,6 +10,17 @@ export { STAMPS } from '@/model/stamps';
 
 const STAMP_SIZE = 72;
 
+/** A new web page: an HTML code box, open for the code to be pasted in. */
+export function insertWebPage() {
+  const store = useBoardStore.getState();
+  const element = store.insertAt(
+    'code',
+    { w: 960, h: 600 },
+    { text: '', language: 'html', webView: false },
+  );
+  if (element) store.beginEditing(element.id);
+}
+
 /** Things that are inserted rather than drawn: a table. */
 export function insertTable() {
   useBoardStore

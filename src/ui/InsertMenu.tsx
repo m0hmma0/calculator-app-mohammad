@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { importFile, IMPORT_ACCEPT, startImportBatch, useImport } from '@/importers/importFile';
-import { STAMPS, insertTable } from '@/input/insertions';
+import { STAMPS, insertTable, insertWebPage } from '@/input/insertions';
 import { selectCanEdit, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore, type Tool } from '@/state/boardStore';
 import {
@@ -254,6 +254,18 @@ export function InsertMenu() {
                 type="button"
                 role="menuitem"
                 className={styles.item}
+                data-testid="insert-web-page"
+                title="Paste a web page's HTML — its styles and scripts with it — and switch to Web to use it"
+                onClick={run(insertWebPage)}
+              >
+                <WebIcon />
+                <span>Web page</span>
+                <small>paste HTML</small>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.item}
                 data-testid="insert-import"
                 onClick={() => {
                   fileRef.current?.click();
@@ -262,7 +274,7 @@ export function InsertMenu() {
               >
                 <ImportIcon />
                 <span>Import…</span>
-                <small>pictures, PDF, video, sound</small>
+                <small>pictures, PDF, video, sound, web page</small>
               </button>
 
               <p className={styles.label}>Stamps</p>
@@ -533,3 +545,17 @@ const VoteIcon = () => (
   <Icon path="M5 6.2a1.7 1.7 0 1 1 0 .01M11 6.2a1.7 1.7 0 1 1 0 .01M8 10.7a1.7 1.7 0 1 1 0 .01" />
 );
 const MinimapIcon = () => <Icon path="M2.5 3.5h11v9h-11zM8.5 8h3.5v3h-3.5z" />;
+
+function WebIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}

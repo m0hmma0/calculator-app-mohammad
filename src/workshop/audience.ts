@@ -5,6 +5,7 @@ import { boardDoc, useBoardStore } from '@/state/boardStore';
 import { useEmbeds } from '@/state/embedStore';
 import { releaseDevices, useCamera, type CameraLayout } from '@/recording/camera';
 import { stopRecording } from '@/recording/recorder';
+import { myPerson } from '@/webpage/logs';
 import { audienceUrl } from './audienceMode';
 import { usePresentation } from './presentation';
 
@@ -42,6 +43,8 @@ export type ToAudience =
       frame: string | null;
       /** The room's clock less this one's, so celebrations are fresh there too. */
       clockOffset: number;
+      /** Whose use of the board's web pages to show: the presenter's own. */
+      person: string;
       /** Other sites' players started here, which start there instead. */
       started: readonly string[];
       /** The presenter's camera on the slide, while it is on; its picture comes apart. */
@@ -158,6 +161,7 @@ function feed(channel: BroadcastChannel, opened: Window): () => void {
       page: useBoardStore.getState().page,
       frame: presentation.presenting ? presentation.frame : null,
       clockOffset: usePresence.getState().clockOffset,
+      person: myPerson(),
       started: useEmbeds.getState().started,
       camera: useCamera.getState().stream ? useCamera.getState().layout : null,
     };

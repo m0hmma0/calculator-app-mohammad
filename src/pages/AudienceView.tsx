@@ -17,6 +17,7 @@ import { SlideTransition } from '@/ui/SlideTransition';
 import type { AudienceHooks, FromAudience, ToAudience } from '@/workshop/audience';
 import { cameraRadius, cameraRect, type CameraLayout } from '@/recording/camera';
 import { usePresentation } from '@/workshop/presentation';
+import { usePages } from '@/webpage/pageStore';
 import styles from './AudienceView.module.css';
 
 /** Around the slide: dark, as on the presenter's screen. */
@@ -114,6 +115,8 @@ export function AudienceView({ channelName }: { channelName: string }) {
         case 'state': {
           document.title = `${message.title} — slides`;
           usePresence.setState({ clockOffset: message.clockOffset });
+          // The board's web pages show what the presenter does in them.
+          usePages.setState({ forcedViewer: message.person });
           useEmbeds.setState({ started: message.started });
           if (useBoardStore.getState().page !== message.page) {
             useBoardStore.getState().setPage(message.page);

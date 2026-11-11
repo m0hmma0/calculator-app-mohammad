@@ -1,0 +1,82 @@
+/* A web page: laid out in board units, scaled with the board from its top-left. */
+.frame {
+  position: absolute;
+  transform-origin: 0 0;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.waiting {
+  position: absolute;
+  transform-origin: 0 0;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #667085;
+  font-size: 18px;
+  border-radius: 6px;
+}
+
+/* Its controls, just above its top-left corner, at screen size whatever the zoom. */
+.bar {
+  position: absolute;
+  transform: translateY(calc(-100% - 6px));
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: auto;
+  z-index: 3;
+}
+
+.bar button,
+.bar select {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.bar button:hover {
+  background: var(--surface-2);
+}
+
+.bar select {
+  border-color: var(--border);
+  padding: 2px 4px;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.toggle button {
+  border-radius: 0;
+}
+
+.toggle button[aria-pressed='true'],
+.on {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
+.status {
+  padding: 0 6px;
+  color: var(--accent);
+  font-weight: 600;
+}

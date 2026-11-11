@@ -1,3 +1,4 @@
+import { pageTitle } from '@/webpage/shim';
 import getStroke from 'perfect-freehand';
 import { detectLanguage, tokenizeLine, TOKEN_COLORS, type Language } from '@/model/highlight';
 import { fromFlat } from '@/ink/stroke';
@@ -770,6 +771,32 @@ export function drawCode(
   zoom: number,
 ): void {
   ctx.save();
+  // A web page: the live page is drawn over this by the page layer. Here, for
+  // thumbnails, exports and transitions, a card with its title.
+  if (element.webView && element.language === 'html') {
+    const radius = Math.min(6, element.w / 2, element.h / 2);
+    ctx.beginPath();
+    ctx.roundRect(element.x, element.y, element.w, element.h, radius);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth = 1 / zoom;
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.stroke();
+    const size = Math.max(14, Math.min(element.w, element.h) / 14);
+    ctx.font = `600 ${size}px ${fontStack('sans')}`;
+    ctx.fillStyle = '#344054';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const title = pageTitle(element.text ?? '') ?? 'Web page';
+    ctx.fillText(
+      `🌐 ${title}`,
+      element.x + element.w / 2,
+      element.y + element.h / 2,
+      element.w - 24,
+    );
+    ctx.restore();
+    return;
+  }
   cardBox(ctx, element, colors, zoom);
   const radius = Math.min(element.style.radius, element.w / 2, element.h / 2);
   ctx.beginPath();

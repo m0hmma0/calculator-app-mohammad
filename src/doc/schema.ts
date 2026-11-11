@@ -91,6 +91,8 @@ export function toYElement(element: BoardElement): YElement {
   if (typeof element.slide === 'string') map.set('slide', element.slide);
   if (element.notes) map.set('notes', element.notes);
   if (element.transition) map.set('transition', element.transition);
+  if (element.webView) map.set('webView', true);
+  if (element.lead) map.set('lead', element.lead);
   if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
   if (element.lockMode === 'others') map.set('lockMode', 'others');
   if (element.crop) map.set('crop', { ...element.crop });
@@ -133,6 +135,9 @@ export function fromYElement(map: YElement): BoardElement {
   if (typeof notes === 'string' && notes) element.notes = notes;
   const transition = map.get('transition');
   if (typeof transition === 'string' && transition) element.transition = transition;
+  if (map.get('webView') === true) element.webView = true;
+  const lead = map.get('lead');
+  if (typeof lead === 'string' && lead) element.lead = lead;
   const placeholder = map.get('placeholder');
   if (typeof placeholder === 'string') element.placeholder = placeholder;
   if (map.get('autoHeight') === true) element.autoHeight = true;

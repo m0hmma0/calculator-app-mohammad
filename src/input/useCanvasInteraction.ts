@@ -60,6 +60,7 @@ import { canTypeInto, lockedForMe, selectCanEdit, useBoardAccess } from '@/shari
 import { linkAt } from '@/text/links';
 import { openLink } from '@/text/marks';
 import { mediaFullScreen } from './useShortcuts';
+import { isWebPage, setActivePage } from '@/webpage/pageStore';
 
 const PICK_SLOP = 6; // screen px of forgiveness when clicking thin shapes
 const SNAP_DISTANCE = 6; // screen px
@@ -460,6 +461,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if ((event.target as HTMLElement | null)?.closest('[data-hud]')) return;
       // A video full screen is inside the stage, but presses on it are its own.
       if (mediaFullScreen()) return;
+      // A page in use is put down by pressing anywhere else on the board.
+      setActivePage(null);
       // A video that was played keeps the keyboard until something takes it back, and
       // the default is prevented below, so nothing would: Delete and every shortcut
       // would go to the player. A press on the board takes it back.
@@ -1192,6 +1195,11 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       });
       const target = found && !lockedForMe(found) ? found : null;
       if (!target) return;
+      // A web page is used, not edited, on a double-click: its code is a click away.
+      if (isWebPage(target)) {
+        setActivePage(target.id);
+        return;
+      }
       if (
         target.type === 'text' ||
         target.type === 'sticky' ||

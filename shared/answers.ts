@@ -1,4 +1,5 @@
 import * as Y from 'yjs';
+import { PAGE_EVENT_LIMIT, PAGE_LOGS, splitPageLogKey } from './pageLogs';
 
 /**
  * The Answer role's rule, which the room applies to every change such a person sends:
@@ -10,6 +11,10 @@ import * as Y from 'yjs';
  * parent, or a neighbour whose parent it shares. Every piece must land in a
  * placeholder's words, or be the new height of a placeholder; every deletion must
  * remove something from a placeholder's words (or something already gone).
+ *
+ * They may also keep their own record of what they do in the board's web pages
+ * (`pageLogs.ts`): a log under their own name, and entries added to it or taken away.
+ * Never anyone else's.
  */
 
 /** The element a placeholder's map is, if this is one: a text box with a hint. */
@@ -60,7 +65,30 @@ function known(doc: Y.Doc, id: Y.ID): Y.Item | Y.GC | null {
   }
 }
 
-export function isOnlyAnswers(doc: Y.Doc, update: Uint8Array): boolean {
+/** Whether a key in the page logs is this person's own. */
+const ownKey = (key: unknown, person: string | null): boolean =>
+  person !== null && typeof key === 'string' && splitPageLogKey(key)?.person === person;
+
+/** An entry of a page log: plain data, not too big. */
+function isPageEntry(item: Y.Item): boolean {
+  if (!(item.content instanceof Y.ContentAny)) return false;
+  return item.content.getContent().every((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    try {
+      return JSON.stringify(value).length <= PAGE_EVENT_LIMIT;
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function isOnlyAnswers(
+  doc: Y.Doc,
+  update: Uint8Array,
+  /** Who sent it (their uid): the page logs they may write are theirs alone. */
+  person: string | null = null,
+): boolean {
+  const logs = doc.getMap(PAGE_LOGS);
   // Asked for first, before anything is compared with it. A document rebuilt from stored
   // changes — a room waking up — holds its elements in a stand-in until something asks
   // for them by name; the asking swaps in the real map and moves the children to it, so
@@ -103,11 +131,65 @@ export function isOnlyAnswers(doc: Y.Doc, update: Uint8Array): boolean {
     return sibling && sibling !== item ? placeOf(sibling, depth + 1) : null;
   };
 
+  /** A list that is someone's page log, theirs being this person's. */
+  const isOwnLogList = (type: unknown): boolean => {
+    if (!(type instanceof Y.Array)) return false;
+    const holder = type._item;
+    return holder?.parent === logs && ownKey(holder.parentSub, person);
+  };
+
+  /**
+   * Whether a piece goes into a page log: undefined if it goes anywhere else, true if
+   * into this person's own log, false if into someone else's. The log may be made in
+   * this same change, or already be in the document.
+   */
+  const pageLogOf = (item: Y.Item): boolean | undefined => {
+    let target: Y.Item | Y.AbstractType<unknown> | null = null;
+    if (item.parent && typeof item.parent !== 'string') {
+      const id = item.parent as Y.ID;
+      const holder = known(doc, id) ?? inChange(id);
+      if (holder instanceof Y.Item && holder.content instanceof Y.ContentType) {
+        target = holder.content.type;
+        if (!known(doc, id)) {
+          // Made in this change: its own place says whose it is.
+          return (holder.parent as unknown) === PAGE_LOGS
+            ? ownKey(holder.parentSub, person)
+            : undefined;
+        }
+      }
+    } else if (!item.parent) {
+      const neighbour = item.origin ?? item.rightOrigin;
+      const existing = neighbour ? known(doc, neighbour) : null;
+      if (existing instanceof Y.Item) target = existing.parent as Y.AbstractType<unknown>;
+      else if (neighbour) {
+        const sibling = inChange(neighbour);
+        if (sibling) return pageLogOf(sibling);
+      }
+    }
+    if (!(target instanceof Y.Array)) return undefined;
+    const holder = target._item;
+    if (holder?.parent !== logs) return undefined;
+    return ownKey(holder.parentSub, person);
+  };
+
   for (const struct of decoded.structs) {
     if (struct instanceof Y.Skip) continue;
     // Already here: sent again when a page reconnects, and changes nothing.
     if (Y.getState(doc.store, struct.id.client) >= struct.id.clock + struct.length) continue;
     if (!(struct instanceof Y.Item)) return false;
+    // Their own page log: made (a list under their own key), or added to.
+    if ((struct.parent as unknown) === PAGE_LOGS) {
+      if (!ownKey(struct.parentSub, person) || !(struct.content instanceof Y.ContentType)) {
+        return false;
+      }
+      if (!(struct.content.type instanceof Y.Array)) return false;
+      continue;
+    }
+    const logPlace = pageLogOf(struct);
+    if (logPlace !== undefined) {
+      if (!logPlace || !isPageEntry(struct)) return false;
+      continue;
+    }
     const place = placeOf(struct);
     if (!place || !isAnswerPlace(elements, place.parent, place.sub)) return false;
     if (!isAnswerContent(struct, place.sub)) return false;
@@ -122,7 +204,12 @@ export function isOnlyAnswers(doc: Y.Doc, update: Uint8Array): boolean {
         const existing = known(doc, id);
         if (existing) {
           if (existing instanceof Y.Item && !existing.deleted) {
-            if (!isAnswerPlace(elements, existing.parent, existing.parentSub)) return false;
+            const ownLog =
+              (existing.parent === logs && ownKey(existing.parentSub, person)) ||
+              isOwnLogList(existing.parent);
+            if (!ownLog && !isAnswerPlace(elements, existing.parent, existing.parentSub)) {
+              return false;
+            }
           }
           clock = existing.id.clock + existing.length;
           continue;

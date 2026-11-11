@@ -5,6 +5,8 @@ import { useHistory } from '@/collab/history';
 import { useBoardStore } from '@/state/boardStore';
 import { startPlayer, useEmbeds } from '@/state/embedStore';
 import { SoundCard, VideoCard } from './MediaPlayers';
+import { isHtmlCode } from '@/webpage/pageStore';
+import { WebPages } from './WebPages';
 import { useFrameOnShow } from '@/workshop/onShow';
 import { usePresentation } from '@/workshop/presentation';
 import styles from './EmbedLayer.module.css';
@@ -30,7 +32,8 @@ export function EmbedLayer() {
   const embeds = (preview ?? elements).filter(
     (element) => element.type === 'embed' && element.embed && !element.hidden,
   );
-  if (embeds.length === 0) return null;
+  const hasPages = (preview ?? elements).some((element) => isHtmlCode(element) && !element.hidden);
+  if (embeds.length === 0 && !hasPages) return null;
 
   // A frame on show is all that shows: an embed beyond its edge is cut off there.
   let clipPath: string | undefined;
@@ -46,6 +49,8 @@ export function EmbedLayer() {
       style={{ clipPath, opacity: transitioning ? 0 : 1 }}
       data-transitioning={transitioning || undefined}
     >
+      {/* Not while looking at an old version: a page would run its code from then. */}
+      {preview ? null : <WebPages elements={elements} viewport={viewport} />}
       {embeds.map((element) => {
         const embed = element.embed!;
         const topLeft = boardToScreen(viewport, { x: element.x, y: element.y });

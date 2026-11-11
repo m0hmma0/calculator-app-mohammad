@@ -225,6 +225,36 @@ board canvas before it redraws (the old slide), waits `SETTLE_FRAMES` and copies
 new one); `usePresentation.transitioning` hides the embed layer meanwhile. Reduced motion
 gets a cross-fade. Not into a presentation's first slide, nor out of one.
 
+Web pages (11 November): a lesson page — one HTML file, its CSS and JS inside — is a code
+box with `language: 'html'` and `webView: true` (`isWebPage`, `src/webpage/pageStore.ts`);
+its HTML is the element's `text`, so it lives in the board (2 MB cap on import). In:
+Insert → Web page (empty, editor open to paste; `insertWebPage`), Import or drop an
+.html file (`importWebPage`: 1280×800, selected and zoomed to). A Code / Web switch and
+the page's other controls sit above it (`PageBar` in `src/ui/WebPages.tsx`, rendered
+inside the embed layer so slide clips and transitions apply). The page runs in an iframe
+with `srcdoc` and `sandbox` without `allow-same-origin` — an opaque origin, cut off from
+the board, its sign-in and its storage (webpages.spec proves it) — laid out in board
+units and scaled. `src/webpage/shim.ts` goes first in its head: Math.random seeded by
+the element id (every copy shuffles alike), localStorage/sessionStorage in memory, and
+a recorder of trusted clicks (not on form fields), input/change, keys outside fields,
+drags (pointer down/move/up) and scrolls, sent to the board by postMessage; it replays
+logs it is sent, each event when its target exists (3 s at most). Logs are per page and
+person in the root map `pageLogs` (`shared/pageLogs.ts`, key `<page>|<uid>`, never a map
+per page: two first writers would overwrite each other), written with `PAGE_ORIGIN`
+(not undoable), capped at 4,000 entries. A page shows: the presenter's log in the
+audience window (`forcedViewer`, from the state message's `person`), the leader's while
+`element.lead` is someone else, someone watched (`watchPage`, the teacher's "Watch…"),
+or one's own — replayed on open, which is how progress is remembered across devices.
+"Start over" deletes one's own log. Students (any role below editor) use a page at once;
+editors double-click or press "Use page" (pointer goes back to the board on a press
+elsewhere, or Escape in the page). The Answer role may write only its own logs:
+`isOnlyAnswers(doc, update, uid)` allows a list under its own key and small plain
+entries in it, nothing else (unit tests in answers.test.ts; the class test in
+workshop.spec fails when the room is not told who sent the change). Viewers use pages
+unsaved. Playwright's clicks inside a scaled frame miss: tests click at the screen
+position (`clickIn`). The canvas draws a card with the page's title under the frame
+(thumbnails, transitions).
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

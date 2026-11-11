@@ -6,7 +6,14 @@ import { createElement } from '@/model/element';
 import { keyBetween } from '@/model/zorder';
 import { imageBlobsFrom, pictureBox } from '@/media/images';
 import { storeImage } from '@/media/storeImage';
-import { importFile, isPdfFile, startImportBatch, useImport } from '@/importers/importFile';
+import {
+  importFile,
+  importWebPage,
+  isHtmlFile,
+  isPdfFile,
+  startImportBatch,
+  useImport,
+} from '@/importers/importFile';
 import { insertMedia, isMediaFile } from '@/media/mediaFiles';
 import { boardDoc, DUPLICATE_GAP, useBoardStore } from '@/state/boardStore';
 
@@ -117,6 +124,18 @@ export function useImageImport(hostRef: RefObject<HTMLElement | null>): void {
       }
       const rect = host.getBoundingClientRect();
       const screenPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      // A web page is used where it was dropped.
+      const pages = [...(event.dataTransfer?.files ?? [])].filter(isHtmlFile);
+      if (pages.length > 0 && !boardDoc().readOnly) {
+        event.preventDefault();
+        const at = screenToBoard(useBoardStore.getState().viewport, screenPoint);
+        pages.forEach((file, index) => {
+          void importWebPage(file, { x: at.x + index * 40, y: at.y + index * 40 }).catch((error) =>
+            useImport.setState({ error: (error as Error).message }),
+          );
+        });
+        return;
+      }
       // A video or a sound plays where it was dropped.
       const media = [...(event.dataTransfer?.files ?? [])].filter(isMediaFile);
       if (media.length > 0 && !boardDoc().readOnly) {

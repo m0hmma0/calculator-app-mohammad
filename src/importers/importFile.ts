@@ -105,6 +105,38 @@ async function importMedia(file: File) {
   below = { x: at.x, y: at.y + element.h + PAGE_GAP };
 }
 
+/** The biggest web page taken in: it lives in the board itself. */
+export const WEB_PAGE_LIMIT = 2_000_000;
+
+export const isHtmlFile = (file: File) => file.type === 'text/html' || /\.html?$/i.test(file.name);
+
+/**
+ * A web page — one HTML file, its styles and scripts inside it — as a page on the
+ * board, ready to use, at `at` (board coordinates) or in the middle of the view.
+ */
+export async function importWebPage(file: File, at?: { x: number; y: number }): Promise<void> {
+  if (file.size > WEB_PAGE_LIMIT) {
+    throw new Error(`${file.name} is over 2 MB: too big for a web page on the board.`);
+  }
+  const html = await file.text();
+  const element = createElement({
+    type: 'code',
+    box: { x: 0, y: 0, w: 1280, h: 800 },
+    z: 'a0',
+  });
+  Object.assign(element, { text: html, language: 'html', webView: true });
+  const store = useBoardStore.getState();
+  const [placed] = at
+    ? copiesOf([element], at, store.elements.at(-1)?.z ?? null)
+    : place([element]);
+  if (at && placed) store.addElements([placed]);
+  // A page is made for a screen: shown whole, so all of it can be used.
+  if (placed) {
+    store.selectOnly([placed.id]);
+    store.zoomToSelection();
+  }
+}
+
 /** What the Import button offers to open. */
 export const IMPORT_ACCEPT = [
   ...RASTER_TYPES,
@@ -114,6 +146,7 @@ export const IMPORT_ACCEPT = [
   '.pdf',
   'application/pdf',
   MEDIA_ACCEPT,
+  '.html,.htm,text/html',
 ].join(',');
 
 export const isSvgFile = (file: File) =>
@@ -139,7 +172,11 @@ export async function importFile(file: File): Promise<void> {
     else if (isPdfFile(file)) await importPdf(file);
     else if (isRasterImage(file)) await importImage(file);
     else if (isMediaFile(file)) await importMedia(file);
-    else throw new Error(`${file.name} is not a picture, an SVG, a PDF, a video or a sound.`);
+    else if (isHtmlFile(file)) await importWebPage(file);
+    else
+      throw new Error(
+        `${file.name} is not a picture, an SVG, a PDF, a video, a sound or a web page.`,
+      );
     useImport.setState({ status: null });
   } catch (error) {
     useImport.setState({ status: null, error: (error as Error).message });

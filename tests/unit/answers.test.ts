@@ -131,3 +131,77 @@ describe('someone who answers', () => {
     expect(isOnlyAnswers(room, new Uint8Array([1, 2, 3]))).toBe(false);
   });
 });
+
+describe('someone who answers, in a web page', () => {
+  const logs = () => student.getMap('pageLogs');
+  const me = 'u-student';
+
+  it('may start their own log for a page and add to it, in one change or several', () => {
+    const log = new Y.Array<unknown>();
+    logs().set(`page1|${me}`, log);
+    log.push([
+      { t: 'who', name: 'Sam' },
+      { t: 'click', path: [0, 1] },
+    ]);
+    expect(isOnlyAnswers(room, change(), me)).toBe(true);
+    Y.applyUpdate(room, change());
+    log.push([{ t: 'input', path: [0, 2], value: 'yes' }]);
+    expect(isOnlyAnswers(room, change(), me)).toBe(true);
+    Y.applyUpdate(room, change());
+    // Starting over: their log taken away.
+    logs().delete(`page1|${me}`);
+    expect(isOnlyAnswers(room, change(), me)).toBe(true);
+  });
+
+  it('may not write in anyone else’s log, start one under another name, or be nobody', () => {
+    const other = new Y.Array<unknown>();
+    room.getMap('pageLogs').set('page1|u-other', other);
+    other.push([{ t: 'click', path: [0] }]);
+    Y.applyUpdate(student, Y.encodeStateAsUpdate(room));
+
+    (logs().get('page1|u-other') as Y.Array<unknown>).push([{ t: 'click', path: [9] }]);
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+
+    student = new Y.Doc();
+    Y.applyUpdate(student, Y.encodeStateAsUpdate(room));
+    logs().set('page1|u-other', new Y.Array());
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+
+    student = new Y.Doc();
+    Y.applyUpdate(student, Y.encodeStateAsUpdate(room));
+    logs().delete('page1|u-other');
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+
+    student = new Y.Doc();
+    Y.applyUpdate(student, Y.encodeStateAsUpdate(room));
+    logs().set(`page1|${me}`, new Y.Array());
+    expect(isOnlyAnswers(room, change(), null)).toBe(false);
+  });
+
+  it('may put only small plain entries in their log, and nothing else in the page logs', () => {
+    const log = new Y.Array<unknown>();
+    logs().set(`page1|${me}`, log);
+    log.push(['x'.repeat(10)]);
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+
+    student = new Y.Doc();
+    Y.applyUpdate(student, Y.encodeStateAsUpdate(room));
+    const big = new Y.Array<unknown>();
+    logs().set(`page1|${me}`, big);
+    big.push([{ t: 'input', value: 'x'.repeat(5000) }]);
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+
+    student = new Y.Doc();
+    Y.applyUpdate(student, Y.encodeStateAsUpdate(room));
+    logs().set(`page1|${me}`, 'not a list');
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+  });
+
+  it('still may not touch the board while writing a log', () => {
+    const log = new Y.Array<unknown>();
+    logs().set(`page1|${me}`, log);
+    log.push([{ t: 'click', path: [0] }]);
+    map('box').set('x', 999);
+    expect(isOnlyAnswers(room, change(), me)).toBe(false);
+  });
+});

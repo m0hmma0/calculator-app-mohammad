@@ -209,6 +209,10 @@ export interface BoardElement {
   embed?: EmbedData;
   /** A code block's language, for highlighting. */
   language?: string;
+  /** An HTML code block shown as the web page it is, rather than its code. */
+  webView?: boolean;
+  /** Whose use of this web page everyone sees, while they lead (a uid); null for no one. */
+  lead?: string | null;
 
   /** Connector endpoints. When bound, the arrow follows the element. */
   from?: Binding;
