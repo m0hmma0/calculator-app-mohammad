@@ -10,6 +10,9 @@ import { recordWebm } from './mediaFixtures';
 
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 test.use({
+  // Playwright's headless shell has no camera, microphone or tab recording at all;
+  // the full Chromium, headless, has all three (CI's run on the shell failed here).
+  ...(executablePath ? {} : { channel: 'chromium' }),
   permissions: ['camera', 'microphone'],
   launchOptions: {
     ...(executablePath ? { executablePath } : {}),

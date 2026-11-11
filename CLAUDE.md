@@ -200,7 +200,10 @@ use context `permissions` and `--auto-select-tab-capture-source-by-title=slides`
 audience window is made 2:1 so the frames' dark bands prove which tab was recorded;
 ffprobe/ffmpeg, where installed (this container has them; the test skips that part otherwise), decode every frame and check
 codecs, size and key frames. `elementsFromPoint` skips `pointer-events: none`, which is
-everything in the audience window.
+everything in the audience window. Playwright's headless shell (what CI runs by default) has no camera,
+microphone or tab recording, so recording.spec asks for `channel: 'chromium'` (the full
+browser, headless) unless `PLAYWRIGHT_CHROMIUM_EXECUTABLE` is set; reproduce with
+`/opt/pw-browsers/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell`.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
