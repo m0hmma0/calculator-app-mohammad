@@ -6,6 +6,7 @@ import { useBoardStore } from '@/state/boardStore';
 import { startPlayer, useEmbeds } from '@/state/embedStore';
 import { SoundCard, VideoCard } from './MediaPlayers';
 import { useFrameOnShow } from '@/workshop/onShow';
+import { usePresentation } from '@/workshop/presentation';
 import styles from './EmbedLayer.module.css';
 
 /**
@@ -21,6 +22,8 @@ export function EmbedLayer() {
   const preview = useHistory((state) => state.preview);
   const started = useEmbeds((state) => state.started);
   const onShow = useFrameOnShow();
+  // Presenter view: other sites' players play in the audience window, not here too.
+  const playsElsewhere = usePresentation((state) => state.audience);
 
   const embeds = (preview ?? elements).filter(
     (element) => element.type === 'embed' && element.embed && !element.hidden,
@@ -71,7 +74,9 @@ export function EmbedLayer() {
         if (embed.kind === 'video' && embed.videoId) {
           return (
             <div key={element.id} className={styles.embed} style={box} data-testid="embed-video">
-              {isStarted ? (
+              {isStarted && playsElsewhere ? (
+                <Elsewhere />
+              ) : isStarted ? (
                 <>
                   <Grip />
                   <iframe
@@ -105,13 +110,32 @@ export function EmbedLayer() {
 
         if (embed.kind === 'media') {
           return embed.media === 'video' ? (
-            <VideoCard key={element.id} embed={embed} style={scaled} selected={selected} />
+            <VideoCard
+              key={element.id}
+              elementId={element.id}
+              embed={embed}
+              style={scaled}
+              selected={selected}
+            />
           ) : (
-            <SoundCard key={element.id} embed={embed} style={scaled} selected={selected} />
+            <SoundCard
+              key={element.id}
+              elementId={element.id}
+              embed={embed}
+              style={scaled}
+              selected={selected}
+            />
           );
         }
 
         if (embed.kind === 'player' && embed.player) {
+          if (isStarted && playsElsewhere) {
+            return (
+              <div key={element.id} className={styles.embed} style={box}>
+                <Elsewhere />
+              </div>
+            );
+          }
           if (isStarted) {
             return (
               <div
@@ -213,10 +237,20 @@ function PlayButton({
       data-hud
       data-wheel-pans
       data-testid="media-play"
+      data-media-controls
       onClick={onPlay}
     >
       <span aria-hidden="true">▶</span>
     </button>
+  );
+}
+
+/** In presenter view, where another site's player is playing instead. */
+function Elsewhere() {
+  return (
+    <p className={styles.elsewhere} data-testid="embed-elsewhere">
+      Playing in the audience window
+    </p>
   );
 }
 
@@ -226,7 +260,12 @@ function PlayButton({
  */
 function Grip() {
   return (
-    <div className={styles.grip} title="Drag to move · click to select" data-testid="embed-grip">
+    <div
+      className={styles.grip}
+      title="Drag to move · click to select"
+      data-testid="embed-grip"
+      data-media-controls
+    >
       ⠿
     </div>
   );

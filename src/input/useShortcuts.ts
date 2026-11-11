@@ -10,7 +10,7 @@ import { startPresentation, usePresentation } from '@/workshop/presentation';
 import { STAMPS } from '@/model/stamps';
 import { actionFor, isRecordingShortcut } from './shortcuts';
 
-function isTypingTarget(target: EventTarget | null): boolean {
+export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
     target.isContentEditable ||

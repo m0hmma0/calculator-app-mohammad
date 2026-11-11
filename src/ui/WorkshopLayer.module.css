@@ -198,3 +198,23 @@
 .slidesInPane button:disabled {
   opacity: 0.35;
 }
+
+.blocked {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--danger, #c92a2a);
+  max-width: 24ch;
+}
+
+.slidesInPane .exit[aria-pressed='true'] {
+  background: var(--surface-2);
+}
+
+/* Two words, or three, in the narrow pane: it grows to fit them. */
+.slidesInPane .viewToggle,
+.presentBar .viewToggle {
+  height: auto;
+  min-height: 28px;
+  line-height: 1.2;
+  padding: 4px 8px;
+}

@@ -3,6 +3,7 @@ import { usePresence } from '@/collab/presence';
 import { transactLocal, type BoardDoc } from '@/doc/board';
 import { metaOf } from '@/doc/schema';
 import { onDocumentAttached } from '@/state/boardStore';
+import { usePresentation } from '@/workshop/presentation';
 import { playSound, type SoundName } from './sound';
 
 /**
@@ -100,7 +101,10 @@ function play(effect: Effect) {
   played.add(effect.id);
   lastVariant.set(effect.kind, effect.variant);
   useEffectsStore.setState((state) => ({ playing: [...state.playing, effect] }));
-  playSound(effect.kind, { level: effect.level, seed: effect.id, variant: effect.variant });
+  // In presenter view the audience window plays the sound; twice would be an echo.
+  if (!usePresentation.getState().audience) {
+    playSound(effect.kind, { level: effect.level, seed: effect.id, variant: effect.variant });
+  }
   setTimeout(() => {
     useEffectsStore.setState((state) => ({
       playing: state.playing.filter((each) => each.id !== effect.id),

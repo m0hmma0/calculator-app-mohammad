@@ -59,6 +59,7 @@ import { lockedForMe, mayLockForOthers } from '@/sharing/boardAccess';
 import { loadViewport, saveViewport, setViewportScope } from './viewportStorage';
 import { useWorkspace } from './workspaceStore';
 import type { SnapGuide, SpacingMark } from '@/snapping/snap';
+import { isAudienceWindow } from '@/workshop/audienceMode';
 
 export type ContentTool =
   | 'pen'
@@ -319,7 +320,8 @@ const canPersist = typeof indexedDB !== 'undefined';
  * board is currently open.
  */
 let board: BoardDoc = createBoard({
-  persistenceKey: canPersist ? 'sabboura-local' : undefined,
+  // The audience window keeps nothing: its board comes from the presenter's window.
+  persistenceKey: canPersist && !isAudienceWindow() ? 'sabboura-local' : undefined,
 });
 
 export const boardDoc = (): BoardDoc => board;
@@ -1070,7 +1072,7 @@ let history: History | null = null;
  * someone else signing in here does not inherit it. The signed-out board has one.
  */
 function historyKey(): string | null {
-  if (!canPersist) return null;
+  if (!canPersist || isAudienceWindow()) return null;
   if (openBoardId === null) return 'local';
   return `${useWorkspace.getState().account?.uid ?? 'guest'}/${openBoardId}`;
 }
@@ -1247,6 +1249,21 @@ export function openBoardDocument(boardId: string | null): BoardDoc {
   return board;
 }
 
+/**
+ * The audience window's board: in memory, read-only, filled from the presenter's
+ * window (`src/pages/AudienceView.tsx`).
+ */
+export function openAudienceDocument(): BoardDoc {
+  const previous = board;
+  openBoardId = null;
+  board = createBoard();
+  board.readOnly = true;
+  attachDocument(board);
+  useBoardStore.setState({ selection: [], editingId: null, draft: null, tool: 'hand' });
+  previous.destroy();
+  return board;
+}
+
 if (typeof window !== 'undefined') {
   const report = () => useBoardStore.getState().setOnline(navigator.onLine);
   window.addEventListener('online', report);
@@ -1254,6 +1271,7 @@ if (typeof window !== 'undefined') {
 }
 
 // The camera follows you back after a reload, but stays out of the shared document.
+// Not the audience window's, which is fitted to the slide and must not overwrite it.
 useBoardStore.subscribe((state, previous) => {
-  if (state.viewport !== previous.viewport) saveViewport(state.viewport);
+  if (state.viewport !== previous.viewport && !isAudienceWindow()) saveViewport(state.viewport);
 });

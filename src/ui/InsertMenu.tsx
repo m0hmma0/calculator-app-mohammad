@@ -19,6 +19,7 @@ import {
   numberFramesAutomatically,
   selectedFrame,
   startPresentation,
+  startPresenterView,
 } from '@/workshop/presentation';
 import {
   clearVote,
@@ -298,6 +299,27 @@ export function InsertMenu() {
             >
               <PresentIcon />
               <span>{startNumber ? `Present from frame ${startNumber}` : 'Present frames'}</span>
+            </button>
+          ) : null}
+          {owner ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              title="Only the slides in a window of their own, for sharing or recording your screen; notes and controls stay here"
+              data-testid="present-presenter-view"
+              onClick={() => {
+                const result = startPresenterView();
+                if (result === 'started') setOpen(false);
+                else if (result === 'no-frames') {
+                  setNotice('Add a frame first — each frame is one slide.');
+                } else {
+                  setNotice('The browser blocked the window: allow pop-ups for this site.');
+                }
+              }}
+            >
+              <PresentIcon />
+              <span>Presenter view</span>
             </button>
           ) : null}
           {editable ? (

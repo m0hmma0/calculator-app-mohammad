@@ -12,6 +12,7 @@ import type { EmbedData } from '@/model/element';
 import { useMediaSrc } from '@/media/mediaFiles';
 import { useUploads } from '@/media/uploads';
 import { formatTime, PEAK_COUNT, usePeaks } from '@/media/waveform';
+import { useMutedHere } from '@/workshop/audience';
 import styles from './MediaPlayers.module.css';
 
 /**
@@ -86,6 +87,17 @@ function useClock(ref: RefObject<HTMLMediaElement | null>) {
   }, [ref]);
 
   return { time, duration, playing };
+}
+
+/**
+ * Silent here while presenter view's audience window plays it (`useMutedHere`), so a
+ * screen being shared or recorded does not carry it twice.
+ */
+function useMuted(ref: RefObject<HTMLMediaElement | null>, elementId: string) {
+  const muted = useMutedHere(elementId);
+  useEffect(() => {
+    if (ref.current) ref.current.muted = muted;
+  });
 }
 
 /** Plays from a fraction of the way through — once the length is known, if it is not yet. */
@@ -184,10 +196,12 @@ function barsPath(peaks: readonly number[], top: boolean): string {
  * a click would play from; a click plays from there.
  */
 export function SoundCard({
+  elementId,
   embed,
   style,
   selected,
 }: {
+  elementId: string;
   embed: EmbedData;
   style: CSSProperties;
   selected: boolean;
@@ -195,6 +209,7 @@ export function SoundCard({
   const src = useMediaSrc(embed);
   const ref = useRef<HTMLAudioElement>(null);
   const { time, duration, playing } = useClock(ref);
+  useMuted(ref, elementId);
   const { peaks, real } = usePeaks(embed, src);
   const { hover, handlers } = useSeeking(ref, duration);
   const id = useId();
@@ -210,10 +225,19 @@ export function SoundCard({
       data-playing={playing || undefined}
       data-selected={selected || undefined}
     >
-      {src ? <audio ref={ref} src={src} preload="metadata" data-testid="embed-player" /> : null}
+      {src ? (
+        <audio
+          ref={ref}
+          src={src}
+          preload="metadata"
+          data-element-id={elementId}
+          data-testid="embed-player"
+        />
+      ) : null}
       <button
         type="button"
         className={styles.round}
+        data-media-controls
         aria-label={playing ? 'Pause' : 'Play'}
         data-hud
         data-wheel-pans
@@ -292,10 +316,12 @@ export function SoundCard({
  * there while it is paused, and on hover while it plays.
  */
 export function VideoCard({
+  elementId,
   embed,
   style,
   selected,
 }: {
+  elementId: string;
   embed: EmbedData;
   style: CSSProperties;
   selected: boolean;
@@ -303,6 +329,7 @@ export function VideoCard({
   const src = useMediaSrc(embed);
   const ref = useRef<HTMLVideoElement>(null);
   const { time, duration, playing } = useClock(ref);
+  useMuted(ref, elementId);
   const { hover, handlers } = useSeeking(ref, duration);
   const progress = Number.isFinite(duration) && duration > 0 ? time / duration : 0;
 
@@ -333,6 +360,7 @@ export function VideoCard({
           src={src}
           preload="metadata"
           playsInline
+          data-element-id={elementId}
           data-testid="embed-player"
         />
       ) : null}
@@ -340,6 +368,7 @@ export function VideoCard({
         <button
           type="button"
           className={styles.bigPlay}
+          data-media-controls
           aria-label="Play"
           data-hud
           data-wheel-pans
@@ -351,7 +380,7 @@ export function VideoCard({
           <PlayIcon playing={false} />
         </button>
       ) : null}
-      <div className={styles.bar} data-hud data-wheel-pans>
+      <div className={styles.bar} data-hud data-wheel-pans data-media-controls>
         <button
           type="button"
           className={styles.barButton}

@@ -3,14 +3,17 @@ import { boardToScreen } from '@/canvas/viewport';
 import { useHistory } from '@/collab/history';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore } from '@/state/boardStore';
+import { closeAudienceWindow } from '@/workshop/audience';
 import {
   framesInOrder,
+  startPresenterView,
   stepPresentation,
   stopPresentation,
   usePresentation,
 } from '@/workshop/presentation';
 import { castVote, serverNow, stopTimer, useWorkshop } from '@/workshop/workshop';
 import { actionFor, isRecordingShortcut } from '@/input/shortcuts';
+import { isTypingTarget } from '@/input/useShortcuts';
 import { rectsIntersect } from '@/geometry';
 import { useFrameOnShow } from '@/workshop/onShow';
 import { useSidePane } from './layout';
@@ -23,6 +26,10 @@ const PRESENTING: Record<string, () => void> = {
   'present.first': () => stepPresentation(-Infinity),
   'present.last': () => stepPresentation(Infinity),
   'present.stop': stopPresentation,
+  'present.audience': () => {
+    if (usePresentation.getState().audience) closeAudienceWindow();
+    else startPresenterView();
+  },
 };
 
 const formatRemaining = (ms: number) => {
@@ -164,7 +171,8 @@ function usePresentingKeys() {
   useEffect(() => {
     if (!presenting) return;
     const onKey = (event: KeyboardEvent) => {
-      if (isRecordingShortcut()) return;
+      // Presenter view's notes take their own keys: arrows and Space are for typing.
+      if (isRecordingShortcut() || isTypingTarget(event.target)) return;
       const id = actionFor(event, 'presenting');
       if (!id) return;
       PRESENTING[id]?.();
@@ -185,8 +193,11 @@ function usePresentingKeys() {
 export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
   const presenting = usePresentation((state) => state.presenting);
   const frame = usePresentation((state) => state.frame);
+  const audience = usePresentation((state) => state.audience);
+  const notesInset = usePresentation((state) => state.notesInset);
   const elements = useBoardStore((state) => state.elements);
   const sidePane = useSidePane();
+  const [blocked, setBlocked] = useState(false);
   if (!presenting || sidePane !== (placement === 'pane')) return null;
 
   const frames = framesInOrder(elements);
@@ -194,6 +205,8 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
   return (
     <div
       className={placement === 'pane' ? styles.slidesInPane : styles.presentBar}
+      // Along the bottom, it sits above presenter view's notes.
+      style={placement === 'bottom' && audience ? { bottom: notesInset + 12 } : undefined}
       role="group"
       aria-label="Presentation"
       data-testid="presentation-bar"
@@ -221,6 +234,28 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
           ›
         </button>
       </div>
+      <button
+        type="button"
+        className={`${styles.exit} ${styles.viewToggle}`}
+        aria-pressed={audience}
+        title={
+          audience
+            ? 'Close the audience window; presenting carries on here'
+            : 'Open a window with only the slides, for sharing or recording your screen, and keep notes here'
+        }
+        data-testid="presenter-view"
+        onClick={() => {
+          if (audience) return closeAudienceWindow();
+          setBlocked(startPresenterView() === 'blocked');
+        }}
+      >
+        {audience ? 'End presenter view' : 'Presenter view'}
+      </button>
+      {blocked && !audience ? (
+        <span className={styles.blocked} role="alert" data-testid="presenter-view-blocked">
+          The browser blocked the window: allow pop-ups for this site, then try again.
+        </span>
+      ) : null}
       <button
         type="button"
         className={styles.exit}

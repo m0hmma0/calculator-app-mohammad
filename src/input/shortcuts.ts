@@ -118,6 +118,7 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('present.first', 'First frame', 'Presenting', ['Home'], 'presenting'),
   action('present.last', 'Last frame', 'Presenting', ['End'], 'presenting'),
   action('present.stop', 'Stop presenting', 'Presenting', ['Escape'], 'presenting'),
+  action('present.audience', 'Presenter view on or off', 'Presenting', [], 'presenting'),
 
   // In the order of the Insert menu's row of celebrations.
   action('celebrate.confetti', 'Confetti', 'Celebrations', ['Numpad1']),

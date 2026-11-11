@@ -5,6 +5,7 @@ import { selectionAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
 import { keysBetween } from '@/model/zorder';
 import { useBoardStore } from '@/state/boardStore';
+import { closeAudienceWindow, openAudienceWindow } from './audience';
 
 /** Margin around a frame in presentation, in screen pixels. */
 export const PRESENT_PADDING = 24;
@@ -13,11 +14,23 @@ interface PresentationStore {
   presenting: boolean;
   /** The frame on screen, by id, so frames added or moved mid-talk do not skip it. */
   frame: string | null;
+  /** Presenter view: the audience window is open (`src/workshop/audience.ts`). */
+  audience: boolean;
+  /** When it opened, for the presenter's clock. */
+  audienceSince: number | null;
+  /** Videos and sounds the audience window could not play, so heard here instead. */
+  heardHere: readonly string[];
+  /** The notes along the bottom in presenter view, in pixels: the slide fits above them. */
+  notesInset: number;
 }
 
 export const usePresentation = create<PresentationStore>(() => ({
   presenting: false,
   frame: null,
+  audience: false,
+  audienceSince: null,
+  heardHere: [],
+  notesInset: 0,
 }));
 
 /**
@@ -136,7 +149,11 @@ function show(frameId: string | null) {
   const frame = store.elements.find((element) => element.id === frameId);
   usePresentation.setState({ frame: frame?.id ?? null });
   usePresence.setState({ present: frame ? { frame: frame.id } : null });
-  if (frame) store.setViewport(fitToRect(frame, store.stageSize, PRESENT_PADDING));
+  if (!frame) return;
+  // In presenter view the notes take the bottom of the stage; the slide fits above.
+  const inset = usePresentation.getState().audience ? usePresentation.getState().notesInset : 0;
+  const size = { width: store.stageSize.width, height: store.stageSize.height - inset };
+  store.setViewport(fitToRect(frame, size, PRESENT_PADDING));
 }
 
 let stopWatching: (() => void) | null = null;
@@ -157,13 +174,25 @@ export function startPresentation(): boolean {
   usePresentation.setState({ presenting: true });
   show(first.id);
   // The chrome goes away, so the stage grows; the frame is refitted to the new size.
-  stopWatching = useBoardStore.subscribe((state, previous) => {
+  const stopStage = useBoardStore.subscribe((state, previous) => {
     if (state.stageSize !== previous.stageSize) show(usePresentation.getState().frame);
   });
+  // Presenter view opening or closing, or its notes growing, changes the room too.
+  const stopNotes = usePresentation.subscribe((state, previous) => {
+    if (state.audience !== previous.audience || state.notesInset !== previous.notesInset) {
+      show(state.frame);
+    }
+  });
+  stopWatching = () => {
+    stopStage();
+    stopNotes();
+  };
   return true;
 }
 
 export function stopPresentation(): void {
+  // The audience window goes with the presentation, as a slide show's does.
+  closeAudienceWindow();
   stopWatching?.();
   stopWatching = null;
   delete document.documentElement.dataset.presenting;
@@ -178,4 +207,20 @@ export function stepPresentation(step: number): void {
   const current = frames.findIndex((frame) => frame.id === usePresentation.getState().frame);
   const next = Math.min(frames.length - 1, Math.max(0, (current === -1 ? 0 : current) + step));
   show(frames[next]!.id);
+}
+
+/**
+ * Presenter view: presents (if not already) and opens the audience window, which
+ * shows only the slides. False when there are no frames or the browser blocked the
+ * window. Must run inside the click that asked for it.
+ */
+export function startPresenterView(): 'started' | 'no-frames' | 'blocked' {
+  const wasPresenting = usePresentation.getState().presenting;
+  if (!wasPresenting && framesInOrder(useBoardStore.getState().elements).length === 0) {
+    return 'no-frames';
+  }
+  // The window first, while the click still counts: presenting changes the page.
+  if (!openAudienceWindow()) return 'blocked';
+  if (!wasPresenting) startPresentation();
+  return 'started';
 }

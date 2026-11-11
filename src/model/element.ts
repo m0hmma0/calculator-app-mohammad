@@ -166,6 +166,8 @@ export interface BoardElement {
    * Null takes a number away again ("Number frames automatically").
    */
   slide?: string | null;
+  /** A frame's speaker notes, shown to the presenter in presenter view only. */
+  notes?: string;
   style: ElementStyle;
 
   /**

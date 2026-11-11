@@ -48,6 +48,7 @@ async function twoWindows(browser: Browser, label: string, twoPeople = false) {
   return {
     a,
     b,
+    account,
     close: async () => {
       await contextA.close();
       await contextB.close();
@@ -151,6 +152,77 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
 
     await a.keyboard.press('Escape');
     await expect(b.getByTestId('peer-avatar').first()).not.toContainText('presenting');
+  } finally {
+    await close();
+  }
+});
+
+// Presenter view on an account board: the audience window opens at the board's own
+// address, takes the board from this window rather than the room, and is nobody new
+// on the board. The notes are kept on the frame, in the room's copy too.
+test('presenter view on an account board: the slides in a window of their own', async ({
+  browser,
+}) => {
+  const { a, b, account, close } = await twoWindows(browser, 'audience', true);
+  try {
+    await drag(a, 'KeyR', [170, 230], [230, 270]);
+    await drag(a, 'KeyF', [100, 180], [300, 320]);
+    await drag(a, 'KeyF', [400, 180], [600, 320]);
+    await a.keyboard.press('Escape');
+    await expect(layerItems(b)).toHaveCount(3);
+    const people = await b.getByTestId('peer-avatar').count();
+
+    await a.getByTestId('insert-menu').click();
+    const opened = a.context().waitForEvent('page');
+    await a.getByTestId('present-presenter-view').click();
+    const audience = await opened;
+    expect(new URL(audience.url()).pathname).toBe(new URL(a.url()).pathname);
+    await expect(audience.getByTestId('audience')).toBeVisible();
+    await expect(a.getByTestId('presentation-counter')).toHaveText('1 / 2');
+
+    // The first slide's rectangle, large in the middle of the audience window.
+    await expect
+      .poll(() =>
+        audience.evaluate(() => {
+          const canvas = document.querySelector<HTMLCanvasElement>(
+            '[data-testid="audience-canvas"]',
+          )!;
+          const [r, g, bl] = canvas
+            .getContext('2d')!
+            .getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+          return `${r},${g},${bl}`;
+        }),
+      )
+      .not.toBe('255,255,255');
+    await expect(audience.locator('button:visible')).toHaveCount(0);
+
+    // Nobody new joined the board, and the follower sees no notes.
+    await a.getByTestId('presenter-notes-field').fill('Only for the presenter');
+    await a.getByTestId('slide-next').click();
+    await expect(b.getByTestId('peer-avatar')).toHaveCount(people);
+    await expect(b.getByTestId('presenter-notes')).toHaveCount(0);
+
+    // Kept in the room: the presenter, in a browser that has never opened the board,
+    // finds them there.
+    await a.getByTestId('present-stop').click();
+    await expect.poll(() => audience.isClosed()).toBe(true);
+    await a.waitForTimeout(1500);
+    const fresh = await browser.newContext();
+    try {
+      const again = await fresh.newPage();
+      await signIn(again, account);
+      await again.goto(new URL(a.url()).pathname);
+      await expect(layerItems(again)).toHaveCount(3);
+      await again.getByTestId('insert-menu').click();
+      const reopened = again.context().waitForEvent('page');
+      await again.getByTestId('present-presenter-view').click();
+      await reopened;
+      await expect(again.getByTestId('presenter-notes-field')).toHaveValue(
+        'Only for the presenter',
+      );
+    } finally {
+      await fresh.close();
+    }
   } finally {
     await close();
   }

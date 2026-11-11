@@ -148,6 +148,26 @@ place order is decided. Tiles/list and the board order are `settings.dashboard`
 list view's rows read down columns (`useListRows` sets the grid's row count from its
 width). Migration 0007.
 
+Presenter view (11 November, asked for after Phase 16): while presenting, "Presenter
+view" (slide controls, or Insert) opens an audience window — this app at the same
+address plus `#audience=<channel>` (`src/workshop/audienceMode.ts`; `main.tsx` renders
+`AudienceView` instead of `App`). It has no room, account or storage: the presenter's
+window (`src/workshop/audience.ts`) feeds it over a BroadcastChannel — the whole Yjs
+document on `hello`, then each update; the page, frame and started site players; laser
+trails as ages (the windows' clocks differ); and play/pause/seek of video and sound
+files (`data-element-id` on the media element). The audience window draws the slide
+fitted edge to edge, nothing is pressable there but other sites' iframes, double-click
+or F fills the screen, and the pointer hides. While it is open the presenter's own files
+and celebration sounds are muted (heard there; if that window may not play sound
+unasked, it plays muted and tells the presenter's copy to play aloud: `heardHere`), and
+site players show "Playing in the audience window". Exit closes it; closing it keeps
+presenting. The presenter's side gets `PresenterNotes` along the bottom (the slide fits
+above: `notesInset`): slide n of m, next, a clock, and the frame's notes —
+`element.notes`, a document field, so anyone with the board's data could read them,
+though only presenter view shows them. Presenting keys ignore text fields now
+(`isTypingTarget`). Shortcut `present.audience`, no default key. No migration, no
+server cost.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

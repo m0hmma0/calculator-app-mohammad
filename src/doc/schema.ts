@@ -89,6 +89,7 @@ export function toYElement(element: BoardElement): YElement {
   }
   if (element.page !== undefined) map.set('page', element.page);
   if (typeof element.slide === 'string') map.set('slide', element.slide);
+  if (element.notes) map.set('notes', element.notes);
   if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
   if (element.lockMode === 'others') map.set('lockMode', 'others');
   if (element.crop) map.set('crop', { ...element.crop });
@@ -127,6 +128,8 @@ export function fromYElement(map: YElement): BoardElement {
   if (isCrop(crop)) element.crop = { x: crop.x, y: crop.y, w: crop.w, h: crop.h };
   const slide = map.get('slide');
   if (typeof slide === 'string') element.slide = slide;
+  const notes = map.get('notes');
+  if (typeof notes === 'string' && notes) element.notes = notes;
   const placeholder = map.get('placeholder');
   if (typeof placeholder === 'string') element.placeholder = placeholder;
   if (map.get('autoHeight') === true) element.autoHeight = true;

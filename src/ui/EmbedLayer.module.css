@@ -94,3 +94,17 @@
     0 0 0 3px rgb(255 255 255 / 0.9),
     0 0 0 5px var(--accent);
 }
+
+/* Presenter view: another site's player is playing in the audience window instead. */
+.elsewhere {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 8px;
+  background: #101217;
+  color: #c9d1dc;
+  font-size: 13px;
+  text-align: center;
+}

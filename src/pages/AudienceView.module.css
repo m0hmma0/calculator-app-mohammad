@@ -1,0 +1,45 @@
+/* The audience window: the slide, edge to edge, on a dark surround. */
+.audience {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #101217;
+  /* Nothing here is pressed — the presenter's window steers — except other sites'
+     players, which only take a press in their own frame. */
+  user-select: none;
+}
+
+.audience * {
+  pointer-events: none;
+}
+
+.audience iframe {
+  pointer-events: auto;
+}
+
+.audience[data-idle] {
+  cursor: none;
+}
+
+/* A file's own play buttons and bar are the presenter's to press, not shown here. */
+.audience [data-media-controls] {
+  display: none !important;
+}
+
+.canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+
+.lonely {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  color: #9aa3b2;
+  font: 15px/1.5 var(--font-ui, system-ui, sans-serif);
+  text-align: center;
+}

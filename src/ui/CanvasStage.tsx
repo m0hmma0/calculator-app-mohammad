@@ -40,6 +40,7 @@ import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
 import { WorkshopLayer } from './WorkshopLayer';
+import { PresenterNotes } from './PresenterNotes';
 import { EffectsLayer } from './EffectsLayer';
 import { ToolOptions } from './ToolOptions';
 import styles from './CanvasStage.module.css';
@@ -311,6 +312,7 @@ export function CanvasStage() {
       <PeersLayer hostRef={hostRef} />
       <CommentPins />
       <WorkshopLayer />
+      <PresenterNotes />
       <EffectsLayer />
       <ToolOptions />
       <TextEditor viewport={viewport} />
