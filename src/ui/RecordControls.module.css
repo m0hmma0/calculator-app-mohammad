@@ -118,3 +118,33 @@
   color: #c92a2a;
   font-size: 12px;
 }
+
+.size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sizeLabel {
+  color: var(--text-muted);
+}
+
+.size select {
+  font: inherit;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sharp,
+.soft {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.soft {
+  color: #b35c00;
+}

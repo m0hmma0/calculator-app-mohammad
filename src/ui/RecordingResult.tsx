@@ -11,14 +11,24 @@ import styles from './RecordingResult.module.css';
 const LABEL: Record<OutputKind, string> = {
   video: 'Video with sound',
   videoOnly: 'Video only',
-  sound: 'Sound only',
+  mix: 'Sound only — microphone and slides',
+  mic: 'Sound only — microphone',
+  slides: 'Sound only — slides’ sound',
 };
 
 const SUFFIX: Record<OutputKind, string> = {
   video: '',
   videoOnly: ' (video only)',
-  sound: ' (sound only)',
+  mix: ' (sound only)',
+  mic: ' (microphone)',
+  slides: ' (slides sound)',
 };
+
+/** In this order, whatever order they were made in. */
+const ORDER: OutputKind[] = ['video', 'videoOnly', 'mix', 'mic', 'slides'];
+
+/** Between one file and the next of "Download all", so the browser takes each. */
+const BETWEEN_MS = 400;
 
 const size = (bytes: number) =>
   bytes > 1e9
@@ -53,14 +63,37 @@ function Files({ outputs }: { outputs: Output[] }) {
   const [saved, setSaved] = useState<OutputKind[]>([]);
 
   const links = useMemo(
-    () => outputs.map((output) => ({ ...output, url: URL.createObjectURL(output.blob) })),
+    () =>
+      [...outputs]
+        .sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind))
+        .map((output) => ({ ...output, url: URL.createObjectURL(output.blob) })),
     [outputs],
   );
+  const [allRunning, setAllRunning] = useState(false);
   useEffect(() => () => links.forEach((link) => URL.revokeObjectURL(link.url)), [links]);
 
   const base = safeName(
     `${document.title.replace(/ · Sabboura$/, '')} ${new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '.')}`,
   );
+  const nameOf = (link: (typeof links)[number]) => `${base}${SUFFIX[link.kind]}.${link.extension}`;
+
+  // One after the other: the browser may ask once whether this site may download
+  // several files.
+  const downloadAll = async () => {
+    setAllRunning(true);
+    for (const link of links) {
+      const anchor = document.createElement('a');
+      anchor.href = link.url;
+      anchor.download = nameOf(link);
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setSaved((done) => (done.includes(link.kind) ? done : [...done, link.kind]));
+      await new Promise((resolve) => setTimeout(resolve, BETWEEN_MS));
+    }
+    setAllRunning(false);
+  };
+
   const close = () => {
     if (
       saved.length < links.length &&
@@ -85,6 +118,8 @@ function Files({ outputs }: { outputs: Output[] }) {
         </h2>
         <p className={styles.hint}>
           Download the files you want. They are kept only in this window until you close this.
+          Videos are MP4; sounds are{' '}
+          {links.some((link) => link.extension === 'ogg') ? 'OGG' : 'M4A'}: both open in Canva.
         </p>
         <ul className={styles.files}>
           {links.map((link) => (
@@ -92,7 +127,7 @@ function Files({ outputs }: { outputs: Output[] }) {
               <a
                 className={styles.file}
                 href={link.url}
-                download={`${base}${SUFFIX[link.kind]}.${link.extension}`}
+                download={nameOf(link)}
                 data-testid={`recording-${link.kind}`}
                 data-saved={saved.includes(link.kind) || undefined}
                 onClick={() =>
@@ -110,6 +145,15 @@ function Files({ outputs }: { outputs: Output[] }) {
         </ul>
         {error ? <p className={styles.hint}>{error}</p> : null}
         <div className={styles.footer}>
+          <button
+            type="button"
+            className={styles.all}
+            disabled={allRunning}
+            data-testid="recording-all"
+            onClick={() => void downloadAll()}
+          >
+            Download all ({links.length})
+          </button>
           <button
             type="button"
             className={styles.close}

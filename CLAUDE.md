@@ -168,25 +168,39 @@ though only presenter view shows them. Presenting keys ignore text fields now
 (`isTypingTarget`). Shortcut `present.audience`, no default key. No migration, no
 server cost.
 
-Recording presenter view (11 November): the notes strip has a recording row
-(`src/ui/RecordControls.tsx`) — Camera, Microphone and Slides' sound switches, the
-camera's shape (circle, rounded square, wide), and Record / Pause / Stop. The camera
+Recording presenter view (11 November, redone the same day after the user's first
+try: smeared video after the first frame, the camera behind a video, a small picture):
+the notes strip has a recording row (`src/ui/RecordControls.tsx`) — Camera, Microphone
+and Slides' sound switches, the camera's shape (circle, rounded square, wide), Size
+(1080p or 720p, remembered), and Record / Pause / Stop, with "Recording 1920×1080 from a
+W×H window" (amber when the window is smaller: make it full screen). The camera
 (`src/recording/camera.ts`) is opened in the presenter's window and its stream handed to
 the audience window directly (`window.sabbouraAudience.setCamera`, same origin — a
 stream cannot go over a channel); its place is fractions of the slide (`CameraLayout`,
-kept in localStorage, sent in the `state` message) and is dragged and sized on the
-presenter's slide (`PresenterCamera`). Recording (`src/recording/recorder.ts`) asks the
-browser for a tab (`getDisplayMedia`, the audience tab with its sound), mixes in the
-microphone with Web Audio, and runs three MediaRecorders at once: video with sound,
-video alone, sound alone. Formats (`formats.ts`): MP4 H.264 + AAC where the browser has
-AAC (Chrome/Edge on Windows and Mac), MP4 H.264 + Opus otherwise; the sound alone is
-M4A, or WAV made from the recording (`wav.ts`) — never WebM sound, which Canva refuses.
-Files stay in the window (`RecordingResult` dialog; `beforeunload` warns) — nothing
+localStorage, sent in the `state` message), dragged and sized on the presenter's slide
+(`PresenterCamera`), and it sits over the embed layer (z-index 10 in the audience
+window; the embed layer is 1 — it used to sit under videos). Recording
+(`src/recording/recorder.ts`) asks for a tab (`getDisplayMedia`, the audience tab and
+its sound), routes the slides' sound and the microphone through Web Audio as three
+continuous tracks (mix, mic, slides), and hands the picture and those tracks as
+`MediaStreamTrackProcessor` streams to a worker (`encodeWorker.ts`, `?worker&inline`).
+The worker fits each tab picture into exactly 1280×720 or 1920×1080 on the dark
+surround, encodes at a steady 30 fps (repeating an unchanged picture) with WebCodecs
+H.264, a key frame every 2 s, and each sound as AAC (Opus where there is no AAC
+encoder, as on Linux Chromium); at Stop it writes with mediabunny: video with sound and
+video alone as MP4 (index at the front), each sound as M4A or OGG. Chrome's own
+MediaRecorder MP4 (fragmented, one key frame) was what smeared in the user's player. A
+tab is recorded at its on-screen size — Chrome does not render it larger when asked —
+so a small audience window gives a soft 1080p. Files stay in the window
+(`RecordingResult`: five downloads and "Download all"; `beforeunload` warns); nothing
 goes to the server. The audience window sets a capture handle, but Chromium does not
-report it back, so the check is "a tab, and the handle if there is one". Tests:
-`--use-fake-ui-for-media-stream` makes Chromium record the wrong tab — use context
-`permissions` and `--auto-select-tab-capture-source-by-title=slides` (recording.spec),
-and check the video's shape against the audience window's.
+report it back, so the check is "a tab, and the handle if there is one". Tests
+(recording.spec): `--use-fake-ui-for-media-stream` makes Chromium record the wrong tab —
+use context `permissions` and `--auto-select-tab-capture-source-by-title=slides`; the
+audience window is made 2:1 so the frames' dark bands prove which tab was recorded;
+ffprobe/ffmpeg, where installed (this container has them; the test skips that part otherwise), decode every frame and check
+codecs, size and key frames. `elementsFromPoint` skips `pointer-events: none`, which is
+everything in the audience window.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

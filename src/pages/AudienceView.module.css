@@ -47,6 +47,8 @@
 /* The presenter's camera on the slide: mirrored, as a camera of oneself is. */
 .camera {
   position: absolute;
+  /* Over the slide's videos and players (the embed layer), under celebrations. */
+  z-index: 10;
   object-fit: cover;
   transform: scaleX(-1);
   background: #000;

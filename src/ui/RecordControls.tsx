@@ -12,6 +12,7 @@ import {
   pauseRecording,
   recordedMs,
   resumeRecording,
+  setResolution,
   startRecording,
   stopRecording,
   useRecorder,
@@ -84,6 +85,20 @@ export function RecordControls() {
         onChange={(on) => useCamera.setState({ slideSound: on })}
       />
 
+      <label className={styles.size}>
+        <span className={styles.sizeLabel}>Size</span>
+        <select
+          value={recorder.resolution}
+          disabled={busy || recorder.state === 'starting'}
+          aria-label="Recording size"
+          data-testid="record-resolution"
+          onChange={(event) => setResolution(event.target.value === '720' ? 720 : 1080)}
+        >
+          <option value={1080}>1080p</option>
+          <option value={720}>720p</option>
+        </select>
+      </label>
+
       <span className={styles.actions}>
         {busy ? (
           <>
@@ -136,6 +151,7 @@ export function RecordControls() {
           </button>
         )}
       </span>
+      {busy ? <Sharpness /> : null}
       {problem || recorder.error ? (
         <span className={styles.problem} role="alert" data-testid="record-problem">
           {problem ?? recorder.error}
@@ -207,5 +223,27 @@ function ShapeIcon({ shape }: { shape: CameraShape }) {
         />
       )}
     </svg>
+  );
+}
+
+/**
+ * The recorded window's own size against the file's. A browser records a tab at the
+ * size it is on screen, so a small audience window makes a soft video: say so, and how
+ * to fix it.
+ */
+function Sharpness() {
+  const source = useRecorder((state) => state.source);
+  const resolution = useRecorder((state) => state.resolution);
+  if (!source) return null;
+  const target = resolution === 1080 ? { width: 1920, height: 1080 } : { width: 1280, height: 720 };
+  const scale = Math.min(target.width / source.width, target.height / source.height);
+  const soft = scale > 1.05;
+  return (
+    <span className={soft ? styles.soft : styles.sharp} data-testid="record-source">
+      Recording {target.width}×{target.height} from a {source.width}×{source.height} window
+      {soft
+        ? ' — make the audience window full screen (double-click it) for a sharper picture.'
+        : '.'}
+    </span>
   );
 }

@@ -1,6 +1,7 @@
 .camera {
   position: absolute;
-  z-index: 2;
+  /* Over the slide's videos and players, as in the audience window. */
+  z-index: 4;
   cursor: move;
   touch-action: none;
   outline: 2px dashed rgb(255 255 255 / 0.7);

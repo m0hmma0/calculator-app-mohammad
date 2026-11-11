@@ -1,52 +1,54 @@
 /**
- * What a recording is saved as. Canva takes MP4 video and M4A, MP3 or WAV sound, so
- * those come first: MP4 with H.264 picture and AAC sound where the browser can make
- * them (Chrome and Edge on Windows and Mac), MP4 with Opus sound where it has no AAC
- * encoder (Chromium on Linux), and WebM only from a browser that makes no MP4 at all.
- * Sound on its own is M4A where AAC can be made, and otherwise WAV, which is worked
- * out here from the recording (`wav.ts`) — never a WebM sound, which Canva refuses.
+ * What a recording is made as. Canva takes MP4 video and M4A or OGG sound, among
+ * others: so the video is MP4 with H.264 picture — High profile, falling back to Main
+ * and Baseline — and AAC sound where the browser can encode AAC (Chrome and Edge on
+ * Windows and Mac), Opus where it cannot (Chromium on Linux). The sound on its own is
+ * M4A (AAC) or OGG (Opus) to match.
  */
-export interface Format {
-  mimeType: string;
-  extension: string;
-}
+export type Resolution = 720 | 1080;
 
-const VIDEO_WITH_SOUND: Format[] = [
-  { mimeType: 'video/mp4;codecs=avc1.640028,mp4a.40.2', extension: 'mp4' },
-  { mimeType: 'video/mp4;codecs=avc1,mp4a.40.2', extension: 'mp4' },
-  { mimeType: 'video/mp4;codecs=avc1.640028,opus', extension: 'mp4' },
-  { mimeType: 'video/mp4;codecs=avc1,opus', extension: 'mp4' },
-  { mimeType: 'video/webm;codecs=vp9,opus', extension: 'webm' },
-  { mimeType: 'video/webm', extension: 'webm' },
-];
+export const RESOLUTIONS: Record<Resolution, { width: number; height: number; bitrate: number }> = {
+  720: { width: 1280, height: 720, bitrate: 4_000_000 },
+  1080: { width: 1920, height: 1080, bitrate: 8_000_000 },
+};
 
-const VIDEO_ALONE: Format[] = [
-  { mimeType: 'video/mp4;codecs=avc1.640028', extension: 'mp4' },
-  { mimeType: 'video/mp4;codecs=avc1', extension: 'mp4' },
-  { mimeType: 'video/webm;codecs=vp9', extension: 'webm' },
-  { mimeType: 'video/webm', extension: 'webm' },
-];
+/** H.264 profiles to try, best first, per size (the level must allow the size). */
+const VIDEO_CODECS: Record<number, string[]> = {
+  720: ['avc1.64001f', 'avc1.4d001f', 'avc1.42e01f'],
+  1080: ['avc1.640028', 'avc1.4d0028', 'avc1.42e028'],
+};
 
-/** Recorded as these, then saved as M4A as it is, or turned into WAV. */
-const SOUND: Array<Format & { toWav: boolean }> = [
-  { mimeType: 'audio/mp4;codecs=mp4a.40.2', extension: 'm4a', toWav: false },
-  { mimeType: 'audio/webm;codecs=opus', extension: 'wav', toWav: true },
-  { mimeType: 'audio/mp4;codecs=opus', extension: 'wav', toWav: true },
-];
+type VideoCheck = (config: VideoEncoderConfig) => Promise<boolean>;
+type AudioCheck = (config: AudioEncoderConfig) => Promise<boolean>;
 
-type Supports = (mimeType: string) => boolean;
+const videoSupported: VideoCheck = async (config) =>
+  typeof VideoEncoder !== 'undefined' &&
+  ((await VideoEncoder.isConfigSupported(config).catch(() => null))?.supported ?? false);
 
-const supported: Supports = (type) =>
-  typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type);
+const audioSupported: AudioCheck = async (config) =>
+  typeof AudioEncoder !== 'undefined' &&
+  ((await AudioEncoder.isConfigSupported(config).catch(() => null))?.supported ?? false);
 
-export function videoWithSound(supports: Supports = supported): Format | null {
-  return VIDEO_WITH_SOUND.find((format) => supports(format.mimeType)) ?? null;
-}
-
-export function videoAlone(supports: Supports = supported): Format | null {
-  return VIDEO_ALONE.find((format) => supports(format.mimeType)) ?? null;
-}
-
-export function soundAlone(supports: Supports = supported): (Format & { toWav: boolean }) | null {
-  return SOUND.find((format) => supports(format.mimeType)) ?? null;
+/** The video codec to use at this size, and whether the sound can be AAC. Null: no H.264. */
+export async function chooseCodecs(
+  size: { width: number; height: number; bitrate: number },
+  checks: { video?: VideoCheck; audio?: AudioCheck } = {},
+): Promise<{ video: string; aac: boolean } | null> {
+  const video = checks.video ?? videoSupported;
+  const audio = checks.audio ?? audioSupported;
+  let chosen: string | null = null;
+  for (const codec of VIDEO_CODECS[size.height] ?? VIDEO_CODECS[1080]!) {
+    if (await video({ codec, width: size.width, height: size.height, bitrate: size.bitrate })) {
+      chosen = codec;
+      break;
+    }
+  }
+  if (!chosen) return null;
+  const aac = await audio({
+    codec: 'mp4a.40.2',
+    sampleRate: 48000,
+    numberOfChannels: 2,
+    bitrate: 128_000,
+  });
+  return { video: chosen, aac };
 }

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cameraRect, tidyLayout, MAX_W, MIN_W } from '@/recording/camera';
-import { soundAlone, videoAlone, videoWithSound } from '@/recording/formats';
-import { encodeWav } from '@/recording/wav';
+import { chooseCodecs, RESOLUTIONS } from '@/recording/formats';
 
 describe('the camera on the slide', () => {
   it('stays inside the slide, and within its size bounds', () => {
@@ -35,54 +34,43 @@ describe('the camera on the slide', () => {
 });
 
 describe('recording formats', () => {
-  const only =
-    (...types: string[]) =>
-    (type: string) =>
-      types.includes(type);
+  const size = { width: 1920, height: 1080, bitrate: 8_000_000 };
+  const videos =
+    (...codecs: string[]) =>
+    async (config: VideoEncoderConfig) =>
+      codecs.includes(config.codec);
 
-  it('makes MP4 with AAC, and M4A, where the browser can (Chrome on Windows and Mac)', () => {
-    const supports = only(
-      'video/mp4;codecs=avc1.640028,mp4a.40.2',
-      'video/mp4;codecs=avc1.640028',
-      'audio/mp4;codecs=mp4a.40.2',
-    );
-    expect(videoWithSound(supports)?.extension).toBe('mp4');
-    expect(videoAlone(supports)?.extension).toBe('mp4');
-    expect(soundAlone(supports)).toMatchObject({ extension: 'm4a', toWav: false });
+  it('uses High-profile H.264 and AAC where the browser has both (Chrome on Windows and Mac)', async () => {
+    const codecs = await chooseCodecs(size, {
+      video: videos('avc1.640028', 'avc1.42e028'),
+      audio: async (config) => config.codec === 'mp4a.40.2',
+    });
+    expect(codecs).toEqual({ video: 'avc1.640028', aac: true });
   });
 
-  it('still makes MP4 video without AAC, and the sound alone as WAV, never WebM', () => {
-    const supports = only(
-      'video/mp4;codecs=avc1,opus',
-      'video/mp4;codecs=avc1',
-      'audio/webm;codecs=opus',
-    );
-    expect(videoWithSound(supports)?.mimeType).toBe('video/mp4;codecs=avc1,opus');
-    expect(videoAlone(supports)?.mimeType).toBe('video/mp4;codecs=avc1');
-    expect(soundAlone(supports)).toMatchObject({ extension: 'wav', toWav: true });
+  it('falls back to a simpler H.264 profile, and to Opus without an AAC encoder', async () => {
+    const codecs = await chooseCodecs(size, {
+      video: videos('avc1.42e028'),
+      audio: async () => false,
+    });
+    expect(codecs).toEqual({ video: 'avc1.42e028', aac: false });
   });
 
-  it('says so when nothing can be made', () => {
-    expect(videoWithSound(() => false)).toBeNull();
-    expect(soundAlone(() => false)).toBeNull();
+  it('picks a level that allows the size: 720p asks for 3.1, 1080p for 4.0', async () => {
+    const asked: string[] = [];
+    await chooseCodecs(RESOLUTIONS[720], {
+      video: async (config) => {
+        asked.push(config.codec);
+        return true;
+      },
+      audio: async () => true,
+    });
+    expect(asked).toEqual(['avc1.64001f']);
   });
-});
 
-describe('WAV', () => {
-  it('writes a standard 16-bit PCM file', () => {
-    const left = new Float32Array([0, 1, -1, 0.5]);
-    const right = new Float32Array([0, -1, 1, -0.5]);
-    const buffer = encodeWav({ sampleRate: 48000, channels: [left, right] });
-    const view = new DataView(buffer);
-    const text = (at: number) => String.fromCharCode(...new Uint8Array(buffer.slice(at, at + 4)));
-    expect(text(0)).toBe('RIFF');
-    expect(text(8)).toBe('WAVE');
-    expect(view.getUint16(22, true)).toBe(2);
-    expect(view.getUint32(24, true)).toBe(48000);
-    expect(view.getUint32(40, true)).toBe(4 * 2 * 2);
-    expect(buffer.byteLength).toBe(44 + 16);
-    // Interleaved: left then right, each frame.
-    expect(view.getInt16(44 + 4, true)).toBe(0x7fff);
-    expect(view.getInt16(44 + 6, true)).toBe(-0x8000);
+  it('says so when there is no H.264 at all', async () => {
+    expect(
+      await chooseCodecs(size, { video: async () => false, audio: async () => true }),
+    ).toBeNull();
   });
 });

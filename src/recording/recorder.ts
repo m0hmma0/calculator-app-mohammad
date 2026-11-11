@@ -1,22 +1,25 @@
 import { create } from 'zustand';
 import { audienceChannelName } from '@/workshop/audience';
 import { useCamera } from './camera';
-import { soundAlone, videoAlone, videoWithSound, type Format } from './formats';
-import { toWav } from './wav';
+import { chooseCodecs, RESOLUTIONS, type Resolution } from './formats';
+import type { FromWorker, SoundName, ToWorker } from './workerProtocol';
+import EncodeWorker from './encodeWorker?worker&inline';
 
 /**
  * Recording presenter view's audience window: what the audience sees — the slides,
  * the camera on them, what is drawn and pointed at — with the slides' own sound and
- * the presenter's microphone mixed in. The browser asks which tab to record; the
- * audience window ("… — slides") is the one, and it is checked.
+ * the presenter's microphone. The browser asks which tab to record; the audience
+ * window ("… — slides") is the one.
  *
- * Three files come out of one recording, made side by side as it runs: the video with
- * its sound, the video alone, and the sound alone (`formats.ts` says which kinds).
- * Nothing goes to the server: the files are kept in this window until downloaded.
+ * The tab's picture and the sounds go to a worker (`encodeWorker.ts`) that makes the
+ * files: exactly 1280×720 or 1920×1080 at a steady 30 frames a second, one H.264
+ * encoding used for both videos, and each sound — the mix, the microphone alone, the
+ * slides alone — encoded once. Nothing goes to the server: the files are kept in this
+ * window until downloaded.
  */
 export type RecordingState = 'idle' | 'starting' | 'recording' | 'paused' | 'finishing' | 'done';
 
-export type OutputKind = 'video' | 'videoOnly' | 'sound';
+export type OutputKind = 'video' | 'videoOnly' | SoundName;
 
 export interface Output {
   kind: OutputKind;
@@ -26,27 +29,55 @@ export interface Output {
 
 interface RecorderStore {
   state: RecordingState;
+  /** The size of the files, chosen before recording. */
+  resolution: Resolution;
   /** When the current stretch of recording began (performance.now()), while recording. */
   since: number | null;
   /** Recorded before the current stretch: pauses split a recording into stretches. */
   before: number;
+  /** The recorded tab's own size, as it arrives; smaller than the files means less sharp. */
+  source: { width: number; height: number } | null;
   outputs: Output[];
   /** How long the finished recording is, in milliseconds. */
   length: number;
   error: string | null;
 }
 
+const RESOLUTION_KEY = 'sabboura:recording-resolution';
+
+function loadResolution(): Resolution {
+  try {
+    return localStorage.getItem(RESOLUTION_KEY) === '720' ? 720 : 1080;
+  } catch {
+    return 1080;
+  }
+}
+
 export const useRecorder = create<RecorderStore>(() => ({
   state: 'idle',
+  resolution: typeof localStorage === 'undefined' ? 1080 : loadResolution(),
   since: null,
   before: 0,
+  source: null,
   outputs: [],
   length: 0,
   error: null,
 }));
 
+export function setResolution(resolution: Resolution): void {
+  useRecorder.setState({ resolution });
+  try {
+    localStorage.setItem(RESOLUTION_KEY, String(resolution));
+  } catch {
+    // Still used; just not remembered.
+  }
+}
+
 /** How long has been recorded so far, in milliseconds. */
-export function recordedMs(state: RecorderStore, now = performance.now()): number {
+export function recordedMs(
+  state: Pick<RecorderStore, 'before' | 'since'>,
+  now = performance.now(),
+): number {
   return state.before + (state.since === null ? 0 : now - state.since);
 }
 
@@ -57,21 +88,21 @@ export const clockText = (ms: number): string => {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
-const VIDEO_BITS = 4_000_000;
-const SOUND_BITS = 160_000;
-/** Recorders hand over what they have this often, so a long recording is not one buffer. */
-const SLICE_MS = 1000;
+const FPS = 30;
 
 interface Running {
   capture: MediaStream;
   audio: AudioContext;
-  recorders: Array<{ kind: OutputKind; recorder: MediaRecorder; format: Format; toWav?: boolean }>;
-  chunks: Map<OutputKind, Blob[]>;
+  worker: Worker;
+  /** Tracks made here for the worker, stopped at the end. */
+  made: MediaStreamTrack[];
 }
 
 let running: Running | null = null;
 
 const fail = (error: string) => useRecorder.setState({ state: 'idle', error });
+
+type Processor = new (init: { track: MediaStreamTrack }) => { readable: ReadableStream };
 
 /**
  * Starts recording the audience window. Must run in the click that asked for it: the
@@ -82,12 +113,27 @@ export async function startRecording(): Promise<void> {
   if (state !== 'idle' && state !== 'done') return;
   const channel = audienceChannelName();
   if (!channel) return fail('Open presenter view first: the recording is of its audience window.');
-  if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === 'undefined') {
-    return fail('This browser cannot record a tab. Chrome or Edge can.');
+  const TrackProcessor = (window as Window & { MediaStreamTrackProcessor?: Processor })
+    .MediaStreamTrackProcessor;
+  if (
+    !navigator.mediaDevices?.getDisplayMedia ||
+    typeof VideoEncoder === 'undefined' ||
+    !TrackProcessor
+  ) {
+    return fail('This browser cannot record here. Chrome or Edge can.');
   }
   // Made inside the click, so it is allowed to run.
   const audio = new AudioContext();
-  useRecorder.setState({ state: 'starting', error: null, outputs: [], before: 0, length: 0 });
+  const { resolution } = useRecorder.getState();
+  const size = RESOLUTIONS[resolution];
+  useRecorder.setState({
+    state: 'starting',
+    error: null,
+    outputs: [],
+    before: 0,
+    length: 0,
+    source: null,
+  });
 
   const { slideSound } = useCamera.getState();
   let capture: MediaStream;
@@ -95,9 +141,9 @@ export async function startRecording(): Promise<void> {
     capture = await navigator.mediaDevices.getDisplayMedia({
       video: {
         displaySurface: 'browser',
-        frameRate: { ideal: 30 },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        frameRate: { ideal: FPS },
+        width: { ideal: size.width },
+        height: { ideal: size.height },
       },
       audio: slideSound ? { suppressLocalAudioPlayback: false } : false,
       preferCurrentTab: false,
@@ -126,52 +172,84 @@ export async function startRecording(): Promise<void> {
     );
   }
 
-  // The slides' sound and the microphone, mixed into one.
-  const mixed = audio.createMediaStreamDestination();
-  let sources = 0;
-  for (const stream of [capture, useCamera.getState().mic]) {
-    if (stream && stream.getAudioTracks().length > 0) {
-      audio.createMediaStreamSource(new MediaStream(stream.getAudioTracks())).connect(mixed);
-      sources += 1;
-    }
-  }
-  void audio.resume();
-  const sound = sources > 0 ? mixed.stream.getAudioTracks()[0]! : null;
-
-  const recorders: Running['recorders'] = [];
-  const make = (
-    kind: OutputKind,
-    tracks: MediaStreamTrack[],
-    format: Format | null,
-    wav?: boolean,
-  ) => {
-    if (!format) return;
-    const recorder = new MediaRecorder(new MediaStream(tracks), {
-      mimeType: format.mimeType,
-      videoBitsPerSecond: VIDEO_BITS,
-      audioBitsPerSecond: SOUND_BITS,
-    });
-    recorders.push({ kind, recorder, format, toWav: wav });
-  };
-  if (sound) make('video', [video, sound], videoWithSound());
-  make('videoOnly', [video.clone()], videoAlone());
-  const soundFormat = soundAlone();
-  if (sound) make('sound', [sound], soundFormat, soundFormat?.toWav);
-  if (recorders.length === 0) {
+  const codecs = await chooseCodecs(size);
+  if (!codecs) {
     capture.getTracks().forEach((track) => track.stop());
     void audio.close();
-    return fail('This browser cannot make a video file.');
+    return fail('This browser cannot make an H.264 video. Chrome or Edge can.');
   }
 
-  const chunks = new Map<OutputKind, Blob[]>();
-  for (const { kind, recorder } of recorders) {
-    chunks.set(kind, []);
-    recorder.addEventListener('dataavailable', (event) => {
-      if (event.data.size > 0) chunks.get(kind)!.push(event.data);
-    });
-    recorder.start(SLICE_MS);
-  }
-  running = { capture, audio, recorders, chunks };
+  // Each sound through the audio graph, so it runs on through silence and keeps time:
+  // the slides alone, the microphone alone, and the two mixed.
+  const slides: MediaStreamTrack | null = capture.getAudioTracks()[0] ?? null;
+  const mic: MediaStreamTrack | null = useCamera.getState().mic?.getAudioTracks()[0] ?? null;
+  const made: MediaStreamTrack[] = [];
+  const through = (inputs: MediaStreamTrack[]) => {
+    const out = audio.createMediaStreamDestination();
+    for (const input of inputs) {
+      audio.createMediaStreamSource(new MediaStream([input])).connect(out);
+    }
+    const track = out.stream.getAudioTracks()[0]!;
+    made.push(track);
+    return track;
+  };
+  const sounds: Array<{ name: SoundName; track: MediaStreamTrack }> = [];
+  const present = [slides, mic].filter((track): track is MediaStreamTrack => track !== null);
+  if (present.length > 0) sounds.push({ name: 'mix', track: through(present) });
+  if (mic) sounds.push({ name: 'mic', track: through([mic]) });
+  if (slides) sounds.push({ name: 'slides', track: through([slides]) });
+  void audio.resume();
+
+  const worker = new EncodeWorker();
+  const videoStream = new TrackProcessor({ track: video }).readable;
+  const soundStreams = sounds.map(({ name, track }) => ({
+    name,
+    stream: new TrackProcessor({ track }).readable as ReadableStream<AudioData>,
+  }));
+  const start: ToWorker = {
+    t: 'start',
+    width: size.width,
+    height: size.height,
+    fps: FPS,
+    videoCodec: codecs.video,
+    bitrate: size.bitrate,
+    aac: codecs.aac,
+    video: videoStream as ReadableStream<VideoFrame>,
+    sounds: soundStreams,
+  };
+  worker.postMessage(start, [videoStream, ...soundStreams.map((each) => each.stream)]);
+
+  const outputs: Output[] = [];
+  worker.addEventListener('message', (event: MessageEvent<FromWorker>) => {
+    const message = event.data;
+    if (message.t === 'source') {
+      useRecorder.setState({ source: { width: message.width, height: message.height } });
+    } else if (message.t === 'file') {
+      const type =
+        message.extension === 'ogg'
+          ? 'audio/ogg'
+          : message.extension === 'm4a'
+            ? 'audio/mp4'
+            : 'video/mp4';
+      outputs.push({
+        kind: message.kind as OutputKind,
+        blob: new Blob([message.data], { type }),
+        extension: message.extension,
+      });
+    } else if (message.t === 'done') {
+      worker.terminate();
+      useRecorder.setState({
+        state: outputs.length > 0 ? 'done' : 'idle',
+        outputs,
+        length: message.length * 1000,
+        error: outputs.length > 0 ? null : 'Nothing was recorded.',
+      });
+    } else if (message.t === 'error') {
+      useRecorder.setState({ error: `Recording problem: ${message.message}` });
+    }
+  });
+
+  running = { capture, audio, worker, made };
   // The tab closed, or "Stop sharing" was pressed: the recording ends there.
   video.addEventListener('ended', () => void stopRecording());
   useRecorder.setState({ state: 'recording', since: performance.now(), before: 0 });
@@ -180,68 +258,43 @@ export async function startRecording(): Promise<void> {
 export function pauseRecording(): void {
   const state = useRecorder.getState();
   if (!running || state.state !== 'recording') return;
-  for (const { recorder } of running.recorders) recorder.pause();
+  running.worker.postMessage({ t: 'pause' } satisfies ToWorker);
   useRecorder.setState({ state: 'paused', since: null, before: recordedMs(state) });
 }
 
 export function resumeRecording(): void {
   if (!running || useRecorder.getState().state !== 'paused') return;
-  for (const { recorder } of running.recorders) recorder.resume();
+  running.worker.postMessage({ t: 'resume' } satisfies ToWorker);
   useRecorder.setState({ state: 'recording', since: performance.now() });
 }
 
-/** Ends the recording and makes its files. */
+/** Ends the recording; the worker sends its files, then says it is done. */
 export async function stopRecording(): Promise<void> {
   const current = running;
   if (!current) return;
   running = null;
   const length = recordedMs(useRecorder.getState());
   useRecorder.setState({ state: 'finishing', since: null, before: length, length });
-
-  await Promise.all(
-    current.recorders.map(
-      ({ recorder }) =>
-        new Promise<void>((resolve) => {
-          if (recorder.state === 'inactive') return resolve();
-          recorder.addEventListener('stop', () => resolve(), { once: true });
-          recorder.stop();
-        }),
-    ),
-  );
+  current.worker.postMessage({ t: 'stop' } satisfies ToWorker);
+  // The worker is told first, so it takes the last of the picture and sound before
+  // the tracks end.
+  await new Promise((resolve) => setTimeout(resolve, 150));
   current.capture.getTracks().forEach((track) => track.stop());
-  for (const { recorder } of current.recorders) {
-    recorder.stream.getTracks().forEach((track) => track.stop());
-  }
+  current.made.forEach((track) => track.stop());
   void current.audio.close();
-
-  const outputs: Output[] = [];
-  let problem: string | null = null;
-  for (const { kind, format, toWav: wav } of current.recorders) {
-    const recorded = new Blob(current.chunks.get(kind) ?? [], {
-      type: format.mimeType.split(';')[0],
-    });
-    if (recorded.size === 0) continue;
-    if (wav) {
-      try {
-        outputs.push({ kind, blob: await toWav(recorded), extension: 'wav' });
-      } catch {
-        problem = 'The sound on its own could not be made; the video with sound has it.';
-      }
-    } else {
-      outputs.push({ kind, blob: recorded, extension: format.extension });
-    }
-  }
-  useRecorder.setState({
-    state: outputs.length > 0 ? 'done' : 'idle',
-    outputs,
-    error: outputs.length > 0 ? problem : 'Nothing was recorded.',
-  });
 }
 
 /** Throws the finished files away. */
 export function discardRecording(): void {
   if (running) return;
-  useRecorder.setState({ state: 'idle', outputs: [], length: 0, before: 0, error: null });
+  useRecorder.setState({
+    state: 'idle',
+    outputs: [],
+    length: 0,
+    before: 0,
+    error: null,
+    source: null,
+  });
 }
 
 /** Whether there is something that would be lost by closing the page. */
