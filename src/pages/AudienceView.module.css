@@ -43,3 +43,12 @@
   font: 15px/1.5 var(--font-ui, system-ui, sans-serif);
   text-align: center;
 }
+
+/* The presenter's camera on the slide: mirrored, as a camera of oneself is. */
+.camera {
+  position: absolute;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: #000;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+}

@@ -41,6 +41,8 @@ import { StatusBar } from './StatusBar';
 import { TextEditor } from './TextEditor';
 import { WorkshopLayer } from './WorkshopLayer';
 import { PresenterNotes } from './PresenterNotes';
+import { PresenterCamera } from './PresenterCamera';
+import { RecordingResult } from './RecordingResult';
 import { EffectsLayer } from './EffectsLayer';
 import { ToolOptions } from './ToolOptions';
 import styles from './CanvasStage.module.css';
@@ -313,6 +315,8 @@ export function CanvasStage() {
       <CommentPins />
       <WorkshopLayer />
       <PresenterNotes />
+      <PresenterCamera />
+      <RecordingResult />
       <EffectsLayer />
       <ToolOptions />
       <TextEditor viewport={viewport} />

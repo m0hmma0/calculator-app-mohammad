@@ -168,6 +168,26 @@ though only presenter view shows them. Presenting keys ignore text fields now
 (`isTypingTarget`). Shortcut `present.audience`, no default key. No migration, no
 server cost.
 
+Recording presenter view (11 November): the notes strip has a recording row
+(`src/ui/RecordControls.tsx`) — Camera, Microphone and Slides' sound switches, the
+camera's shape (circle, rounded square, wide), and Record / Pause / Stop. The camera
+(`src/recording/camera.ts`) is opened in the presenter's window and its stream handed to
+the audience window directly (`window.sabbouraAudience.setCamera`, same origin — a
+stream cannot go over a channel); its place is fractions of the slide (`CameraLayout`,
+kept in localStorage, sent in the `state` message) and is dragged and sized on the
+presenter's slide (`PresenterCamera`). Recording (`src/recording/recorder.ts`) asks the
+browser for a tab (`getDisplayMedia`, the audience tab with its sound), mixes in the
+microphone with Web Audio, and runs three MediaRecorders at once: video with sound,
+video alone, sound alone. Formats (`formats.ts`): MP4 H.264 + AAC where the browser has
+AAC (Chrome/Edge on Windows and Mac), MP4 H.264 + Opus otherwise; the sound alone is
+M4A, or WAV made from the recording (`wav.ts`) — never WebM sound, which Canva refuses.
+Files stay in the window (`RecordingResult` dialog; `beforeunload` warns) — nothing
+goes to the server. The audience window sets a capture handle, but Chromium does not
+report it back, so the check is "a tab, and the handle if there is one". Tests:
+`--use-fake-ui-for-media-stream` makes Chromium record the wrong tab — use context
+`permissions` and `--auto-select-tab-capture-source-by-title=slides` (recording.spec),
+and check the video's shape against the audience window's.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

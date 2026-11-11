@@ -3,6 +3,8 @@ import { usePresence } from '@/collab/presence';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 import { useEmbeds } from '@/state/embedStore';
+import { releaseDevices, useCamera, type CameraLayout } from '@/recording/camera';
+import { stopRecording } from '@/recording/recorder';
 import { audienceUrl } from './audienceMode';
 import { usePresentation } from './presentation';
 
@@ -42,6 +44,8 @@ export type ToAudience =
       clockOffset: number;
       /** Other sites' players started here, which start there instead. */
       started: readonly string[];
+      /** The presenter's camera on the slide, while it is on; its picture comes apart. */
+      camera: CameraLayout | null;
     }
   | { t: 'doc'; update: Uint8Array }
   | { t: 'laser'; trails: SentTrail[] }
@@ -58,12 +62,36 @@ export type FromAudience =
 const MEDIA_SYNC_MS = 1000;
 
 interface Open {
+  name: string;
   window: Window;
   channel: BroadcastChannel;
   stop: () => void;
 }
 
 let open: Open | null = null;
+
+/** What the audience window offers this one, being of the same origin. */
+export interface AudienceHooks {
+  /** Shows the presenter's camera there: a picture cannot go over a channel. */
+  setCamera: (stream: MediaStream | null) => void;
+}
+
+type WithHooks = Window & { sabbouraAudience?: AudienceHooks };
+
+/** The open audience window's channel, which it also gives as its capture handle. */
+export function audienceChannelName(): string | null {
+  return open && !open.window.closed ? open.name : null;
+}
+
+/** Hands the camera's picture, or its absence, to the audience window. */
+function shareCamera(): void {
+  if (!open || open.window.closed) return;
+  try {
+    (open.window as WithHooks).sabbouraAudience?.setCamera(useCamera.getState().stream);
+  } catch {
+    // Not ready yet: its hello brings it again.
+  }
+}
 
 const newChannelName = () =>
   `aud-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -88,7 +116,7 @@ export function openAudienceWindow(): boolean {
   );
   if (!opened) return false;
   const channel = new BroadcastChannel(name);
-  open = { window: opened, channel, stop: feed(channel, opened) };
+  open = { name, window: opened, channel, stop: feed(channel, opened) };
   usePresentation.setState({ audience: true, heardHere: [], audienceSince: Date.now() });
   return true;
 }
@@ -99,6 +127,9 @@ export function closeAudienceWindow(): void {
   const { window: opened, channel, stop } = open;
   open = null;
   stop();
+  // A recording ends with presenter view, and keeps what it has; the camera goes off.
+  void stopRecording();
+  releaseDevices();
   try {
     channel.postMessage({ t: 'close' } satisfies ToAudience);
   } catch {
@@ -128,6 +159,7 @@ function feed(channel: BroadcastChannel, opened: Window): () => void {
       frame: presentation.presenting ? presentation.frame : null,
       clockOffset: usePresence.getState().clockOffset,
       started: useEmbeds.getState().started,
+      camera: useCamera.getState().stream ? useCamera.getState().layout : null,
     };
   };
 
@@ -165,6 +197,7 @@ function feed(channel: BroadcastChannel, opened: Window): () => void {
       post(state());
       post({ t: 'doc', update: Y.encodeStateAsUpdate(doc) });
       for (const media of playingMedia()) sendMedia(media);
+      shareCamera();
     } else if (message.t === 'gone') {
       closeAudienceWindow();
     } else if (message.t === 'media-blocked') {
@@ -191,6 +224,10 @@ function feed(channel: BroadcastChannel, opened: Window): () => void {
       if (now.page !== before.page) sendState();
     }),
     useEmbeds.subscribe(sendState),
+    useCamera.subscribe((now, before) => {
+      if (now.stream !== before.stream) shareCamera();
+      if (now.stream !== before.stream || now.layout !== before.layout) sendState();
+    }),
   ];
 
   // The laser — this person's, and anyone else's on the board — frame by frame while

@@ -3,6 +3,7 @@ import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useBoardStore } from '@/state/boardStore';
 import { closeAudienceWindow } from '@/workshop/audience';
 import { framesInOrder, usePresentation } from '@/workshop/presentation';
+import { RecordControls } from './RecordControls';
 import styles from './PresenterNotes.module.css';
 
 /** Typing is written to the board this long after the last key, as one step. */
@@ -91,6 +92,7 @@ function Notes() {
           Close audience window
         </button>
       </div>
+      <RecordControls />
       {frame ? (
         <NoteField
           key={frame.id}

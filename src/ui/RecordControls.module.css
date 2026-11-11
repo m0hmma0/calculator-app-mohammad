@@ -1,0 +1,120 @@
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 3px 10px 3px 4px;
+  cursor: pointer;
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.knob {
+  width: 22px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+.knob::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.switch[aria-checked='true'] .knob {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch[aria-checked='true'] .knob::after {
+  transform: translateX(8px);
+  background: #fff;
+}
+
+.shapes {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.shape {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.shape[aria-checked='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.record {
+  color: #c92a2a;
+  font-weight: 600;
+}
+
+.live {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: #c92a2a;
+}
+
+.live[data-state='paused'] {
+  color: var(--text-muted);
+}
+
+.problem {
+  flex-basis: 100%;
+  color: #c92a2a;
+  font-size: 12px;
+}

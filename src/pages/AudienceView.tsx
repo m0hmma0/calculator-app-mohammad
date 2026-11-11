@@ -13,7 +13,8 @@ import { openAudienceDocument, useBoardStore } from '@/state/boardStore';
 import { useEmbeds } from '@/state/embedStore';
 import { EmbedLayer } from '@/ui/EmbedLayer';
 import { EffectsLayer } from '@/ui/EffectsLayer';
-import type { FromAudience, ToAudience } from '@/workshop/audience';
+import type { AudienceHooks, FromAudience, ToAudience } from '@/workshop/audience';
+import { cameraRadius, cameraRect, type CameraLayout } from '@/recording/camera';
 import { usePresentation } from '@/workshop/presentation';
 import styles from './AudienceView.module.css';
 
@@ -41,6 +42,8 @@ export function AudienceView({ channelName }: { channelName: string }) {
   const [heard, setHeard] = useState(false);
   const [lonely, setLonely] = useState(false);
   const [idle, setIdle] = useState(false);
+  const [camera, setCamera] = useState<CameraLayout | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const frameId = usePresentation((state) => state.frame);
   const onShow = useBoardStore((state) =>
     frameId ? state.elements.some((element) => element.id === frameId) : false,
@@ -115,6 +118,7 @@ export function AudienceView({ channelName }: { channelName: string }) {
             useBoardStore.getState().setPage(message.page);
           }
           usePresentation.setState({ frame: message.frame });
+          setCamera(message.camera);
           redraw();
           break;
         }
@@ -140,6 +144,28 @@ export function AudienceView({ channelName }: { channelName: string }) {
       }
     };
     channel.addEventListener('message', onMessage);
+    // The presenter's window hands over its camera's picture through this.
+    (window as Window & { sabbouraAudience?: AudienceHooks }).sabbouraAudience = {
+      setCamera: setCameraStream,
+    };
+    // A recording made from the presenter's window can tell this tab from any other.
+    try {
+      (
+        navigator.mediaDevices as MediaDevices & {
+          setCaptureHandleConfig?: (config: {
+            handle: string;
+            exposeOrigin: boolean;
+            permittedOrigins: string[];
+          }) => void;
+        }
+      ).setCaptureHandleConfig?.({
+        handle: channelName,
+        exposeOrigin: true,
+        permittedOrigins: [location.origin],
+      });
+    } catch {
+      // Not offered by this browser: the recording takes the tab chosen on trust.
+    }
     say({ t: 'hello' });
     const lonely = setTimeout(() => setLonely(true), LONELY_MS);
     const onLeave = () => say({ t: 'gone' });
@@ -210,6 +236,9 @@ export function AudienceView({ channelName }: { channelName: string }) {
       <canvas ref={canvasRef} className={styles.canvas} data-testid="audience-canvas" />
       {/* Only over a slide: between slides there is nothing to clip them to. */}
       {onShow ? <EmbedLayer /> : null}
+      {onShow && camera && cameraStream ? (
+        <AudienceCamera layout={camera} stream={cameraStream} />
+      ) : null}
       <EffectsLayer />
       {!heard && lonely ? (
         <p className={styles.lonely} data-testid="audience-lonely">
@@ -244,4 +273,45 @@ function followMedia(
   } else if (!message.playing && !media.paused) {
     media.pause();
   }
+}
+
+/** The presenter's camera, where they put it on the slide. */
+function AudienceCamera({ layout, stream }: { layout: CameraLayout; stream: MediaStream }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const viewport = useBoardStore((state) => state.viewport);
+  const frameId = usePresentation((state) => state.frame);
+  const frame = useBoardStore((state) => state.elements.find((element) => element.id === frameId));
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    video.srcObject = stream;
+    void video.play().catch(() => {});
+  }, [stream]);
+
+  if (!frame) return null;
+  const corner = boardToScreen(viewport, { x: frame.x, y: frame.y });
+  const box = cameraRect(layout, {
+    x: corner.x,
+    y: corner.y,
+    w: frame.w * viewport.zoom,
+    h: frame.h * viewport.zoom,
+  });
+  return (
+    <video
+      ref={ref}
+      className={styles.camera}
+      style={{
+        left: box.x,
+        top: box.y,
+        width: box.w,
+        height: box.h,
+        borderRadius: cameraRadius(layout.shape),
+      }}
+      muted
+      playsInline
+      autoPlay
+      data-testid="audience-camera"
+    />
+  );
 }
