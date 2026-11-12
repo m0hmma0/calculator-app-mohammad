@@ -4,6 +4,16 @@ import { useCamera } from './camera';
 import { chooseCodecs, RESOLUTIONS, type Resolution } from './formats';
 import type { FromWorker, SoundName, ToWorker } from './workerProtocol';
 import EncodeWorker from './encodeWorker?worker&inline';
+import { allowRecordingFolder, saveToRecordingFolder } from './folder';
+import {
+  discardRecordingFiles,
+  holdRecording,
+  keepRecordings,
+  recordingFile,
+  recordingSpace,
+  releaseRecording,
+  type Unsaved,
+} from './recovery';
 
 /**
  * Recording presenter view's audience window: what the audience sees — the slides,
@@ -41,6 +51,17 @@ interface RecorderStore {
   /** How long the finished recording is, in milliseconds. */
   length: number;
   error: string | null;
+  /** The recording on disk (`storage.ts`) being made or shown. */
+  recordingId: string | null;
+  /** The board's name and when it began, for the files' names. */
+  title: string;
+  startedAt: number;
+  /** The folder the files were saved to by themselves, once they are. */
+  savedTo: string | null;
+  /** How much of the recording being made is safe on disk, in seconds. */
+  stored: number;
+  /** Free room for recordings on this computer, in bytes, and whether it is kept. */
+  space: { free: number; kept: boolean } | null;
 }
 
 const RESOLUTION_KEY = 'sabboura:recording-resolution';
@@ -62,6 +83,12 @@ export const useRecorder = create<RecorderStore>(() => ({
   outputs: [],
   length: 0,
   error: null,
+  recordingId: null,
+  title: '',
+  startedAt: 0,
+  savedTo: null,
+  stored: 0,
+  space: null,
 }));
 
 export function setResolution(resolution: Resolution): void {
@@ -124,6 +151,12 @@ export async function startRecording(): Promise<void> {
   }
   // Made inside the click, so it is allowed to run.
   const audio = new AudioContext();
+  // Kept on disk as it is made; the browser is asked not to clear it to make room.
+  void keepRecordings().then(() =>
+    recordingSpace().then((space) => useRecorder.setState({ space })),
+  );
+  const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 7)}`;
+  const title = document.title.replace(/ · Sabboura$/, '') || 'Recording';
   const { resolution } = useRecorder.getState();
   const size = RESOLUTIONS[resolution];
   useRecorder.setState({
@@ -208,6 +241,8 @@ export async function startRecording(): Promise<void> {
   }));
   const start: ToWorker = {
     t: 'start',
+    id,
+    title,
     width: size.width,
     height: size.height,
     fps: FPS,
@@ -219,34 +254,14 @@ export async function startRecording(): Promise<void> {
   };
   worker.postMessage(start, [videoStream, ...soundStreams.map((each) => each.stream)]);
 
-  const outputs: Output[] = [];
-  worker.addEventListener('message', (event: MessageEvent<FromWorker>) => {
-    const message = event.data;
-    if (message.t === 'source') {
-      useRecorder.setState({ source: { width: message.width, height: message.height } });
-    } else if (message.t === 'file') {
-      const type =
-        message.extension === 'ogg'
-          ? 'audio/ogg'
-          : message.extension === 'm4a'
-            ? 'audio/mp4'
-            : 'video/mp4';
-      outputs.push({
-        kind: message.kind as OutputKind,
-        blob: new Blob([message.data], { type }),
-        extension: message.extension,
-      });
-    } else if (message.t === 'done') {
-      worker.terminate();
-      useRecorder.setState({
-        state: outputs.length > 0 ? 'done' : 'idle',
-        outputs,
-        length: message.length * 1000,
-        error: outputs.length > 0 ? null : 'Nothing was recorded.',
-      });
-    } else if (message.t === 'error') {
-      useRecorder.setState({ error: `Recording problem: ${message.message}` });
-    }
+  holdRecording(id);
+  listen(worker, id);
+  useRecorder.setState({
+    recordingId: id,
+    title,
+    startedAt: Date.now(),
+    savedTo: null,
+    stored: 0,
   });
 
   running = { capture, audio, worker, made };
@@ -273,6 +288,8 @@ export async function stopRecording(): Promise<void> {
   const current = running;
   if (!current) return;
   running = null;
+  // In the click: the browser may want to ask again before the app writes to the folder.
+  void allowRecordingFolder();
   const length = recordedMs(useRecorder.getState());
   useRecorder.setState({ state: 'finishing', since: null, before: length, length });
   current.worker.postMessage({ t: 'stop' } satisfies ToWorker);
@@ -284,10 +301,34 @@ export async function stopRecording(): Promise<void> {
   void current.audio.close();
 }
 
+/**
+ * Puts the finished files away without deleting them: they stay on disk, and are offered
+ * again next time (the lock goes, so they show as left over).
+ */
+export function putAwayRecording(): void {
+  if (running) return;
+  const { recordingId } = useRecorder.getState();
+  if (recordingId) releaseRecording(recordingId);
+  useRecorder.setState({
+    state: 'idle',
+    outputs: [],
+    length: 0,
+    before: 0,
+    error: null,
+    source: null,
+    recordingId: null,
+    savedTo: null,
+  });
+}
+
 /** Throws the finished files away. */
 export function discardRecording(): void {
   if (running) return;
+  const { recordingId } = useRecorder.getState();
+  if (recordingId) void discardRecordingFiles(recordingId);
   useRecorder.setState({
+    recordingId: null,
+    savedTo: null,
     state: 'idle',
     outputs: [],
     length: 0,
@@ -297,10 +338,129 @@ export function discardRecording(): void {
   });
 }
 
-/** Whether there is something that would be lost by closing the page. */
+/**
+ * Whether closing the page now would cut something short: a recording being made or
+ * its files being made. (Finished files are on disk, and offered again next time.)
+ */
 export function recordingAtStake(): boolean {
   const { state } = useRecorder.getState();
-  return state !== 'idle';
+  return (
+    state === 'recording' || state === 'paused' || state === 'finishing' || state === 'starting'
+  );
+}
+
+const KINDS_SUFFIX: Record<string, string> = {
+  video: '',
+  videoOnly: ' (video only)',
+  mix: ' (sound only)',
+  mic: ' (microphone)',
+  slides: ' (slides sound)',
+};
+
+/** A file's name: the board, when it was recorded, and which file it is. */
+export function fileName(
+  kind: string,
+  extension: string,
+  title: string,
+  startedAt: number,
+): string {
+  const when = new Date(startedAt || Date.now());
+  const stamp = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(
+    when.getDate(),
+  ).padStart(2, '0')} ${String(when.getHours()).padStart(2, '0')}.${String(
+    when.getMinutes(),
+  ).padStart(2, '0')}`;
+  const base = `${title} ${stamp}`
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+  return `${base || 'Recording'}${KINDS_SUFFIX[kind] ?? ` (${kind})`}.${extension}`;
+}
+
+/**
+ * What the worker says about a recording's files, at Stop or on recovery: each file
+ * from disk as it is made, then — all made — shown, and saved to the folder if one is
+ * chosen. The disk being full stops the recording, keeping what there is.
+ */
+function listen(worker: Worker, id: string) {
+  const outputs: Output[] = [];
+  const reading: Array<Promise<unknown>> = [];
+  worker.addEventListener('message', (event: MessageEvent<FromWorker>) => {
+    const message = event.data;
+    if (message.t === 'source') {
+      useRecorder.setState({ source: { width: message.width, height: message.height } });
+    } else if (message.t === 'stored') {
+      useRecorder.setState({ stored: message.seconds });
+    } else if (message.t === 'file') {
+      reading.push(
+        recordingFile(id, message.file).then((file) =>
+          outputs.push({
+            kind: message.kind as OutputKind,
+            blob: file,
+            extension: message.extension,
+          }),
+        ),
+      );
+    } else if (message.t === 'done') {
+      // Each file is read from disk as its message comes; all of them, then on.
+      void Promise.allSettled(reading).then(async () => {
+        worker.terminate();
+        const { title, startedAt } = useRecorder.getState();
+        useRecorder.setState({
+          state: outputs.length > 0 ? 'done' : 'idle',
+          outputs: [...outputs],
+          length: message.length * 1000,
+          error: outputs.length > 0 ? null : 'Nothing was recorded.',
+        });
+        if (outputs.length === 0) return discardRecordingFiles(id);
+        try {
+          const savedTo = await saveToRecordingFolder(
+            outputs.map((output) => ({
+              name: fileName(output.kind, output.extension, title, startedAt),
+              blob: output.blob,
+            })),
+          );
+          if (useRecorder.getState().recordingId === id) useRecorder.setState({ savedTo });
+        } catch {
+          useRecorder.setState({
+            error: 'The files could not be saved to the folder. Download them below.',
+          });
+        }
+      });
+    } else if (message.t === 'full') {
+      useRecorder.setState({
+        error:
+          'This computer’s disk is full: the recording stopped there. What was recorded is kept.',
+      });
+      void stopRecording();
+    } else if (message.t === 'error') {
+      useRecorder.setState({ error: `Recording problem: ${message.message}` });
+    }
+  });
+}
+
+/**
+ * Makes the files of a recording left on disk by an earlier visit, and shows them as a
+ * finished recording is shown. Run from a click: the folder may need asking again.
+ */
+export async function recoverRecording(unsaved: Unsaved): Promise<void> {
+  const state = useRecorder.getState().state;
+  if (state !== 'idle' && state !== 'done') return;
+  void allowRecordingFolder();
+  holdRecording(unsaved.id);
+  useRecorder.setState({
+    state: 'finishing',
+    recordingId: unsaved.id,
+    title: unsaved.title,
+    startedAt: unsaved.startedAt,
+    savedTo: null,
+    error: null,
+    outputs: [],
+  });
+  const worker = new EncodeWorker();
+  listen(worker, unsaved.id);
+  worker.postMessage({ t: 'recover', id: unsaved.id } satisfies ToWorker);
 }
 
 if (typeof window !== 'undefined') {

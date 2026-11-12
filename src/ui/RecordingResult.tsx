@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   clockText,
   discardRecording,
+  fileName,
+  putAwayRecording,
   useRecorder,
   type Output,
   type OutputKind,
@@ -14,14 +16,6 @@ const LABEL: Record<OutputKind, string> = {
   mix: 'Sound only — microphone and slides',
   mic: 'Sound only — microphone',
   slides: 'Sound only — slides’ sound',
-};
-
-const SUFFIX: Record<OutputKind, string> = {
-  video: '',
-  videoOnly: ' (video only)',
-  mix: ' (sound only)',
-  mic: ' (microphone)',
-  slides: ' (slides sound)',
 };
 
 /** In this order, whatever order they were made in. */
@@ -37,17 +31,11 @@ const size = (bytes: number) =>
       ? `${(bytes / 1e6).toFixed(1)} MB`
       : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 
-/** A file name a person (and Canva) is happy with: no slashes, colons or the like. */
-const safeName = (text: string) =>
-  text
-    .replace(/[\\/:*?"<>|]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80) || 'Recording';
-
 /**
- * A finished recording: its three files to download — the video with sound, the video
- * alone, the sound alone — then close. They are only in this window until then.
+ * A finished recording: its files to download — the video with sound, the video alone,
+ * the sounds — saved to the chosen folder by themselves if there is one. The recording
+ * stays on this computer's disk until it is downloaded, saved or deleted: closing this
+ * without either keeps it, and it is offered again next time.
  */
 export function RecordingResult() {
   const state = useRecorder((current) => current.state);
@@ -60,6 +48,9 @@ export function RecordingResult() {
 function Files({ outputs }: { outputs: Output[] }) {
   const length = useRecorder((current) => current.length);
   const error = useRecorder((current) => current.error);
+  const savedTo = useRecorder((current) => current.savedTo);
+  const title = useRecorder((current) => current.title);
+  const startedAt = useRecorder((current) => current.startedAt);
   const [saved, setSaved] = useState<OutputKind[]>([]);
 
   const links = useMemo(
@@ -72,10 +63,8 @@ function Files({ outputs }: { outputs: Output[] }) {
   const [allRunning, setAllRunning] = useState(false);
   useEffect(() => () => links.forEach((link) => URL.revokeObjectURL(link.url)), [links]);
 
-  const base = safeName(
-    `${document.title.replace(/ · Sabboura$/, '')} ${new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '.')}`,
-  );
-  const nameOf = (link: (typeof links)[number]) => `${base}${SUFFIX[link.kind]}.${link.extension}`;
+  const nameOf = (link: (typeof links)[number]) =>
+    fileName(link.kind, link.extension, title, startedAt);
 
   // One after the other: the browser may ask once whether this site may download
   // several files.
@@ -94,14 +83,14 @@ function Files({ outputs }: { outputs: Output[] }) {
     setAllRunning(false);
   };
 
+  // Saved somewhere — downloaded, or in the folder — the copy on disk goes; otherwise
+  // it is kept, and offered again next time.
   const close = () => {
-    if (
-      saved.length < links.length &&
-      !window.confirm('Close without downloading every file? The recording is only kept here.')
-    ) {
-      return;
-    }
-    discardRecording();
+    if (savedTo || saved.length >= links.length) discardRecording();
+    else putAwayRecording();
+  };
+  const remove = () => {
+    if (window.confirm('Delete this recording? It cannot be brought back.')) discardRecording();
   };
 
   return (
@@ -116,8 +105,15 @@ function Files({ outputs }: { outputs: Output[] }) {
         <h2 id="recording-title" className={styles.title}>
           Recording ready <span className={styles.length}>{clockText(length)}</span>
         </h2>
+        {savedTo ? (
+          <p className={styles.saved} data-testid="recording-saved-to">
+            ✓ Saved to your “{savedTo}” folder.
+          </p>
+        ) : null}
         <p className={styles.hint}>
-          Download the files you want. They are kept only in this window until you close this.
+          {savedTo
+            ? 'You can download them here as well. '
+            : 'Download the files you want. Until you do, the recording is kept on this computer and offered again next time. '}
           Videos are MP4; sounds are{' '}
           {links.some((link) => link.extension === 'ogg') ? 'OGG' : 'M4A'}: both open in Canva.
         </p>
@@ -153,6 +149,14 @@ function Files({ outputs }: { outputs: Output[] }) {
             onClick={() => void downloadAll()}
           >
             Download all ({links.length})
+          </button>
+          <button
+            type="button"
+            className={styles.close}
+            data-testid="recording-delete"
+            onClick={remove}
+          >
+            Delete
           </button>
           <button
             type="button"

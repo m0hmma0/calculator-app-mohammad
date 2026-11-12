@@ -6,6 +6,9 @@ export type SoundName = 'mix' | 'mic' | 'slides';
 export type ToWorker =
   | {
       t: 'start';
+      /** The recording's folder on disk (`storage.ts`). */
+      id: string;
+      title: string;
       width: number;
       height: number;
       fps: number;
@@ -18,10 +21,17 @@ export type ToWorker =
     }
   | { t: 'pause' }
   | { t: 'resume' }
-  | { t: 'stop' };
+  | { t: 'stop' }
+  /** Make the files of a recording found on disk: one that stopped without them. */
+  | { t: 'recover'; id: string };
 
 export type FromWorker =
   | { t: 'source'; width: number; height: number }
-  | { t: 'file'; kind: string; data: ArrayBuffer; extension: string }
-  | { t: 'done'; length: number }
+  /** A finished file, in the recording's `out` folder. */
+  | { t: 'file'; kind: string; file: string; extension: string }
+  | { t: 'done'; id: string; length: number }
+  /** How much of the recording is safe on disk, in seconds: put there for good. */
+  | { t: 'stored'; seconds: number }
+  /** The disk is full: what was recorded is kept, and the recording stops. */
+  | { t: 'full' }
   | { t: 'error'; message: string };

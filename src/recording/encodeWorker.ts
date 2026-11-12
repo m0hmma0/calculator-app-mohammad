@@ -1,13 +1,24 @@
 /// <reference lib="webworker" />
 import {
-  BufferTarget,
   EncodedAudioPacketSource,
   EncodedPacket,
   EncodedVideoPacketSource,
   Mp4OutputFormat,
   OggOutputFormat,
   Output,
+  StreamTarget,
+  type StreamTargetChunk,
 } from 'mediabunny';
+import {
+  configFromJson,
+  configToJson,
+  encodeHead,
+  OUT_DIR,
+  PacketReader,
+  recordingsRoot,
+  type RecordingMeta,
+  type StoredPacket,
+} from './storage';
 import type { FromWorker, SoundName, ToWorker } from './workerProtocol';
 
 /**
@@ -17,20 +28,72 @@ import type { FromWorker, SoundName, ToWorker } from './workerProtocol';
  * The picture is taken at a steady frame rate whatever the tab does — a slide that
  * does not change still gets its frames — fitted into exactly the size asked for
  * (1280×720 or 1920×1080) on the dark surround, and encoded once as H.264 with a key
- * frame every two seconds. That one encoding goes into both videos. Each sound (the
- * mix, the microphone alone, the slides alone) is encoded once as AAC, or Opus where
- * the browser has no AAC encoder. When the recording stops, each file is written as a
- * plain MP4 (or M4A, or Ogg) with its index at the front: what editors such as Canva
- * expect, and what the browser's own recorder does not make.
+ * frame every two seconds. Each sound (the mix, the microphone alone, the slides alone)
+ * is encoded once, as AAC, or Opus where the browser has no AAC encoder.
+ *
+ * Every encoded piece goes straight to disk (`storage.ts`) and is put there for good
+ * every second, so a crash, a closed tab or a flat battery loses a second at most; the
+ * files are made from what is on disk, at Stop or when a stopped recording is
+ * recovered, and written to disk too — however long the recording, it is never all
+ * in memory.
  */
 declare const self: DedicatedWorkerGlobalScope;
 
 const SURROUND = '#101217';
 const KEY_EVERY_S = 2;
+const FLUSH_MS = 1000;
 
-interface Stored<M> {
-  packets: EncodedPacket[];
-  meta: M | undefined;
+/** A run of encoded pieces on disk, with how to decode them. */
+class PacketLog {
+  private at = 0;
+  private configured = false;
+  /** The end of the last piece written, in seconds, and of the last put to disk for good. */
+  written = 0;
+  stored = 0;
+  constructor(
+    private readonly handle: FileSystemSyncAccessHandle,
+    private readonly configHandle: FileSystemSyncAccessHandle,
+  ) {}
+
+  static async open(dir: FileSystemDirectoryHandle, name: string): Promise<PacketLog> {
+    const bin = await dir.getFileHandle(`${name}.bin`, { create: true });
+    const json = await dir.getFileHandle(`${name}.json`, { create: true });
+    return new PacketLog(await bin.createSyncAccessHandle(), await json.createSyncAccessHandle());
+  }
+
+  /** Throws when the disk is full. */
+  add(
+    chunk: EncodedVideoChunk | EncodedAudioChunk,
+    config?: VideoDecoderConfig | AudioDecoderConfig,
+  ) {
+    if (!this.configured && config) {
+      const bytes = new TextEncoder().encode(configToJson(config));
+      this.configHandle.truncate(0);
+      this.configHandle.write(bytes, { at: 0 });
+      this.configHandle.flush();
+      this.configured = true;
+    }
+    const data = new Uint8Array(chunk.byteLength);
+    chunk.copyTo(data);
+    const head = encodeHead(
+      { key: chunk.type === 'key', timestamp: chunk.timestamp, duration: chunk.duration ?? 0 },
+      data.length,
+    );
+    this.at += this.handle.write(head, { at: this.at });
+    this.at += this.handle.write(data, { at: this.at });
+    this.written = Math.max(this.written, (chunk.timestamp + (chunk.duration ?? 0)) / 1e6);
+  }
+
+  flush() {
+    this.handle.flush();
+    this.stored = this.written;
+  }
+
+  close() {
+    this.handle.flush();
+    this.handle.close();
+    this.configHandle.close();
+  }
 }
 
 let width = 1920;
@@ -38,6 +101,7 @@ let height = 1080;
 let fps = 30;
 let paused = false;
 let stopping = false;
+let full = false;
 
 /** Frames encoded so far, and the clock they are counted against. */
 let emitted = 0;
@@ -49,26 +113,55 @@ let fresh = false;
 let canvas: OffscreenCanvas | null = null;
 let context: OffscreenCanvasRenderingContext2D | null = null;
 let videoEncoder: VideoEncoder | null = null;
-const video: Stored<EncodedVideoChunkMetadata> = { packets: [], meta: undefined };
+let videoLog: PacketLog | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
+let flusher: ReturnType<typeof setInterval> | null = null;
 let sourceSize = '';
+let dir: FileSystemDirectoryHandle | null = null;
+let meta: RecordingMeta | null = null;
 
 interface Sound {
   name: SoundName;
   encoder: AudioEncoder | null;
   /** Sound frames taken so far, which time the next piece. */
   frames: number;
-  stored: Stored<EncodedAudioChunkMetadata>;
+  log: PacketLog;
   codec: 'aac' | 'opus';
-  done: Promise<void>;
 }
 const sounds: Sound[] = [];
 
-const say = (message: FromWorker, transfer: Transferable[] = []) =>
-  self.postMessage(message, transfer);
+const say = (message: FromWorker) => self.postMessage(message);
 
 function fail(error: unknown) {
   say({ t: 'error', message: error instanceof Error ? error.message : String(error) });
+}
+
+/** Writing to disk failed: the disk is full. Keep what is there and stop. */
+function diskFull() {
+  if (full) return;
+  full = true;
+  say({ t: 'full' });
+}
+
+function keep(
+  log: PacketLog | null,
+  chunk: EncodedVideoChunk | EncodedAudioChunk,
+  config?: VideoDecoderConfig | AudioDecoderConfig,
+) {
+  if (!log || full) return;
+  try {
+    log.add(chunk, config);
+  } catch {
+    diskFull();
+  }
+}
+
+async function writeMeta() {
+  if (!dir || !meta) return;
+  const file = await dir.getFileHandle('meta.json', { create: true });
+  const writable = await file.createWritable();
+  await writable.write(JSON.stringify(meta));
+  await writable.close();
 }
 
 /** Draws the newest picture from the tab, fitted, onto the frame being made. */
@@ -86,7 +179,7 @@ function paint() {
 
 /** Makes every frame due by now — the same picture again if the tab has not changed. */
 function tick() {
-  if (paused || stopping || !latest || !videoEncoder || !canvas) return;
+  if (paused || stopping || full || !latest || !videoEncoder || !canvas) return;
   const due = base + Math.floor(((performance.now() - since) * fps) / 1000);
   // Far behind (the computer slept): skip ahead rather than pour out a burst.
   if (due - emitted > fps) emitted = due - 1;
@@ -151,16 +244,13 @@ async function readSound(sound: Sound, stream: ReadableStream<AudioData>) {
       value.close();
       break;
     }
-    if (paused) {
+    if (paused || full) {
       value.close();
       continue;
     }
     if (!sound.encoder) {
       sound.encoder = new AudioEncoder({
-        output: (chunk, meta) => {
-          sound.stored.packets.push(EncodedPacket.fromEncodedChunk(chunk));
-          if (!sound.stored.meta && meta?.decoderConfig) sound.stored.meta = meta;
-        },
+        output: (chunk, chunkMeta) => keep(sound.log, chunk, chunkMeta?.decoderConfig),
         error: fail,
       });
       sound.encoder.configure({
@@ -178,50 +268,170 @@ async function readSound(sound: Sound, stream: ReadableStream<AudioData>) {
   }
 }
 
-/** One file: the given picture and sound, in order of time, written out whole. */
-async function write(
+/* ------------------------------ making the files ------------------------------ */
+
+async function readConfig<T extends VideoDecoderConfig | AudioDecoderConfig>(
+  folder: FileSystemDirectoryHandle,
+  name: string,
+): Promise<T | null> {
+  try {
+    const text = await (await (await folder.getFileHandle(`${name}.json`)).getFile()).text();
+    return text ? configFromJson<T>(text) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readerOf(
+  folder: FileSystemDirectoryHandle,
+  name: string,
+): Promise<PacketReader | null> {
+  try {
+    return new PacketReader(await (await folder.getFileHandle(`${name}.bin`)).getFile());
+  } catch {
+    return null;
+  }
+}
+
+const packetOf = (stored: StoredPacket) =>
+  new EncodedPacket(
+    stored.data,
+    stored.key ? 'key' : 'delta',
+    stored.timestamp / 1e6,
+    stored.duration / 1e6,
+  );
+
+/**
+ * One file, written to `out/<name>` on disk as it is made: the picture and the sound
+ * given, in order of time. MP4 with its index at the end, so nothing need be held back.
+ */
+async function writeFile(
+  folder: FileSystemDirectoryHandle,
+  name: string,
   kind: 'mp4' | 'ogg',
-  picture: Stored<EncodedVideoChunkMetadata> | null,
-  sound: Sound | null,
-): Promise<ArrayBuffer | null> {
-  const target = new BufferTarget();
-  const output = new Output({
-    format:
-      kind === 'ogg' ? new OggOutputFormat() : new Mp4OutputFormat({ fastStart: 'in-memory' }),
-    target,
-  });
-  const pictureSource = picture?.packets.length ? new EncodedVideoPacketSource('avc') : null;
-  const soundSource = sound?.stored.packets.length
-    ? new EncodedAudioPacketSource(sound.codec)
+  picture: string | null,
+  sound: { name: string; codec: 'aac' | 'opus' } | null,
+): Promise<number> {
+  const videoConfig = picture ? await readConfig<VideoDecoderConfig>(folder, picture) : null;
+  const soundConfig = sound
+    ? await readConfig<AudioDecoderConfig>(folder, `sound-${sound.name}`)
     : null;
-  if (pictureSource) output.addVideoTrack(pictureSource, { frameRate: fps });
+  const videoReader = videoConfig && picture ? await readerOf(folder, picture) : null;
+  const soundReader = soundConfig && sound ? await readerOf(folder, `sound-${sound.name}`) : null;
+  if (!videoReader && !soundReader) return 0;
+
+  const out = await folder.getDirectoryHandle(OUT_DIR, { create: true });
+  const handle = await (await out.getFileHandle(name, { create: true })).createSyncAccessHandle();
+  handle.truncate(0);
+  const writable = new WritableStream<StreamTargetChunk>({
+    write(chunk) {
+      handle.write(chunk.data, { at: chunk.position });
+    },
+  });
+  const output = new Output({
+    format: kind === 'ogg' ? new OggOutputFormat() : new Mp4OutputFormat({ fastStart: false }),
+    target: new StreamTarget(writable),
+  });
+  const pictureSource = videoReader ? new EncodedVideoPacketSource('avc') : null;
+  const soundSource = soundReader && sound ? new EncodedAudioPacketSource(sound.codec) : null;
+  if (pictureSource) output.addVideoTrack(pictureSource, { frameRate: meta?.fps ?? fps });
   if (soundSource) output.addAudioTrack(soundSource);
-  if (!pictureSource && !soundSource) return null;
   await output.start();
 
-  // Interleaved by time, as a player reads them.
-  const queue: Array<{ at: number; add: () => Promise<void> }> = [];
-  picture?.packets.forEach((packet, index) =>
-    queue.push({
-      at: packet.timestamp,
-      add: () => pictureSource!.add(packet, index === 0 ? picture.meta : undefined),
-    }),
-  );
-  sound?.stored.packets.forEach((packet, index) =>
-    queue.push({
-      at: packet.timestamp,
-      add: () => soundSource!.add(packet, index === 0 ? sound.stored.meta : undefined),
-    }),
-  );
-  queue.sort((a, b) => a.at - b.at);
-  for (const item of queue) await item.add();
+  // The two runs interleaved by time, as a player reads them.
+  let nextPicture = videoReader ? await videoReader.next() : null;
+  let nextSound = soundReader ? await soundReader.next() : null;
+  let firstPicture = true;
+  let firstSound = true;
+  let end = 0;
+  while (nextPicture || nextSound) {
+    const takePicture = nextPicture && (!nextSound || nextPicture.timestamp <= nextSound.timestamp);
+    if (takePicture && nextPicture && pictureSource) {
+      await pictureSource.add(
+        packetOf(nextPicture),
+        firstPicture ? { decoderConfig: videoConfig! } : undefined,
+      );
+      firstPicture = false;
+      end = Math.max(end, (nextPicture.timestamp + nextPicture.duration) / 1e6);
+      nextPicture = await videoReader!.next();
+    } else if (nextSound && soundSource) {
+      await soundSource.add(
+        packetOf(nextSound),
+        firstSound ? { decoderConfig: soundConfig! } : undefined,
+      );
+      firstSound = false;
+      end = Math.max(end, (nextSound.timestamp + nextSound.duration) / 1e6);
+      nextSound = await soundReader!.next();
+    } else {
+      break;
+    }
+  }
   await output.finalize();
-  return target.buffer;
+  handle.flush();
+  handle.close();
+  return end;
+}
+
+/** Makes every file of the recording in `folder`, from what is on disk. */
+async function makeFiles(folder: FileSystemDirectoryHandle) {
+  const recorded = JSON.parse(
+    await (await (await folder.getFileHandle('meta.json')).getFile()).text(),
+  ) as RecordingMeta;
+  meta = recorded;
+  const codec = recorded.aac ? 'aac' : 'opus';
+  const soundExtension = recorded.aac ? 'm4a' : 'ogg';
+  const made: NonNullable<RecordingMeta['made']> = [];
+  let length = recorded.finished?.length ?? 0;
+  const jobs: Array<{ kind: string; file: string; extension: string; run: () => Promise<number> }> =
+    [];
+  if (recorded.sounds.includes('mix')) {
+    jobs.push({
+      kind: 'video',
+      file: 'video.mp4',
+      extension: 'mp4',
+      run: () => writeFile(folder, 'video.mp4', 'mp4', 'video', { name: 'mix', codec }),
+    });
+  }
+  jobs.push({
+    kind: 'videoOnly',
+    file: 'video-only.mp4',
+    extension: 'mp4',
+    run: () => writeFile(folder, 'video-only.mp4', 'mp4', 'video', null),
+  });
+  for (const name of recorded.sounds) {
+    jobs.push({
+      kind: name,
+      file: `sound-${name}.${soundExtension}`,
+      extension: soundExtension,
+      run: () =>
+        writeFile(folder, `sound-${name}.${soundExtension}`, recorded.aac ? 'mp4' : 'ogg', null, {
+          name,
+          codec,
+        }),
+    });
+  }
+  for (const job of jobs) {
+    try {
+      const end = await job.run();
+      if (end <= 0) continue;
+      length = Math.max(length, end);
+      made.push({ kind: job.kind, file: job.file, extension: job.extension });
+      say({ t: 'file', kind: job.kind, file: job.file, extension: job.extension });
+    } catch (error) {
+      fail(error);
+    }
+  }
+  recorded.made = made;
+  recorded.finished = { length };
+  dir = folder;
+  await writeMeta();
+  say({ t: 'done', id: recorded.id, length });
 }
 
 async function finish() {
   stopping = true;
   if (ticker) clearInterval(ticker);
+  if (flusher) clearInterval(flusher);
   try {
     await videoEncoder?.flush();
     for (const sound of sounds) await sound.encoder?.flush();
@@ -232,69 +442,75 @@ async function finish() {
   for (const sound of sounds) sound.encoder?.close();
   latest?.close();
   latest = null;
+  videoLog?.close();
+  for (const sound of sounds) sound.log.close();
+  if (meta && dir) {
+    meta.finished = { length: emitted / fps };
+    await writeMeta();
+    await makeFiles(dir);
+  }
+}
 
-  const length = emitted / fps;
-  const mix = sounds.find((sound) => sound.name === 'mix' && sound.stored.packets.length) ?? null;
-  const jobs: Array<{ kind: string; make: () => Promise<ArrayBuffer | null>; ext: string }> = [];
-  if (mix) jobs.push({ kind: 'video', make: () => write('mp4', video, mix), ext: 'mp4' });
-  jobs.push({ kind: 'videoOnly', make: () => write('mp4', video, null), ext: 'mp4' });
-  for (const sound of sounds) {
-    if (!sound.stored.packets.length) continue;
-    const ogg = sound.codec === 'opus';
-    jobs.push({
-      kind: sound.name,
-      make: () => write(ogg ? 'ogg' : 'mp4', null, sound),
-      ext: ogg ? 'ogg' : 'm4a',
-    });
+async function start(message: Extract<ToWorker, { t: 'start' }>) {
+  ({ width, height, fps } = message);
+  dir = await (await recordingsRoot()).getDirectoryHandle(message.id, { create: true });
+  meta = {
+    id: message.id,
+    startedAt: Date.now(),
+    width,
+    height,
+    fps,
+    aac: message.aac,
+    sounds: message.sounds.map((each) => each.name),
+    title: message.title,
+  };
+  await writeMeta();
+  videoLog = await PacketLog.open(dir, 'video');
+  canvas = new OffscreenCanvas(width, height);
+  context = canvas.getContext('2d', { alpha: false });
+  videoEncoder = new VideoEncoder({
+    output: (chunk, chunkMeta) => keep(videoLog, chunk, chunkMeta?.decoderConfig),
+    error: fail,
+  });
+  videoEncoder.configure({
+    codec: message.videoCodec,
+    width,
+    height,
+    bitrate: message.bitrate,
+    framerate: fps,
+    latencyMode: 'quality',
+    avc: { format: 'avc' },
+  });
+  for (const { name, stream } of message.sounds) {
+    const sound: Sound = {
+      name,
+      encoder: null,
+      frames: 0,
+      log: await PacketLog.open(dir, `sound-${name}`),
+      codec: message.aac ? 'aac' : 'opus',
+    };
+    sounds.push(sound);
+    void readSound(sound, stream).catch(fail);
   }
-  for (const job of jobs) {
+  since = performance.now();
+  void readVideo(message.video).catch(fail);
+  ticker = setInterval(tick, 1000 / fps / 2);
+  // Put to disk for good every second: what a crash can take is the last second.
+  flusher = setInterval(() => {
     try {
-      const data = await job.make();
-      if (data) say({ t: 'file', kind: job.kind, data, extension: job.ext }, [data]);
-    } catch (error) {
-      fail(error);
+      videoLog?.flush();
+      for (const sound of sounds) sound.log.flush();
+      say({ t: 'stored', seconds: videoLog?.stored ?? 0 });
+    } catch {
+      diskFull();
     }
-  }
-  say({ t: 'done', length });
+  }, FLUSH_MS);
 }
 
 self.addEventListener('message', (event: MessageEvent<ToWorker>) => {
   const message = event.data;
   if (message.t === 'start') {
-    ({ width, height, fps } = message);
-    canvas = new OffscreenCanvas(width, height);
-    context = canvas.getContext('2d', { alpha: false });
-    videoEncoder = new VideoEncoder({
-      output: (chunk, meta) => {
-        video.packets.push(EncodedPacket.fromEncodedChunk(chunk));
-        if (!video.meta && meta?.decoderConfig) video.meta = meta;
-      },
-      error: fail,
-    });
-    videoEncoder.configure({
-      codec: message.videoCodec,
-      width,
-      height,
-      bitrate: message.bitrate,
-      framerate: fps,
-      latencyMode: 'quality',
-      avc: { format: 'avc' },
-    });
-    since = performance.now();
-    void readVideo(message.video).catch(fail);
-    for (const { name, stream } of message.sounds) {
-      const sound: Sound = {
-        name,
-        encoder: null,
-        frames: 0,
-        stored: { packets: [], meta: undefined },
-        codec: message.aac ? 'aac' : 'opus',
-        done: Promise.resolve(),
-      };
-      sound.done = readSound(sound, stream).catch(fail);
-      sounds.push(sound);
-    }
-    ticker = setInterval(tick, 1000 / fps / 2);
+    void start(message).catch(fail);
   } else if (message.t === 'pause') {
     tick();
     paused = true;
@@ -305,6 +521,11 @@ self.addEventListener('message', (event: MessageEvent<ToWorker>) => {
     base = emitted;
   } else if (message.t === 'stop') {
     tick();
-    void finish();
+    void finish().catch(fail);
+  } else if (message.t === 'recover') {
+    void (async () => {
+      const folder = await (await recordingsRoot()).getDirectoryHandle(message.id);
+      await makeFiles(folder);
+    })().catch(fail);
   }
 });

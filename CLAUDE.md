@@ -279,6 +279,28 @@ picture (`media-tap`, only with the select or hand tool, so a pen draws over it)
 frame is picked by its title as well (`frameTitleBox`, passed `zoom` in `PickOptions`
 by the select tool and its hover).
 
+Recordings that cannot be lost (12 November): the encoding worker writes every encoded
+piece to the browser's private disk (OPFS, `src/recording/storage.ts`:
+`recordings/<id>/` with `meta.json`, `video.bin`/`.json`, `sound-<name>.bin`/`.json`;
+a .bin is 21-byte heads plus data) through sync access handles, flushed every second
+(`stored` messages: the row shows "safe on disk m:ss"). The files are made from disk
+— at Stop, or by `{t: 'recover'}` — into `out/`, MP4 with the index at the end
+(`fastStart: false`, written through a `StreamTarget`, never all in memory), and read
+back as disk-backed `File`s. A Web Lock (`holdRecording`) marks a recording this tab is
+making or showing; `unsavedRecordings()` lists the rest, and `RecoveryNotice`
+(mounted with `RecordingResult` at the app's root, in `main.tsx`) offers them:
+Recover or Delete. Closing the result dialog deletes the disk copy only if the files
+were downloaded or saved to the folder; otherwise it is kept and offered again
+(`putAwayRecording`); Delete removes it. The folder (`src/recording/folder.ts`):
+`showDirectoryPicker`, the handle kept in IndexedDB (`sabboura-recording`), permission
+asked on the Stop or Recover click; files written there after they are made
+(`saveToRecordingFolder`, "Name (2).mp4" when taken). `navigator.storage.persist()` at
+Record; the row shows the room left (`recordingSpace`), amber under 2 GB. A full disk
+(`{t: 'full'}`) stops the recording and keeps what there is. Tests close the tab
+mid-recording (`page.close({ runBeforeUnload: false })`) and recover it in a new page —
+they wait for `record-stored` first: under load nothing may reach the disk in the
+first seconds. The folder test stands an OPFS folder in for the picker.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

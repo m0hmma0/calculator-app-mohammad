@@ -1,5 +1,5 @@
 .backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 20;
   display: grid;
@@ -103,4 +103,11 @@
   font: inherit;
   padding: 6px 14px;
   cursor: pointer;
+}
+
+.saved {
+  margin: 0 0 8px;
+  color: #087443;
+  font-weight: 600;
+  font-size: 14px;
 }

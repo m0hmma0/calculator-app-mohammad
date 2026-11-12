@@ -148,3 +148,15 @@
 .soft {
   color: #b35c00;
 }
+
+.folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stored {
+  font-size: 12px;
+  color: #087443;
+  font-variant-numeric: tabular-nums;
+}

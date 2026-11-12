@@ -8,6 +8,14 @@ import {
   type CameraShape,
 } from '@/recording/camera';
 import {
+  allowRecordingFolder,
+  chooseRecordingFolder,
+  folderPickerAvailable,
+  forgetRecordingFolder,
+  useRecordingFolder,
+} from '@/recording/folder';
+import { recordingSpace } from '@/recording/recovery';
+import {
   clockText,
   pauseRecording,
   recordedMs,
@@ -106,6 +114,14 @@ export function RecordControls() {
               {recorder.state === 'recording' ? '● ' : '❚❚ '}
               {clockText(recordedMs(recorder))}
             </span>
+            <span
+              className={styles.stored}
+              title="Written to this computer's disk: kept even if the browser or computer stops"
+              data-testid="record-stored"
+              data-seconds={Math.floor(recorder.stored)}
+            >
+              safe on disk {clockText(recorder.stored * 1000)}
+            </span>
             {recorder.state === 'recording' ? (
               <button
                 type="button"
@@ -151,7 +167,8 @@ export function RecordControls() {
           </button>
         )}
       </span>
-      {busy ? <Sharpness /> : null}
+      <FolderChoice disabled={busy} />
+      {busy ? <Sharpness /> : <Room />}
       {problem || recorder.error ? (
         <span className={styles.problem} role="alert" data-testid="record-problem">
           {problem ?? recorder.error}
@@ -244,6 +261,100 @@ function Sharpness() {
       {soft
         ? ' — make the audience window full screen (double-click it) for a sharper picture.'
         : '.'}
+    </span>
+  );
+}
+
+/**
+ * Where finished recordings go by themselves: a folder on this computer (Chrome, Edge).
+ * Without one, they are downloaded from the dialog at the end.
+ */
+function FolderChoice({ disabled }: { disabled: boolean }) {
+  const handle = useRecordingFolder((state) => state.handle);
+  const allowed = useRecordingFolder((state) => state.allowed);
+  if (!folderPickerAvailable()) return null;
+  return (
+    <span className={styles.folder} data-testid="record-folder">
+      {handle ? (
+        <>
+          <span className={styles.sizeLabel}>Save to</span>
+          <strong title="Finished recordings are saved here by themselves">📁 {handle.name}</strong>
+          {!allowed ? (
+            <button
+              type="button"
+              className={styles.button}
+              data-testid="record-folder-allow"
+              onMouseDown={keepFocus}
+              onClick={() => void allowRecordingFolder()}
+            >
+              Allow
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.button}
+            disabled={disabled}
+            data-testid="record-folder-change"
+            onMouseDown={keepFocus}
+            onClick={() => void chooseRecordingFolder()}
+          >
+            Change
+          </button>
+          <button
+            type="button"
+            className={styles.button}
+            disabled={disabled}
+            aria-label="Stop saving to this folder"
+            title="Stop saving to this folder"
+            data-testid="record-folder-forget"
+            onMouseDown={keepFocus}
+            onClick={() => void forgetRecordingFolder()}
+          >
+            ×
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className={styles.button}
+          disabled={disabled}
+          title="Finished recordings are saved there by themselves, no download needed"
+          data-testid="record-folder-choose"
+          onMouseDown={keepFocus}
+          onClick={() => void chooseRecordingFolder()}
+        >
+          📁 Save to a folder…
+        </button>
+      )}
+    </span>
+  );
+}
+
+const gigabytes = (bytes: number) =>
+  bytes >= 1e9
+    ? `${(bytes / 1e9).toFixed(bytes >= 1e10 ? 0 : 1)} GB`
+    : `${Math.round(bytes / 1e6)} MB`;
+
+/**
+ * The room this computer has for recordings: they are written to its disk as they are
+ * made. Short of room, in amber, with roughly how long that is.
+ */
+function Room() {
+  const space = useRecorder((state) => state.space);
+  const resolution = useRecorder((state) => state.resolution);
+  useEffect(() => {
+    void recordingSpace().then((found) => useRecorder.setState({ space: found }));
+  }, []);
+  if (!space) return null;
+  // At most about 60 MB a minute at 1080p (30 at 720p), all files together; slides that
+  // hardly change take far less.
+  const perMinute = (resolution === 1080 ? 60 : 30) * 1e6 * 1.4;
+  const minutes = Math.floor(space.free / perMinute);
+  const short = space.free < 2e9;
+  return (
+    <span className={short ? styles.soft : styles.sharp} data-testid="record-space">
+      Room for recordings on this computer: {gigabytes(space.free)}
+      {short ? ` — about ${minutes} minutes at ${resolution}p` : ''}.
     </span>
   );
 }

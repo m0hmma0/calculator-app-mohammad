@@ -358,3 +358,104 @@ test('the camera sits over a video on the slide, not behind it', async ({ page }
   expect(top.camera).toBeGreaterThanOrEqual(0);
   expect(top.video === -1 || top.camera < top.video).toBe(true);
 });
+
+test.describe('nothing recorded is lost', () => {
+  /** A finished video's length, read in the page from its download link. */
+  const videoLength = (page: Page) =>
+    page.getByTestId('recording-videoOnly').evaluate(
+      (node) =>
+        new Promise<number>((resolve, reject) => {
+          const video = document.createElement('video');
+          video.muted = true;
+          video.onloadedmetadata = () => resolve(video.duration);
+          video.onerror = () => reject(new Error('the video would not load'));
+          video.src = (node as HTMLAnchorElement).href;
+        }),
+    );
+
+  test('a recording cut off by a closed tab is offered back, and its files play', async ({
+    page,
+    context,
+  }) => {
+    test.slow();
+    await presenterView(page);
+    await expect(page.getByTestId('record-space')).toContainText('Room for recordings');
+    await page.getByTestId('record-start').click();
+    await expect(page.getByTestId('record-time')).toBeVisible();
+    // Until a few seconds are safe on disk, as the row says.
+    await expect
+      .poll(
+        async () => Number(await page.getByTestId('record-stored').getAttribute('data-seconds')),
+        {
+          timeout: 30_000,
+        },
+      )
+      .toBeGreaterThanOrEqual(2);
+    // As a crash would: the tab gone, no Stop, nothing downloaded.
+    await page.close({ runBeforeUnload: false });
+
+    const again = await context.newPage();
+    await again.goto('/');
+    await expect(again.getByTestId('recording-recovery')).toBeVisible({ timeout: 15_000 });
+    await again.getByTestId('recording-recover').click();
+    await expect(again.getByTestId('recording-result')).toBeVisible({ timeout: 30_000 });
+    // What reached the disk before the tab went: a second or so short of it at most.
+    expect(await videoLength(again)).toBeGreaterThan(1.5);
+
+    // Closed without downloading, it is kept, and offered again.
+    await again.getByTestId('recording-close').click();
+    await expect(again.getByTestId('recording-recovery')).toBeVisible();
+    // Deleted, it is gone for good.
+    again.once('dialog', (dialog) => void dialog.accept());
+    await again.getByTestId('recording-recovery-delete').click();
+    await expect(again.getByTestId('recording-recovery')).toHaveCount(0);
+    await again.reload();
+    await expect(again.getByTestId('board-canvas')).toBeVisible();
+    await again.waitForTimeout(1000);
+    await expect(again.getByTestId('recording-recovery')).toHaveCount(0);
+  });
+
+  test('a chosen folder gets the finished files by themselves', async ({ page }) => {
+    test.slow();
+    // The computer's own folder picker cannot be driven from a test; a folder in the
+    // browser's storage stands in for the one a person would pick.
+    await page.addInitScript(() => {
+      (window as unknown as { showDirectoryPicker: () => Promise<unknown> }).showDirectoryPicker =
+        async () =>
+          (await navigator.storage.getDirectory()).getDirectoryHandle('picked', { create: true });
+    });
+    await page.reload();
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+    await presenterView(page);
+    await page.getByTestId('record-folder-choose').click();
+    await expect(page.getByTestId('record-folder')).toContainText('picked');
+
+    await page.getByTestId('record-start').click();
+    await expect(page.getByTestId('record-time')).toBeVisible();
+    await page.waitForTimeout(2000);
+    await page.getByTestId('record-stop').click();
+    await expect(page.getByTestId('recording-saved-to')).toContainText('picked', {
+      timeout: 30_000,
+    });
+    const saved = await page.evaluate(async () => {
+      const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle('picked');
+      const files: Array<{ name: string; size: number }> = [];
+      for await (const [name, handle] of (
+        folder as unknown as { entries: () => AsyncIterable<[string, FileSystemFileHandle]> }
+      ).entries()) {
+        files.push({ name, size: (await handle.getFile()).size });
+      }
+      return files;
+    });
+    // Both videos: with sound, and alone.
+    expect(saved.filter((file) => file.name.endsWith('.mp4'))).toHaveLength(2);
+    expect(saved.find((file) => /\(video only\)\.mp4$/.test(file.name))?.size).toBeGreaterThan(
+      1000,
+    );
+    // Saved there, closing needs no download, and nothing is left to recover.
+    await page.getByTestId('recording-close').click();
+    await expect(page.getByTestId('recording-result')).toHaveCount(0);
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId('recording-recovery')).toHaveCount(0);
+  });
+});
