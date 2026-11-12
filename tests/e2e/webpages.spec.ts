@@ -267,3 +267,56 @@ test('drawing, stamps and notes over a page show on top of it, and the note take
   await page.mouse.click(left + 80, top + 180);
   await expect(page.getByTestId('inspector')).toContainText('sticky');
 });
+
+test('over a page the wheel scrolls what can scroll, then moves the board', async ({ page }) => {
+  const fixedApp = readFileSync(new URL('./fixtures/fixed-app.html', import.meta.url), 'utf8');
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-web-page').click();
+  await page.locator('textarea').fill(fixedApp);
+  await page.keyboard.press('Escape');
+  await switchView(page, 'web');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('web-page')).toHaveAttribute('data-usable', 'true');
+
+  const frame = page.getByTestId('web-page');
+  const at = async () => (await frame.boundingBox())!;
+  const scrolled = () =>
+    lesson(page)
+      .locator('#main')
+      .evaluate((node) => node.scrollTop);
+  const start = await at();
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+
+  // The page's panel scrolls first; the board stays put.
+  await page.mouse.wheel(0, 40);
+  await expect.poll(scrolled).toBeGreaterThan(0);
+  expect((await at()).y).toBe(start.y);
+
+  // At its end, the wheel moves the board.
+  for (let turn = 0; turn < 12; turn += 1) await page.mouse.wheel(0, 120);
+  await expect.poll(async () => (await at()).y).toBeLessThan(start.y - 20);
+});
+
+test('the board’s shortcuts work while a page has the keyboard, but not while typing in it', async ({
+  page,
+}) => {
+  await importLesson(page);
+  await expect(lesson(page).locator('h1')).toHaveText('Fractions');
+  // A click in the page gives it the keyboard.
+  await clickIn(page, '#choices button:text-is("3/4")');
+  await expect(lesson(page).locator('#result')).toHaveText('Correct!');
+  await page.keyboard.press('KeyP');
+  await expect(page.getByTestId('tool-pen')).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('KeyV');
+  await expect(page.getByTestId('tool-select')).toHaveAttribute('aria-pressed', 'true');
+
+  // Typing in one of its fields is the page's alone.
+  await clickIn(page, '#name');
+  await page.keyboard.type('pp');
+  await expect(lesson(page).locator('#name')).toHaveValue('pp');
+  await expect(page.getByTestId('tool-select')).toHaveAttribute('aria-pressed', 'true');
+  // Escape leaves the field; the next key is the board's.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('KeyP');
+  await expect(page.getByTestId('tool-pen')).toHaveAttribute('aria-pressed', 'true');
+});

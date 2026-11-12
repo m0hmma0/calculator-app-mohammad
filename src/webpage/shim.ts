@@ -97,11 +97,57 @@ const SHIM = String.raw`
 
   window.addEventListener('keydown', function (e) {
     if (!e.isTrusted) return;
-    if (e.key === 'Escape') parent.postMessage({ sabboura: 'escape' }, '*');
-    if (typing(e.target)) return;
+    if (typing(e.target)) {
+      // Escape leaves a field, so the next key is the board's again.
+      if (e.key === 'Escape') elementOf(e.target).blur();
+      return;
+    }
     send({ t: 'key', path: pathOf(elementOf(e.target)) || [], key: e.key, code: e.code,
       shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey });
   }, true);
+
+  // The board's shortcuts keep working while the page has the keyboard: a key the
+  // page does not take (one not typed into a field, and not used by the page itself)
+  // goes on to the board, once the page has had its turn at it.
+  ['keydown', 'keyup'].forEach(function (type) {
+    window.addEventListener(type, function (e) {
+      if (!e.isTrusted || typing(e.target)) return;
+      setTimeout(function () {
+        if (e.defaultPrevented) return;
+        parent.postMessage({ sabboura: 'key', type: type, key: e.key, code: e.code,
+          shift: e.shiftKey, ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey, repeat: e.repeat }, '*');
+      }, 0);
+    }, true);
+  });
+
+  // The wheel scrolls the page where something under the pointer can still scroll
+  // that way; past its end, or where nothing scrolls, it moves the board. With Ctrl
+  // (or a trackpad's pinch), it always zooms the board.
+  function canScroll(node, dx, dy) {
+    for (; node && node.nodeType === 1; node = node.parentElement) {
+      var style = getComputedStyle(node);
+      var root = node === document.scrollingElement || node === document.body;
+      var oy = root || /(auto|scroll)/.test(style.overflowY);
+      var ox = root || /(auto|scroll)/.test(style.overflowX);
+      if (dy && oy && node.scrollHeight > node.clientHeight + 1) {
+        if (dy < 0 ? node.scrollTop > 0 : node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
+      }
+      if (dx && ox && node.scrollWidth > node.clientWidth + 1) {
+        if (dx < 0 ? node.scrollLeft > 0 : node.scrollLeft + node.clientWidth < node.scrollWidth - 1) return true;
+      }
+    }
+    var page = document.scrollingElement;
+    if (page && dy && page.scrollHeight > page.clientHeight + 1 &&
+      (dy < 0 ? page.scrollTop > 0 : page.scrollTop + page.clientHeight < page.scrollHeight - 1)) return true;
+    return false;
+  }
+  window.addEventListener('wheel', function (e) {
+    if (!e.isTrusted) return;
+    if (!e.ctrlKey && !e.metaKey && canScroll(elementOf(e.target), e.deltaX, e.deltaY)) return;
+    e.preventDefault();
+    parent.postMessage({ sabboura: 'wheel', x: e.clientX, y: e.clientY, dx: e.deltaX, dy: e.deltaY,
+      mode: e.deltaMode, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey }, '*');
+  }, { passive: false, capture: true });
 
   // Drags: pointer down, its moves (a few a second), and up — not plain hovering.
   var pressed = false, lastMove = 0;

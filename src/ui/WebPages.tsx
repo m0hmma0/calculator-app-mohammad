@@ -231,6 +231,10 @@ function PageFrame({
         sendNew(true);
       } else if (data?.sabboura === 'event' && own && data.event) {
         appendMine(board, element.id, [data.event]);
+      } else if (data?.sabboura === 'key') {
+        handOnKey(data as unknown as KeyMessage);
+      } else if (data?.sabboura === 'wheel' && frameRef.current) {
+        handOnWheel(frameRef.current, data as unknown as WheelMessage);
       }
     };
     window.addEventListener('message', onMessage);
@@ -268,6 +272,67 @@ function PageFrame({
       data-viewing={viewing}
       data-usable={usable || undefined}
     />
+  );
+}
+
+interface KeyMessage {
+  type: 'keydown' | 'keyup';
+  key: string;
+  code: string;
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+  meta: boolean;
+  repeat: boolean;
+}
+
+/** A key the page passed on: to the board's shortcuts, as if pressed on the board. */
+function handOnKey(message: KeyMessage) {
+  window.dispatchEvent(
+    new KeyboardEvent(message.type === 'keyup' ? 'keyup' : 'keydown', {
+      key: message.key,
+      code: message.code,
+      shiftKey: message.shift,
+      ctrlKey: message.ctrl,
+      altKey: message.alt,
+      metaKey: message.meta,
+      repeat: message.repeat,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+}
+
+interface WheelMessage {
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  mode: number;
+  ctrl: boolean;
+  meta: boolean;
+  shift: boolean;
+}
+
+/** A turn of the wheel the page did not use: the board's, at the same spot on screen. */
+function handOnWheel(frame: HTMLIFrameElement, message: WheelMessage) {
+  const stage = frame.closest<HTMLElement>('[data-testid="stage"]');
+  if (!stage) return;
+  const box = frame.getBoundingClientRect();
+  const scale = box.width / Math.max(1, frame.offsetWidth);
+  stage.dispatchEvent(
+    new WheelEvent('wheel', {
+      clientX: box.left + message.x * scale,
+      clientY: box.top + message.y * scale,
+      deltaX: message.dx,
+      deltaY: message.dy,
+      deltaMode: message.mode,
+      ctrlKey: message.ctrl,
+      metaKey: message.meta,
+      shiftKey: message.shift,
+      bubbles: true,
+      cancelable: true,
+    }),
   );
 }
 

@@ -266,7 +266,13 @@ right-click menu (`menu-web-view`), Fill the box in the side panel's code sectio
 stroke being drawn, the selection and the laser are drawn on a second canvas over
 the embed layer (`board-over`, `data-board-over`; the audience window has one too,
 and transitions copy it with the board), so they show on top of pages. Pixel helpers
-in content.spec and collab.spec read both canvases.
+in content.spec and collab.spec read both canvases. Keys and the wheel (12 November): the page script passes on a
+key the page did not take (not typed into a field, not `preventDefault`ed by the page —
+checked a tick later) as `{sabboura: 'key'}`, and `handOnKey` dispatches it on the board's
+window, so shortcuts work while the page has focus; Escape in a field blurs it. A wheel
+turn goes to the page while something under the pointer can still scroll that way
+(`canScroll`), else (and always with Ctrl/⌘) to the board as a synthetic wheel event on
+the stage at the same screen point (`handOnWheel`).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
