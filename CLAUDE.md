@@ -272,7 +272,12 @@ checked a tick later) as `{sabboura: 'key'}`, and `handOnKey` dispatches it on t
 window, so shortcuts work while the page has focus; Escape in a field blurs it. A wheel
 turn goes to the page while something under the pointer can still scroll that way
 (`canScroll`), else (and always with Ctrl/⌘) to the board as a synthetic wheel event on
-the stage at the same screen point (`handOnWheel`).
+the stage at the same screen point (`handOnWheel`). Same day: the canvas over the live layer now takes
+what is stacked above any embed too (`isLiveLayer`: web pages, videos, sounds, players),
+so ink drawn on a video stays on top of it. A playing video pauses on a click on its
+picture (`media-tap`, only with the select or hand tool, so a pen draws over it). A
+frame is picked by its title as well (`frameTitleBox`, passed `zoom` in `PickOptions`
+by the select tool and its hover).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

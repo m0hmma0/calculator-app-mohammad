@@ -13,6 +13,7 @@ import { useMediaSrc } from '@/media/mediaFiles';
 import { useUploads } from '@/media/uploads';
 import { formatTime, PEAK_COUNT, usePeaks } from '@/media/waveform';
 import { useMutedHere } from '@/workshop/audience';
+import { effectiveTool, useBoardStore } from '@/state/boardStore';
 import styles from './MediaPlayers.module.css';
 
 /**
@@ -330,6 +331,10 @@ export function VideoCard({
   const ref = useRef<HTMLVideoElement>(null);
   const { time, duration, playing } = useClock(ref);
   useMuted(ref, elementId);
+  const tapToPause = useBoardStore((state) => {
+    const tool = effectiveTool(state);
+    return tool === 'select' || tool === 'hand';
+  });
   const { hover, handlers } = useSeeking(ref, duration);
   const progress = Number.isFinite(duration) && duration > 0 ? time / duration : 0;
 
@@ -362,6 +367,20 @@ export function VideoCard({
           playsInline
           data-element-id={elementId}
           data-testid="embed-player"
+        />
+      ) : null}
+      {/* Playing, a click on the picture pauses it — with a tool that does not draw. */}
+      {playing && tapToPause ? (
+        <button
+          type="button"
+          className={styles.tap}
+          aria-label="Pause"
+          data-hud
+          data-wheel-pans
+          data-media-controls
+          data-testid="media-tap"
+          onClick={() => toggle(ref.current)}
+          onKeyDown={keepKeys}
         />
       ) : null}
       {!playing ? (

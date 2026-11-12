@@ -37,3 +37,15 @@ export const isWebPage = (element: { type: string; language?: string; webView?: 
 /** An HTML code box: shown as its code, or as the page (`isWebPage`). */
 export const isHtmlCode = (element: { type: string; language?: string }) =>
   element.type === 'code' && element.language === 'html';
+
+/**
+ * Drawn live over the board's canvas rather than on it — web pages, and the embed
+ * layer's videos, sounds and players. Whatever is stacked above the lowest of them goes
+ * on the canvas over that layer, so ink, stamps and the rest stay on top.
+ */
+export const isLiveLayer = (element: {
+  type: string;
+  language?: string;
+  webView?: boolean;
+  embed?: unknown;
+}) => isWebPage(element) || (element.type === 'embed' && !!element.embed);

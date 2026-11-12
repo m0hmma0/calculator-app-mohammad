@@ -71,6 +71,20 @@ export interface PickOptions {
    * the only way the pointer can say "not allowed" instead of silently doing nothing.
    */
   includeLocked?: boolean;
+  /**
+   * The board's zoom, to find frames by their titles too: a title is drawn at a fixed
+   * size on screen, just above the frame's top-left corner, after its number.
+   */
+  zoom?: number;
+}
+
+/** A frame's title band — its number and title above its top edge — in board units. */
+export function frameTitleBox(frame: BoardElement, zoom: number): Rect {
+  const label = frame.text?.trim() || 'Frame';
+  // The number (34 px), the 12 px monospace title (about 7.4 px a letter), a little room.
+  const width = (34 + Math.min(label.length, 80) * 7.4 + 8) / zoom;
+  const height = 20 / zoom;
+  return { x: frame.x, y: frame.y - height, w: width, h: height };
 }
 
 /** Topmost element under the point, or null. */
@@ -87,6 +101,13 @@ export function elementAt(
     if (!options.includeLocked && element.locked) continue;
     if (element.type === 'group') continue;
     if (hitTestElement(element, world, tolerance)) return element;
+    if (
+      options.zoom &&
+      element.type === 'frame' &&
+      rectContainsPoint(frameTitleBox(element, options.zoom), world)
+    ) {
+      return element;
+    }
   }
   return null;
 }

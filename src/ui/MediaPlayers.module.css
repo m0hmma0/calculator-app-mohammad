@@ -329,3 +329,17 @@
 .upload[data-rejected] span {
   background: #d8375c;
 }
+
+/* While a video plays, its picture (above the bar) pauses it on a click. */
+.tap {
+  pointer-events: auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 38px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}

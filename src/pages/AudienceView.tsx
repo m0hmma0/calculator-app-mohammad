@@ -17,7 +17,7 @@ import { SlideTransition } from '@/ui/SlideTransition';
 import type { AudienceHooks, FromAudience, ToAudience } from '@/workshop/audience';
 import { cameraRadius, cameraRect, type CameraLayout } from '@/recording/camera';
 import { usePresentation } from '@/workshop/presentation';
-import { isWebPage, usePages } from '@/webpage/pageStore';
+import { isLiveLayer, usePages } from '@/webpage/pageStore';
 import styles from './AudienceView.module.css';
 
 /** Around the slide: dark, as on the presenter's screen. */
@@ -92,7 +92,7 @@ export function AudienceView({ channelName }: { channelName: string }) {
     ctx.fillStyle = colors.background;
     ctx.fillRect(0, 0, frame.width, frame.height);
     // What is stacked above the web pages, and the laser, go over them, as on the board.
-    const pages = store.elements.filter((element) => isWebPage(element) && !element.hidden);
+    const pages = store.elements.filter((element) => isLiveLayer(element) && !element.hidden);
     const lowest = pages.reduce<string | null>(
       (low, page) => (low === null || page.z < low ? page.z : low),
       null,
@@ -100,11 +100,11 @@ export function AudienceView({ channelName }: { channelName: string }) {
     const under =
       lowest === null
         ? store.elements
-        : store.elements.filter((element) => isWebPage(element) || element.z <= lowest);
+        : store.elements.filter((element) => isLiveLayer(element) || element.z <= lowest);
     const above =
       lowest === null
         ? []
-        : store.elements.filter((element) => !isWebPage(element) && element.z > lowest);
+        : store.elements.filter((element) => !isLiveLayer(element) && element.z > lowest);
     renderElements(ctx, viewport, frame, under, colors, redrawRef.current, shown.id);
     ctx.restore();
     const top = over ?? ctx;

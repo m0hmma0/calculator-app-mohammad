@@ -16,7 +16,7 @@ import { useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
 import { boardToScreen } from '@/canvas/viewport';
 import { frameOnShowId } from '@/workshop/onShow';
-import { isWebPage } from '@/webpage/pageStore';
+import { isLiveLayer } from '@/webpage/pageStore';
 import { usePresentation } from '@/workshop/presentation';
 import { isTrailAlive } from '@/laser/laser';
 import { useShortcuts } from '@/input/useShortcuts';
@@ -118,7 +118,7 @@ export function CanvasStage() {
     // Web pages are live frames over this canvas. What is stacked above the lowest of
     // them — drawing, stamps, shapes, notes — and the selection, the stroke being drawn
     // and the laser go on the canvas over the pages (`overRef`), so they show on top.
-    const pages = elements.filter((element) => isWebPage(element) && !element.hidden);
+    const pages = elements.filter((element) => isLiveLayer(element) && !element.hidden);
     const lowest = pages.reduce<string | null>(
       (low, page) => (low === null || page.z < low ? page.z : low),
       null,
@@ -126,11 +126,11 @@ export function CanvasStage() {
     const under =
       lowest === null
         ? elements
-        : elements.filter((element) => isWebPage(element) || element.z <= lowest);
+        : elements.filter((element) => isLiveLayer(element) || element.z <= lowest);
     const above =
       lowest === null
         ? []
-        : elements.filter((element) => !isWebPage(element) && element.z > lowest);
+        : elements.filter((element) => !isLiveLayer(element) && element.z > lowest);
 
     const { visible } = renderElements(
       ctx,

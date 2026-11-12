@@ -141,3 +141,46 @@ test('a file too big for the board is refused, with a reason', async ({ page }) 
   await expect(page.getByTestId('import-status')).toContainText('up to 20 MB');
   await expect(layerItems(page)).toHaveCount(0);
 });
+
+test('a playing video pauses on a click on its picture, and ink drawn on it stays on top', async ({
+  page,
+}) => {
+  const video = await recordWebm(page);
+  await addFiles(page, [{ name: 'Clip.webm', mimeType: 'video/webm', buffer: video }]);
+  await play(page, 'video');
+
+  // A click in the middle of the playing picture pauses it.
+  await page.getByTestId('media-tap').click();
+  await expect.poll(() => paused(page, 'video')).toBe(true);
+
+  // With the pen, a stroke across it — on top of the video once drawn, not under it.
+  const box = (await media(page, 'video').boundingBox())!;
+  await page.keyboard.press('KeyP');
+  await expect(page.getByTestId('media-tap')).toHaveCount(0);
+  const from = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.4 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + box.width * 0.5, from.y + 20, { steps: 10 });
+  await page.mouse.up();
+  await expect(layerItems(page)).toHaveCount(2);
+  const inkOver = await page.evaluate(
+    (area) => {
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-over"]')!;
+      const bounds = canvas.getBoundingClientRect();
+      const dpr = canvas.width / bounds.width;
+      const data = canvas
+        .getContext('2d')!
+        .getImageData(
+          Math.round((area.x - bounds.left) * dpr),
+          Math.round((area.y - bounds.top) * dpr),
+          Math.round(area.w * dpr),
+          Math.round(area.h * dpr),
+        ).data;
+      let drawn = 0;
+      for (let index = 3; index < data.length; index += 4) if (data[index]! > 0) drawn += 1;
+      return drawn / (data.length / 4);
+    },
+    { x: from.x, y: from.y - 10, w: box.width * 0.5, h: 40 },
+  );
+  expect(inkOver).toBeGreaterThan(0.02);
+});

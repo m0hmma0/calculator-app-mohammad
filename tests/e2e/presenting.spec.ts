@@ -431,3 +431,22 @@ function makePdf(colours: [number, number, number][]): Buffer {
   body += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(body, 'latin1');
 }
+
+test('a frame is selected by its title, and dragged by it', async ({ page }) => {
+  await drag(page, 'KeyF', [200, 200], [500, 420]);
+  await page.keyboard.press('Escape');
+  await page.mouse.click(900, 600);
+  await expect(page.getByTestId('geometry')).toHaveCount(0);
+  const stage = await stageBox(page);
+  // The title is just above the frame's top-left corner, after its number.
+  await page.mouse.click(stage.x + 200 + 50, stage.y + 200 - 8);
+  await expect(page.getByTestId('geo-w')).toHaveText('300');
+  const before = Number(await page.getByTestId('geo-x').innerText());
+  await page.mouse.move(stage.x + 200 + 50, stage.y + 200 - 8);
+  await page.mouse.down();
+  await page.mouse.move(stage.x + 200 + 150, stage.y + 200 + 40, { steps: 6 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => Number(await page.getByTestId('geo-x').innerText()))
+    .toBeGreaterThan(before + 50);
+});

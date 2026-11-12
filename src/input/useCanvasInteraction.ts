@@ -660,7 +660,11 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
       // 2. Then whatever element is under the pointer — locked ones too: selected, they
       // can be unlocked; they just do not move.
-      const target = elementAt(store.elements, point, PICK_SLOP / zoom, { includeLocked: true });
+      // A frame is found by its title, too.
+      const target = elementAt(store.elements, point, PICK_SLOP / zoom, {
+        includeLocked: true,
+        zoom,
+      });
       const targetId = target?.parentId ?? target?.id ?? null;
 
       // A link in the words: Ctrl/⌘-click follows it, as in a word processor (a plain
@@ -792,7 +796,10 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         if (hit) return setCursor(cursorForHandle(hit.handle, frame.rotation));
       }
 
-      const target = elementAt(store.elements, point, PICK_SLOP / zoom, { includeLocked: true });
+      const target = elementAt(store.elements, point, PICK_SLOP / zoom, {
+        includeLocked: true,
+        zoom,
+      });
       const link = target ? linkAt(target, point) : null;
       const hint = link
         ? `${link}\n${selectCanEdit(useBoardAccess.getState()) ? 'Ctrl/⌘-click to open' : 'Click to open'}`
