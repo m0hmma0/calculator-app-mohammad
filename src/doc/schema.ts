@@ -92,6 +92,7 @@ export function toYElement(element: BoardElement): YElement {
   if (element.notes) map.set('notes', element.notes);
   if (element.transition) map.set('transition', element.transition);
   if (element.webView) map.set('webView', true);
+  if (element.asWritten) map.set('asWritten', true);
   if (element.lead) map.set('lead', element.lead);
   if (element.placeholder !== undefined) map.set('placeholder', element.placeholder);
   if (element.lockMode === 'others') map.set('lockMode', 'others');
@@ -136,6 +137,7 @@ export function fromYElement(map: YElement): BoardElement {
   const transition = map.get('transition');
   if (typeof transition === 'string' && transition) element.transition = transition;
   if (map.get('webView') === true) element.webView = true;
+  if (map.get('asWritten') === true) element.asWritten = true;
   const lead = map.get('lead');
   if (typeof lead === 'string' && lead) element.lead = lead;
   const placeholder = map.get('placeholder');

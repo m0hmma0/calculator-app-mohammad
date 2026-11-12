@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fixed app</title>
+    <style>
+      body {
+        background-color: #e2e8f0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+      .app-container {
+        width: 1280px;
+        height: 800px;
+        display: flex;
+        background-color: #f8fafc;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .main-content {
+        flex: 1;
+        overflow-y: auto;
+      }
+      .block {
+        height: 110px;
+        margin: 10px;
+        background: #c7d2fe;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <div class="main-content" id="main">
+        <div class="block"></div>
+        <div class="block"></div>
+        <div class="block"></div>
+        <div class="block"></div>
+        <div class="block"></div>
+      </div>
+    </div>
+  </body>
+</html>

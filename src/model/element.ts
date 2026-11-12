@@ -211,6 +211,8 @@ export interface BoardElement {
   language?: string;
   /** An HTML code block shown as the web page it is, rather than its code. */
   webView?: boolean;
+  /** A web page shown at the size it was written, not stretched to fill its box. */
+  asWritten?: boolean;
   /** Whose use of this web page everyone sees, while they lead (a uid); null for no one. */
   lead?: string | null;
 

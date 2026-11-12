@@ -94,7 +94,7 @@ function WebPage({ element, viewport }: { element: BoardElement; viewport: Viewp
     <>
       {web && viewing ? (
         <PageFrame
-          key={`${viewing}:${hashOf(element.text ?? '')}:${restart}`}
+          key={`${viewing}:${hashOf(element.text ?? '')}:${restart}:${element.asWritten ? 'as' : 'fill'}`}
           element={element}
           viewing={viewing}
           own={own}
@@ -138,7 +138,8 @@ function PageFrame({
 }) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const html = element.text ?? '';
-  const source = useMemo(() => pageSource(html, element.id), [html, element.id]);
+  const fill = !element.asWritten;
+  const source = useMemo(() => pageSource(html, element.id, fill), [html, element.id, fill]);
 
   useEffect(() => {
     const board = boardDoc();
@@ -296,6 +297,24 @@ function PageBar({
           onClick={() => setActivePage(active ? null : element.id)}
         >
           {active ? 'Done' : 'Use page'}
+        </button>
+      ) : null}
+
+      {web && editable ? (
+        <button
+          type="button"
+          aria-pressed={!element.asWritten}
+          className={!element.asWritten ? styles.on : undefined}
+          title={
+            element.asWritten
+              ? 'Shown at the size it was written: stretch it to fill the box'
+              : 'Fills the box: drag the box to give the page more room. Off: the size it was written'
+          }
+          data-testid="web-page-fill"
+          onMouseDown={keep}
+          onClick={() => applyDiscrete(new Map([[element.id, { asWritten: !element.asWritten }]]))}
+        >
+          Fill box
         </button>
       ) : null}
 

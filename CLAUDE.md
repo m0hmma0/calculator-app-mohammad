@@ -253,7 +253,12 @@ entries in it, nothing else (unit tests in answers.test.ts; the class test in
 workshop.spec fails when the room is not told who sent the change). Viewers use pages
 unsaved. Playwright's clicks inside a scaled frame miss: tests click at the screen
 position (`clickIn`). The canvas draws a card with the page's title under the frame
-(thumbnails, transitions).
+(thumbnails, transitions). Fill box (12 November): a page written as one fixed-size card (a single
+visible child of body whose declared width or height is in px, found through the
+style sheets) is stretched to the whole box by the page script (`FILL`, `fill()`):
+html/body to 100% with no margin, the card to 100% — so the box is the page, and
+dragging the box gives the page room. "Fill box" in the bar turns it off
+(`element.asWritten`). A page that flows already is left alone.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

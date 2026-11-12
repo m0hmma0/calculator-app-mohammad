@@ -151,3 +151,61 @@ test('an HTML file dropped on the board is a page where it was dropped', async (
   await expect(page.getByTestId('web-page')).toHaveCount(1);
   await expect(lesson(page).locator('h1')).toHaveText('Fractions');
 });
+
+test('a page written at a fixed size fills its box, and grows with it', async ({ page }) => {
+  const fixedApp = readFileSync(new URL('./fixtures/fixed-app.html', import.meta.url), 'utf8');
+  // As it was done: a code box, the code pasted in, then switched to Web.
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-web-page').click();
+  const editor = page.locator('textarea');
+  await expect(editor).toBeFocused();
+  await editor.fill(fixedApp);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('layers').locator('li').first().click();
+  await page.getByTestId('web-page-web').click();
+  await expect(page.getByTestId('web-page-fill')).toHaveAttribute('aria-pressed', 'true');
+
+  const measure = () =>
+    lesson(page)
+      .locator('.app-container')
+      .evaluate((app) => {
+        const main = document.getElementById('main')!;
+        return {
+          app: { w: app.getBoundingClientRect().width, h: app.getBoundingClientRect().height },
+          view: { w: innerWidth, h: innerHeight },
+          scrolls: main.scrollHeight > main.clientHeight + 1,
+        };
+      });
+  // The card is the whole box: no grey around it, nothing cut off.
+  await expect.poll(async () => (await measure()).app).toEqual((await measure()).view);
+  const before = await measure();
+  expect(before.view).toEqual({ w: 960, h: 600 });
+  // Five 130px rows need 650px: at 600 the panel scrolls.
+  expect(before.scrolls).toBe(true);
+
+  // Dragging the box taller, at the bottom and then the top, gives the page the room:
+  // the panel stops scrolling. (The bottom-left corner: the right one is under the
+  // side panel.)
+  const stage = (await page.getByTestId('stage').boundingBox())!;
+  const drag = async (corner: { x: number; y: number }, by: number) => {
+    await page.mouse.move(corner.x, corner.y);
+    await page.mouse.down();
+    await page.mouse.move(corner.x, corner.y + by, { steps: 6 });
+    await page.mouse.up();
+  };
+  let box = (await page.getByTestId('web-page').boundingBox())!;
+  await drag(
+    { x: box.x, y: box.y + box.height },
+    stage.y + stage.height - (box.y + box.height) - 4,
+  );
+  box = (await page.getByTestId('web-page').boundingBox())!;
+  await drag({ x: box.x, y: box.y }, stage.y - box.y + 30);
+  await expect.poll(async () => (await measure()).view.h).toBeGreaterThan(655);
+  const after = await measure();
+  expect(after.app).toEqual(after.view);
+  expect(after.scrolls).toBe(false);
+
+  // Fill box off: the page as written again — its card 800 high, the grey around it.
+  await page.getByTestId('web-page-fill').click();
+  await expect.poll(async () => (await measure()).app.h).toBe(800);
+});

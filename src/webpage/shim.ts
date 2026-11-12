@@ -210,6 +210,67 @@ const SHIM = String.raw`
     }
   });
 
+  // Filling the box: a page written as one fixed-size card (an "app" 1280 by 800, say,
+  // centred on a background) is stretched to the whole box, so the box is the page and
+  // dragging it bigger gives the page more room. A page that already flows is left be.
+  var FILL = __FILL__;
+  function declared(el, prop) {
+    var value = el.style.getPropertyValue(prop);
+    if (value) return value;
+    var found = '';
+    function walk(rules) {
+      for (var i = 0; i < rules.length; i++) {
+        var rule = rules[i];
+        if (rule.cssRules && rule.media) {
+          if (window.matchMedia(rule.media.mediaText).matches) walk(rule.cssRules);
+          continue;
+        }
+        if (!rule.style || !rule.selectorText) continue;
+        try {
+          if (el.matches(rule.selectorText)) found = rule.style.getPropertyValue(prop) || found;
+        } catch (e) {}
+      }
+    }
+    for (var i = 0; i < document.styleSheets.length; i++) {
+      try { walk(document.styleSheets[i].cssRules); } catch (e) {}
+    }
+    return found;
+  }
+  var fixedSize = /^\s*\d+(\.\d+)?px\s*$/;
+  var filled = null;
+  function fill() {
+    if (!FILL || !document.body) return;
+    var kids = Array.prototype.filter.call(document.body.children, function (child) {
+      if (/^(SCRIPT|STYLE|LINK|NOSCRIPT|TEMPLATE)$/.test(child.tagName)) return false;
+      var style = getComputedStyle(child);
+      return style.display !== 'none' && style.position !== 'fixed' && style.position !== 'absolute';
+    });
+    if (kids.length !== 1) return;
+    var app = kids[0];
+    if (app === filled) return;
+    var wide = fixedSize.test(declared(app, 'width'));
+    var tall = fixedSize.test(declared(app, 'height'));
+    if (!wide && !tall) return;
+    filled = app;
+    var page = document.createElement('style');
+    page.textContent = 'html,body{margin:0!important;padding:0!important;width:100%!important;' +
+      'height:100%!important;min-height:0!important;overflow:hidden!important}';
+    document.head.appendChild(page);
+    var set = function (prop, value) { app.style.setProperty(prop, value, 'important'); };
+    set('max-width', 'none');
+    set('max-height', 'none');
+    set('margin', '0');
+    set('border-radius', '0');
+    set('box-sizing', 'border-box');
+    if (wide) set('width', '100%');
+    if (tall) set('height', '100%');
+    document.documentElement.setAttribute('data-sabboura-filled', '');
+  }
+  if (FILL) {
+    document.addEventListener('DOMContentLoaded', fill);
+    window.addEventListener('load', function () { fill(); setTimeout(fill, 300); setTimeout(fill, 1200); });
+  }
+
   var told = false;
   function ready() {
     if (told) return;
@@ -237,8 +298,11 @@ export function hashOf(text: string): number {
 const LT = String.fromCharCode(60);
 
 /** The page as given, with the board's script first in its head. */
-export function pageSource(html: string, seed: string): string {
-  const script = `${LT}script>${SHIM.replace('__SEED__', String(hashOf(seed)))}${LT}/script>`;
+export function pageSource(html: string, seed: string, fill = true): string {
+  const script = `${LT}script>${SHIM.replace('__SEED__', String(hashOf(seed))).replace(
+    '__FILL__',
+    String(fill),
+  )}${LT}/script>`;
   const head = new RegExp(`${LT}head(\\s[^>]*)?>`, 'i').exec(html);
   if (head) {
     const at = head.index + head[0].length;
