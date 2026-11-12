@@ -688,7 +688,6 @@ test.describe('web pages with a class', () => {
 
       // The teacher leads: the student's page follows the teacher's, and is not theirs
       // to use meanwhile.
-      await teacher.getByTestId('web-page-use').click();
       await clickIn(teacher, '#choices button:text-is("2/6")');
       await expect(frameOf(teacher).locator('#result')).toHaveText('Try again');
       await teacher.getByTestId('web-page-lead').click();

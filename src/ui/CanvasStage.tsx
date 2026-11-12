@@ -16,6 +16,7 @@ import { useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
 import { boardToScreen } from '@/canvas/viewport';
 import { frameOnShowId } from '@/workshop/onShow';
+import { isWebPage } from '@/webpage/pageStore';
 import { usePresentation } from '@/workshop/presentation';
 import { isTrailAlive } from '@/laser/laser';
 import { useShortcuts } from '@/input/useShortcuts';
@@ -55,6 +56,7 @@ const PRESENT_SURROUND = '#101217';
 export function CanvasStage() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const redrawRef = useRef<() => void>(() => {});
+  const overRef = useRef<HTMLCanvasElement | null>(null);
   const frameTimes = useRef<number[]>([]);
   const lastReport = useRef(0);
   const pendingStats = useRef<RenderStatsSnapshot | null>(null);
@@ -113,22 +115,62 @@ export function CanvasStage() {
       drawGrid(ctx, viewport, frame, colors.dot, frame.dpr);
     }
 
+    // Web pages are live frames over this canvas. What is stacked above the lowest of
+    // them — drawing, stamps, shapes, notes — and the selection, the stroke being drawn
+    // and the laser go on the canvas over the pages (`overRef`), so they show on top.
+    const pages = elements.filter((element) => isWebPage(element) && !element.hidden);
+    const lowest = pages.reduce<string | null>(
+      (low, page) => (low === null || page.z < low ? page.z : low),
+      null,
+    );
+    const under =
+      lowest === null
+        ? elements
+        : elements.filter((element) => isWebPage(element) || element.z <= lowest);
+    const above =
+      lowest === null
+        ? []
+        : elements.filter((element) => !isWebPage(element) && element.z > lowest);
+
     const { visible } = renderElements(
       ctx,
       viewport,
       frame,
-      elements,
+      under,
       colors,
       redrawRef.current,
       shown?.id ?? null,
     );
-    if (draft) renderElements(ctx, viewport, frame, [draft], colors, redrawRef.current);
     if (shown) ctx.restore();
+
+    // The canvas over the pages: the same size and scale as this one.
+    const over = overRef.current?.getContext('2d') ?? ctx;
+    if (over !== ctx) {
+      const canvas = over.canvas;
+      if (canvas.width !== ctx.canvas.width || canvas.height !== ctx.canvas.height) {
+        canvas.width = ctx.canvas.width;
+        canvas.height = ctx.canvas.height;
+        canvas.style.width = ctx.canvas.style.width;
+        canvas.style.height = ctx.canvas.style.height;
+      }
+      over.setTransform(frame.dpr, 0, 0, frame.dpr, 0, 0);
+      over.clearRect(0, 0, frame.width, frame.height);
+    }
+    if (shown) {
+      const corner = boardToScreen(viewport, { x: shown.x, y: shown.y });
+      over.save();
+      over.beginPath();
+      over.rect(corner.x, corner.y, shown.w * viewport.zoom, shown.h * viewport.zoom);
+      over.clip();
+    }
+    if (above.length > 0) renderElements(over, viewport, frame, above, colors, redrawRef.current);
+    if (draft) renderElements(over, viewport, frame, [draft], colors, redrawRef.current);
+    if (shown) over.restore();
 
     const selectedIds = new Set(selection);
     const selected = elements.filter((element) => selectedIds.has(element.id));
     renderOverlay(
-      ctx,
+      over,
       viewport,
       frame,
       {
@@ -153,12 +195,12 @@ export function CanvasStage() {
     // a pointer rather than content.
     const trail = laserSnapshot(startedAt);
     if (trail.points.length > 1) {
-      renderLaser(ctx, viewport, trail.points, trail.lifetimeMs, startedAt, colors);
+      renderLaser(over, viewport, trail.points, trail.lifetimeMs, startedAt, colors);
     }
     for (const peer of Object.values(usePresence.getState().peers)) {
       if (peer.laser && peer.laser.points.length > 1) {
         renderLaser(
-          ctx,
+          over,
           viewport,
           peer.laser.points,
           peer.laser.lifetimeMs,
@@ -312,6 +354,14 @@ export function CanvasStage() {
 
       <FrameNumbers />
       <EmbedLayer />
+      {/* Over the web pages: what is stacked above them, the selection and the laser. */}
+      <canvas
+        ref={overRef}
+        className={styles.over}
+        aria-hidden="true"
+        data-testid="board-over"
+        data-board-over
+      />
       <SlideTransition source={canvasRef} />
       <PeersLayer hostRef={hostRef} />
       <CommentPins />

@@ -4,7 +4,7 @@ import { boardToScreen } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import type { BoardElement } from '@/model/element';
 import { selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
-import { boardDoc, currentBoardId, useBoardStore } from '@/state/boardStore';
+import { boardDoc, currentBoardId, effectiveTool, useBoardStore } from '@/state/boardStore';
 import {
   appendMine,
   clearMine,
@@ -15,14 +15,7 @@ import {
   peopleOf,
   type PageEvent,
 } from '@/webpage/logs';
-import {
-  isHtmlCode,
-  isWebPage,
-  restartPage,
-  setActivePage,
-  usePages,
-  watchPage,
-} from '@/webpage/pageStore';
+import { isHtmlCode, isWebPage, restartPage, usePages, watchPage } from '@/webpage/pageStore';
 import { hashOf, pageSource } from '@/webpage/shim';
 import styles from './WebPages.module.css';
 
@@ -49,18 +42,53 @@ export function WebPages({
   return (
     <>
       {pages.map((element) => (
-        <WebPage key={element.id} element={element} viewport={viewport} />
+        <WebPage
+          key={element.id}
+          element={element}
+          viewport={viewport}
+          over={isWebPage(element) ? itemsOver(element, elements) : []}
+        />
       ))}
     </>
   );
 }
 
-function WebPage({ element, viewport }: { element: BoardElement; viewport: Viewport }) {
+/**
+ * What lies over a page and takes a click: notes, shapes, stamps, pictures above it
+ * in the stack and overlapping it. Pen and highlighter strokes are left out, so
+ * writing on a page does not stop it being used under the ink.
+ */
+function itemsOver(page: BoardElement, elements: readonly BoardElement[]): BoardElement[] {
+  return elements.filter(
+    (element) =>
+      element.id !== page.id &&
+      !element.hidden &&
+      element.type !== 'path' &&
+      element.type !== 'frame' &&
+      element.z > page.z &&
+      element.x < page.x + page.w &&
+      element.x + element.w > page.x &&
+      element.y < page.y + page.h &&
+      element.y + element.h > page.y,
+  );
+}
+
+/** The page's edge, in screen pixels, that the board keeps: select and move it there. */
+const EDGE = 10;
+
+function WebPage({
+  element,
+  viewport,
+  over,
+}: {
+  element: BoardElement;
+  viewport: Viewport;
+  over: BoardElement[];
+}) {
   const me = useMe();
   const forced = usePages((state) => state.forcedViewer);
   const watching = usePages((state) => state.watching[element.id] ?? null);
   const restart = usePages((state) => state.restarts[element.id] ?? 0);
-  const active = usePages((state) => state.active === element.id);
   const editable = useBoardAccess(selectCanEdit);
   const selected = useBoardStore((state) => state.selection.includes(element.id));
   const web = isWebPage(element);
@@ -86,9 +114,17 @@ function WebPage({ element, viewport }: { element: BoardElement; viewport: Viewp
         : ''),
   };
 
-  // Students use their page straight away; someone who edits clicks into it first
-  // (double-click, or Use page), so a single click still selects and moves it.
-  const usable = own && (!editable || active);
+  // The page answers the pointer as soon as it is over it — for someone who edits, with
+  // the select tool in hand; for anyone else, with anything but the laser. Any other
+  // tool draws on the board over the page, and its edge selects and moves it.
+  const tool = useBoardStore((state) => effectiveTool(state));
+  const usable = own && (editable ? tool === 'select' : tool !== 'laser');
+  const screen = {
+    left: topLeft.x,
+    top: topLeft.y,
+    width: element.w * viewport.zoom,
+    height: element.h * viewport.zoom,
+  };
 
   return (
     <>
@@ -107,15 +143,45 @@ function WebPage({ element, viewport }: { element: BoardElement; viewport: Viewp
           Connecting…
         </div>
       ) : null}
+      {web && usable ? (
+        <>
+          {/* The board keeps the edge, and whatever lies over the page. */}
+          <div className={styles.edge} style={{ ...screen, height: EDGE }} />
+          <div
+            className={styles.edge}
+            style={{ ...screen, top: screen.top + screen.height - EDGE, height: EDGE }}
+          />
+          <div className={styles.edge} style={{ ...screen, width: EDGE }} />
+          <div
+            className={styles.edge}
+            style={{ ...screen, left: screen.left + screen.width - EDGE, width: EDGE }}
+          />
+          {over.map((item) => {
+            const corner = boardToScreen(viewport, { x: item.x, y: item.y });
+            return (
+              <div
+                key={item.id}
+                className={styles.edge}
+                style={{
+                  left: corner.x,
+                  top: corner.y,
+                  width: item.w * viewport.zoom,
+                  height: item.h * viewport.zoom,
+                }}
+                data-testid="web-page-over"
+              />
+            );
+          })}
+        </>
+      ) : null}
       {forced ? null : (
         <PageBar
           element={element}
           me={me}
           leader={leader}
           watching={watching}
-          active={active}
           editable={editable}
-          show={!editable || selected || active || watching !== null || element.lead === me}
+          show={web && (!editable || selected || watching !== null || element.lead === me)}
           at={{ left: topLeft.x, top: topLeft.y }}
         />
       )}
@@ -165,8 +231,6 @@ function PageFrame({
         sendNew(true);
       } else if (data?.sabboura === 'event' && own && data.event) {
         appendMine(board, element.id, [data.event]);
-      } else if (data?.sabboura === 'escape') {
-        setActivePage(null);
       }
     };
     window.addEventListener('message', onMessage);
@@ -213,7 +277,6 @@ function PageBar({
   me,
   leader,
   watching,
-  active,
   editable,
   show,
   at,
@@ -222,7 +285,6 @@ function PageBar({
   me: string | null;
   leader: string | null;
   watching: string | null;
-  active: boolean;
   editable: boolean;
   show: boolean;
   at: { left: number; top: number };
@@ -261,63 +323,6 @@ function PageBar({
       data-media-controls
       data-testid="web-page-bar"
     >
-      {editable ? (
-        <span className={styles.toggle} role="group" aria-label="Show as">
-          <button
-            type="button"
-            aria-pressed={!web}
-            data-testid="web-page-code"
-            onMouseDown={keep}
-            onClick={() => {
-              setActivePage(null);
-              applyDiscrete(new Map([[element.id, { webView: false }]]));
-            }}
-          >
-            Code
-          </button>
-          <button
-            type="button"
-            aria-pressed={web}
-            data-testid="web-page-web"
-            onMouseDown={keep}
-            onClick={() => applyDiscrete(new Map([[element.id, { webView: true }]]))}
-          >
-            Web
-          </button>
-        </span>
-      ) : null}
-
-      {web && editable && !leader && !watching ? (
-        <button
-          type="button"
-          className={active ? styles.on : undefined}
-          data-testid="web-page-use"
-          title={active ? 'Back to the board (Escape)' : 'Click and type in the page'}
-          onMouseDown={keep}
-          onClick={() => setActivePage(active ? null : element.id)}
-        >
-          {active ? 'Done' : 'Use page'}
-        </button>
-      ) : null}
-
-      {web && editable ? (
-        <button
-          type="button"
-          aria-pressed={!element.asWritten}
-          className={!element.asWritten ? styles.on : undefined}
-          title={
-            element.asWritten
-              ? 'Shown at the size it was written: stretch it to fill the box'
-              : 'Fills the box: drag the box to give the page more room. Off: the size it was written'
-          }
-          data-testid="web-page-fill"
-          onMouseDown={keep}
-          onClick={() => applyDiscrete(new Map([[element.id, { asWritten: !element.asWritten }]]))}
-        >
-          Fill box
-        </button>
-      ) : null}
-
       {web && editable && me ? (
         <button
           type="button"
@@ -340,7 +345,6 @@ function PageBar({
           value={watching ?? ''}
           data-testid="web-page-watch"
           onChange={(event) => {
-            setActivePage(null);
             watchPage(element.id, event.target.value || null);
           }}
         >

@@ -245,9 +245,7 @@ per page: two first writers would overwrite each other), written with `PAGE_ORIG
 audience window (`forcedViewer`, from the state message's `person`), the leader's while
 `element.lead` is someone else, someone watched (`watchPage`, the teacher's "Watch…"),
 or one's own — replayed on open, which is how progress is remembered across devices.
-"Start over" deletes one's own log. Students (any role below editor) use a page at once;
-editors double-click or press "Use page" (pointer goes back to the board on a press
-elsewhere, or Escape in the page). The Answer role may write only its own logs:
+"Start over" deletes one's own log. The Answer role may write only its own logs:
 `isOnlyAnswers(doc, update, uid)` allows a list under its own key and small plain
 entries in it, nothing else (unit tests in answers.test.ts; the class test in
 workshop.spec fails when the room is not told who sent the change). Viewers use pages
@@ -258,7 +256,17 @@ visible child of body whose declared width or height is in px, found through the
 style sheets) is stretched to the whole box by the page script (`FILL`, `fill()`):
 html/body to 100% with no margin, the card to 100% — so the box is the page, and
 dragging the box gives the page room. "Fill box" in the bar turns it off
-(`element.asWritten`). A page that flows already is left alone.
+(`element.asWritten`). A page that flows already is left alone. Same day, asked for: no "Use
+page" — a page takes the pointer whenever the select tool is in hand (anyone below
+editor: any tool but the laser), and any other tool draws on the board over it;
+the board keeps a 10 px edge band and the boxes of non-stroke items lying over the
+page (`.edge` divs, `itemsOver`) for selecting and moving. Code / Web is in the
+right-click menu (`menu-web-view`), Fill the box in the side panel's code section
+(`web-page-fill`, a checkbox). Everything stacked above the lowest web page, the
+stroke being drawn, the selection and the laser are drawn on a second canvas over
+the embed layer (`board-over`, `data-board-over`; the audience window has one too,
+and transitions copy it with the board), so they show on top of pages. Pixel helpers
+in content.spec and collab.spec read both canvases.
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

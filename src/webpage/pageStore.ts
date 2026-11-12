@@ -4,8 +4,6 @@ import { create } from 'zustand';
  * What this screen is doing with the board's web pages; none of it is shared.
  */
 interface PagesStore {
-  /** The page being used: it takes the pointer until clicked away from (or Escape). */
-  active: string | null;
   /** A page showing someone else's log on this screen, by page: the teacher watching. */
   watching: Record<string, string>;
   /** Whose pages everything shows, whatever else: the audience window, the presenter. */
@@ -15,15 +13,10 @@ interface PagesStore {
 }
 
 export const usePages = create<PagesStore>(() => ({
-  active: null,
   watching: {},
   forcedViewer: null,
   restarts: {},
 }));
-
-export function setActivePage(id: string | null): void {
-  if (usePages.getState().active !== id) usePages.setState({ active: id });
-}
 
 export function watchPage(pageId: string, person: string | null): void {
   const watching = { ...usePages.getState().watching };

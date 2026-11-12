@@ -80,3 +80,9 @@
   color: var(--accent);
   font-weight: 600;
 }
+
+/* What the board keeps over a page in use: its edge, and things lying on it. */
+.edge {
+  position: absolute;
+  pointer-events: auto;
+}

@@ -17,7 +17,7 @@ import { SlideTransition } from '@/ui/SlideTransition';
 import type { AudienceHooks, FromAudience, ToAudience } from '@/workshop/audience';
 import { cameraRadius, cameraRect, type CameraLayout } from '@/recording/camera';
 import { usePresentation } from '@/workshop/presentation';
-import { usePages } from '@/webpage/pageStore';
+import { isWebPage, usePages } from '@/webpage/pageStore';
 import styles from './AudienceView.module.css';
 
 /** Around the slide: dark, as on the presenter's screen. */
@@ -51,6 +51,7 @@ export function AudienceView({ channelName }: { channelName: string }) {
     frameId ? state.elements.some((element) => element.id === frameId) : false,
   );
   const redrawRef = useRef<() => void>(() => {});
+  const overRef = useRef<HTMLCanvasElement | null>(null);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, frame: CanvasFrame) => {
     const host = ctx.canvas.parentElement;
@@ -59,6 +60,19 @@ export function AudienceView({ channelName }: { channelName: string }) {
     store.setStageSize({ width: frame.width, height: frame.height });
     ctx.fillStyle = SURROUND;
     ctx.fillRect(0, 0, frame.width, frame.height);
+    // The canvas over the web pages, cleared with this one.
+    const over = overRef.current?.getContext('2d') ?? null;
+    if (over) {
+      const canvas = over.canvas;
+      if (canvas.width !== ctx.canvas.width || canvas.height !== ctx.canvas.height) {
+        canvas.width = ctx.canvas.width;
+        canvas.height = ctx.canvas.height;
+        canvas.style.width = ctx.canvas.style.width;
+        canvas.style.height = ctx.canvas.style.height;
+      }
+      over.setTransform(frame.dpr, 0, 0, frame.dpr, 0, 0);
+      over.clearRect(0, 0, frame.width, frame.height);
+    }
 
     const id = usePresentation.getState().frame;
     const shown = id ? store.elements.find((element) => element.id === id) : undefined;
@@ -77,12 +91,33 @@ export function AudienceView({ channelName }: { channelName: string }) {
     ctx.clip();
     ctx.fillStyle = colors.background;
     ctx.fillRect(0, 0, frame.width, frame.height);
-    renderElements(ctx, viewport, frame, store.elements, colors, redrawRef.current, shown.id);
+    // What is stacked above the web pages, and the laser, go over them, as on the board.
+    const pages = store.elements.filter((element) => isWebPage(element) && !element.hidden);
+    const lowest = pages.reduce<string | null>(
+      (low, page) => (low === null || page.z < low ? page.z : low),
+      null,
+    );
+    const under =
+      lowest === null
+        ? store.elements
+        : store.elements.filter((element) => isWebPage(element) || element.z <= lowest);
+    const above =
+      lowest === null
+        ? []
+        : store.elements.filter((element) => !isWebPage(element) && element.z > lowest);
+    renderElements(ctx, viewport, frame, under, colors, redrawRef.current, shown.id);
+    ctx.restore();
+    const top = over ?? ctx;
+    top.save();
+    top.beginPath();
+    top.rect(corner.x, corner.y, shown.w * viewport.zoom, shown.h * viewport.zoom);
+    top.clip();
+    if (above.length > 0) renderElements(top, viewport, frame, above, colors, redrawRef.current);
     const now = performance.now();
     for (const trail of trails.current) {
-      renderLaser(ctx, viewport, trail.points, trail.lifetimeMs, now, colors, trail.color);
+      renderLaser(top, viewport, trail.points, trail.lifetimeMs, now, colors, trail.color);
     }
-    ctx.restore();
+    top.restore();
   }, []);
 
   const { canvasRef, redraw } = useCanvas2D(draw);
@@ -240,6 +275,7 @@ export function AudienceView({ channelName }: { channelName: string }) {
       <canvas ref={canvasRef} className={styles.canvas} data-testid="audience-canvas" />
       {/* Only over a slide: between slides there is nothing to clip them to. */}
       {onShow ? <EmbedLayer /> : null}
+      <canvas ref={overRef} className={styles.over} aria-hidden="true" data-board-over />
       <SlideTransition source={canvasRef} />
       {onShow && camera && cameraStream ? (
         <AudienceCamera layout={camera} stream={cameraStream} />

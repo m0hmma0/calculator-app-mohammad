@@ -41,17 +41,24 @@ async function clickIn(page: Page, selector: string) {
   await page.mouse.click(frame.x + inner.x * scale, frame.y + inner.y * scale);
 }
 
-/** Clicks into the page, as someone who edits does: a double-click on it. */
-async function usePage(page: Page) {
-  // Somewhere on the page that is on screen (it is bigger than the view).
-  const box = (await page.getByTestId('web-page').boundingBox())!;
+/**
+ * Code or page, from the right-click menu: on the page, its edge (the board keeps it);
+ * as code, the middle of the board, where a new code box goes.
+ */
+async function switchView(page: Page, to: 'code' | 'web') {
+  const frame =
+    (await page.getByTestId('web-page').count()) > 0
+      ? await page.getByTestId('web-page').boundingBox()
+      : null;
   const stage = (await page.getByTestId('stage').boundingBox())!;
-  const right = Math.min(box.x + box.width, stage.x + stage.width);
-  const bottom = Math.min(box.y + box.height, stage.y + stage.height);
-  const left = Math.max(box.x, stage.x);
-  const top = Math.max(box.y, stage.y);
-  await page.mouse.dblclick((left + right) / 2, (top + bottom) / 2 + 40);
-  await expect(page.getByTestId('web-page')).toHaveAttribute('data-usable', 'true');
+  const at = frame
+    ? { x: Math.max(frame.x, stage.x) + 60, y: Math.max(frame.y, stage.y) + 3 }
+    : { x: stage.x + stage.width / 2, y: stage.y + stage.height / 2 };
+  await page.mouse.click(at.x, at.y, { button: 'right' });
+  await expect(page.getByTestId('menu-web-view')).toHaveText(
+    to === 'web' ? 'Show the web page' : 'Show the code',
+  );
+  await page.getByTestId('menu-web-view').click();
 }
 
 test('an HTML file is a working page, and what was done in it comes back after a reload', async ({
@@ -61,9 +68,8 @@ test('an HTML file is a working page, and what was done in it comes back after a
   await expect(lesson(page).locator('h1')).toHaveText('Fractions');
   const order = await lesson(page).locator('#order').textContent();
 
-  // Someone who edits clicks into it first; until then a click is the board's.
-  await expect(page.getByTestId('web-page')).not.toHaveAttribute('data-usable', 'true');
-  await usePage(page);
+  // In use as soon as the pointer is on it, with the select tool in hand.
+  await expect(page.getByTestId('web-page')).toHaveAttribute('data-usable', 'true');
   await clickIn(page, '#choices button:text-is("3/4")');
   await expect(lesson(page).locator('#result')).toHaveText('Correct!');
   await clickIn(page, '#sure');
@@ -71,9 +77,14 @@ test('an HTML file is a working page, and what was done in it comes back after a
   await clickIn(page, '#name');
   await page.keyboard.type('Maya');
 
-  // Escape puts it down again.
-  await page.keyboard.press('Escape');
+  // Another tool in hand draws over it instead. (Typing in the page kept the keys
+  // there; a click on the board takes them back.)
+  const stage = (await page.getByTestId('stage').boundingBox())!;
+  await page.mouse.click(stage.x + 5, stage.y + stage.height - 5);
+  await page.keyboard.press('KeyP');
   await expect(page.getByTestId('web-page')).not.toHaveAttribute('data-usable', 'true');
+  await page.keyboard.press('KeyV');
+  await expect(page.getByTestId('web-page')).toHaveAttribute('data-usable', 'true');
 
   await page.waitForTimeout(800);
   await page.reload();
@@ -127,15 +138,13 @@ test('a new web page takes pasted code and switches between the code and the pag
   await expect(editor).toBeFocused();
   await editor.fill('<h1 id="hello">Hello class</h1><script>document.title = "Hi"</script>');
   await page.keyboard.press('Escape');
-  await page.getByTestId('layers').locator('li').first().click();
-  await expect(page.getByTestId('web-page-code')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('web-page')).toHaveCount(0);
 
-  await page.getByTestId('web-page-web').click();
+  await switchView(page, 'web');
   await expect(page.getByTestId('web-page')).toHaveCount(1);
   await expect(lesson(page).locator('#hello')).toHaveText('Hello class');
 
-  await page.getByTestId('web-page-code').click();
+  await switchView(page, 'code');
   await expect(page.getByTestId('web-page')).toHaveCount(0);
 });
 
@@ -161,9 +170,10 @@ test('a page written at a fixed size fills its box, and grows with it', async ({
   await expect(editor).toBeFocused();
   await editor.fill(fixedApp);
   await page.keyboard.press('Escape');
+  await switchView(page, 'web');
+  // Fill the box: in the side panel, on from the start.
   await page.getByTestId('layers').locator('li').first().click();
-  await page.getByTestId('web-page-web').click();
-  await expect(page.getByTestId('web-page-fill')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('web-page-fill')).toBeChecked();
 
   const measure = () =>
     lesson(page)
@@ -208,4 +218,52 @@ test('a page written at a fixed size fills its box, and grows with it', async ({
   // Fill box off: the page as written again — its card 800 high, the grey around it.
   await page.getByTestId('web-page-fill').click();
   await expect.poll(async () => (await measure()).app.h).toBe(800);
+});
+
+test('drawing, stamps and notes over a page show on top of it, and the note takes a click', async ({
+  page,
+}) => {
+  await importLesson(page);
+  await expect(lesson(page).locator('h1')).toHaveText('Fractions');
+  const frame = (await page.getByTestId('web-page').boundingBox())!;
+  const stage = (await page.getByTestId('stage').boundingBox())!;
+  const left = Math.max(frame.x, stage.x) + 80;
+  const top = Math.max(frame.y, stage.y) + 80;
+
+  // How much of an area of the canvas over the pages has something drawn on it.
+  const inked = (area: { x: number; y: number; w: number; h: number }) =>
+    page.evaluate((region) => {
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-over"]')!;
+      const bounds = canvas.getBoundingClientRect();
+      const dpr = canvas.width / bounds.width;
+      const data = canvas
+        .getContext('2d')!
+        .getImageData(
+          Math.round((region.x - bounds.left) * dpr),
+          Math.round((region.y - bounds.top) * dpr),
+          Math.round(region.w * dpr),
+          Math.round(region.h * dpr),
+        ).data;
+      let drawn = 0;
+      for (let index = 3; index < data.length; index += 4) if (data[index]! > 0) drawn += 1;
+      return drawn / (data.length / 4);
+    }, area);
+
+  // A pen stroke across the page.
+  await page.keyboard.press('KeyP');
+  await page.mouse.move(left, top);
+  await page.mouse.down();
+  await page.mouse.move(left + 200, top + 40, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(() => inked({ x: left, y: top - 10, w: 200, h: 60 })).toBeGreaterThan(0.02);
+
+  // A sticky note on it: drawn over the page, and a click on it selects it.
+  await page.keyboard.press('KeyN');
+  await page.mouse.click(left + 60, top + 160);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('KeyV');
+  await expect.poll(() => inked({ x: left + 60, y: top + 160, w: 40, h: 40 })).toBeGreaterThan(0.9);
+  await page.mouse.click(stage.x + 5, stage.y + stage.height - 5);
+  await page.mouse.click(left + 80, top + 180);
+  await expect(page.getByTestId('inspector')).toContainText('sticky');
 });

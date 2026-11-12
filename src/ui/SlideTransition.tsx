@@ -17,7 +17,11 @@ function copyOf(canvas: HTMLCanvasElement): HTMLCanvasElement {
   const copy = document.createElement('canvas');
   copy.width = canvas.width;
   copy.height = canvas.height;
-  copy.getContext('2d')!.drawImage(canvas, 0, 0);
+  const ctx = copy.getContext('2d')!;
+  ctx.drawImage(canvas, 0, 0);
+  // And what is drawn over the web pages, on the canvas above them.
+  const over = canvas.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-board-over]');
+  if (over && over !== canvas && over.width === canvas.width) ctx.drawImage(over, 0, 0);
   return copy;
 }
 

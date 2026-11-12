@@ -219,6 +219,22 @@ export function Inspector() {
                   </option>
                 ))}
               </select>
+              {first.language === 'html' && first.webView ? (
+                <label
+                  className={styles.check}
+                  title="Stretch a page written at a fixed size to the whole box, so the box is the page"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!first.asWritten}
+                    data-testid="web-page-fill"
+                    onChange={(event) =>
+                      applyDiscrete(new Map([[first.id, { asWritten: !event.target.checked }]]))
+                    }
+                  />
+                  Fill the box
+                </label>
+              ) : null}
             </div>
           ) : null}
 

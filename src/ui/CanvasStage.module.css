@@ -180,3 +180,12 @@
   pointer-events: none;
   z-index: 6;
 }
+
+/* Over the embed layer (web pages, videos), under the slide transition and the HUD. */
+.over {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}

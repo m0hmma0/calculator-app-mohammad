@@ -13,6 +13,7 @@ import { useComments } from '@/sharing/comments';
 import { useSettings } from '@/settings/settings';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 import { togglePane, useUiPrefs } from '@/state/uiPrefs';
+import { isHtmlCode } from '@/webpage/pageStore';
 import styles from './ContextMenu.module.css';
 
 interface Entry {
@@ -171,6 +172,20 @@ export function ContextMenu() {
           disabled: !chosen.some((element) => element.type === 'group'),
           run: () => store().ungroupSelection(),
         },
+        // A web page shows its code, or the page, from here.
+        ...(chosen.length === 1 && isHtmlCode(chosen[0]!)
+          ? [
+              {
+                id: 'web-view',
+                label: chosen[0]!.webView ? 'Show the code' : 'Show the web page',
+                separated: true,
+                run: () =>
+                  store().applyDiscrete(
+                    new Map([[chosen[0]!.id, { webView: !chosen[0]!.webView }]]),
+                  ),
+              },
+            ]
+          : []),
         ...commenting.map((entry) => ({ ...entry, separated: true })),
         {
           id: 'pane',

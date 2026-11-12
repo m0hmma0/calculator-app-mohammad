@@ -75,8 +75,15 @@ async function colourFraction(
   return page.evaluate(
     ([target, region]) => {
       const rgb = [1, 3, 5].map((index) => parseInt(target.slice(index, index + 2), 16));
-      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
-      const bounds = canvas.getBoundingClientRect();
+      // What is on screen: the board, and the canvas over web pages (laser, selection).
+      const board = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
+      const over = document.querySelector<HTMLCanvasElement>('[data-testid="board-over"]');
+      const canvas = document.createElement('canvas');
+      canvas.width = board.width;
+      canvas.height = board.height;
+      canvas.getContext('2d')!.drawImage(board, 0, 0);
+      if (over && over.width === board.width) canvas.getContext('2d')!.drawImage(over, 0, 0);
+      const bounds = board.getBoundingClientRect();
       const dpr = canvas.width / bounds.width;
       const box = region ?? { x: bounds.left, y: bounds.top, w: bounds.width, h: bounds.height };
       const data = canvas
@@ -104,8 +111,14 @@ async function colourFraction(
 /** Ink on the canvas inside a page-space rectangle: anything far from the background. */
 async function inkIn(page: Page, area: { x: number; y: number; w: number; h: number }) {
   return page.evaluate((region) => {
-    const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
-    const bounds = canvas.getBoundingClientRect();
+    const board = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
+    const over = document.querySelector<HTMLCanvasElement>('[data-testid="board-over"]');
+    const canvas = document.createElement('canvas');
+    canvas.width = board.width;
+    canvas.height = board.height;
+    canvas.getContext('2d')!.drawImage(board, 0, 0);
+    if (over && over.width === board.width) canvas.getContext('2d')!.drawImage(over, 0, 0);
+    const bounds = board.getBoundingClientRect();
     const dpr = canvas.width / bounds.width;
     const probe = document.createElement('canvas').getContext('2d')!;
     probe.fillStyle = getComputedStyle(document.documentElement)

@@ -3,9 +3,17 @@ import { expect, test, type Page } from '@playwright/test';
 /** Ink coverage inside a page-space rectangle, as a fraction of its pixels. */
 async function inkFraction(page: Page, rect: { x: number; y: number; w: number; h: number }) {
   return page.evaluate((area) => {
-    const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
-    const bounds = canvas.getBoundingClientRect();
+    // What is on screen: the board's canvas, and the one over web pages (the laser, the
+    // selection, the stroke being drawn).
+    const board = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
+    const over = document.querySelector<HTMLCanvasElement>('[data-testid="board-over"]');
+    const canvas = document.createElement('canvas');
+    canvas.width = board.width;
+    canvas.height = board.height;
     const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(board, 0, 0);
+    if (over && over.width === board.width) ctx.drawImage(over, 0, 0);
+    const bounds = board.getBoundingClientRect();
     const dpr = canvas.width / bounds.width;
 
     const background = getComputedStyle(document.documentElement)
@@ -304,7 +312,9 @@ test.describe('text', () => {
 
     await page.keyboard.press('Escape');
     // And it actually renders on the canvas rather than silently dropping out.
-    expect(await inkFraction(page, { x: 300, y: 340, w: 260, h: 50 })).toBeGreaterThan(0.005);
+    await expect
+      .poll(() => inkFraction(page, { x: 300, y: 340, w: 260, h: 50 }))
+      .toBeGreaterThan(0.005);
   });
 
   test('switches back to left-to-right for Latin text', async ({ page }) => {
