@@ -89,8 +89,11 @@ test('a made-up remote key is refused while a real one works, and gets nothing',
   const strangerContext = await browser.newContext();
   const stranger = await strangerContext.newPage();
   // The same board, a key of the right shape that is not the presenter's.
+  // It is told to wait (the room cannot tell it from a link made a moment ago), and
+  // is shown nothing of the board.
   await stranger.goto(`/#remote=${'x'.repeat(24)}&b=${boardId}`);
-  await expect(stranger.getByTestId('remote-status')).toHaveText(/has ended/);
+  await expect(stranger.getByTestId('remote-status')).toHaveText(/Waiting/);
+  await stranger.waitForTimeout(1500);
   await expect(stranger.getByTestId('remote-current')).toHaveCount(0);
   // The real one, at the same moment, works.
   await stranger.goto(real);
@@ -117,6 +120,8 @@ test('a slides link shows the slides on another device, and cannot move them', a
 
   await page.getByTestId('watch-link-open').click();
   await expect(page.getByTestId('watch-link-qr')).toBeVisible();
+  // A board with a room: no "only in this browser" note.
+  await expect(page.getByTestId('watch-link-local')).toHaveCount(0);
   const link = await page.getByTestId('watch-link-link').inputValue();
   expect(link).toContain('#watch=');
   await page.getByTestId('watch-link-done').click();

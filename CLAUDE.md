@@ -395,7 +395,13 @@ room's meta). `main.tsx` renders `AudienceView` with `link` for it: the audience
 fed from the room (a `RoomConnection` with the key, the slide from `remote-state`) or, on
 the signed-out board, from the presenter's tab over `sabboura-remote-<key>`. The room
 lets it in like a remote but `watchOnly`: every message from it is ignored. It ends with
-the presentation, like the remote. Not carried to it yet: the laser, and video/sound
+the presentation, like the remote. Since the same day: a key the room does not know is told to wait
+(`waiting`, 4409, the link keeps trying), since it may be a link made while the
+presenter's page was reconnecting; only a key from a presentation that ended (the room
+keeps the last 12 in `endedKeys`) is refused for good (`ended`, 4410). Opening either
+dialog sends `remote-open` again. On the signed-out board the dialogs say the link works
+only in this browser's other tabs (`*-local`), never another device or a private
+window. Not carried to it yet: the laser, and video/sound
 play/pause (the audience window gets those from presenter view's channel only).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`

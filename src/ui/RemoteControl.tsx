@@ -99,6 +99,7 @@ function LinkDialog({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const local = useRemote((state) => state.local);
   if (!url) return null;
   return (
     <div className={styles.backdrop} data-hud onPointerDown={onClose}>
@@ -111,6 +112,13 @@ function LinkDialog({
       >
         <h2 className={styles.heading}>{title}</h2>
         <p className={styles.lead}>{lead}</p>
+        {local ? (
+          <p className={styles.warn} role="note" data-testid={`${testPrefix}-local`}>
+            This board is not saved to an account, so this link works only in other tabs of this
+            browser — not on another device, and not in a private (incognito) window. Sign in and
+            present a board from your boards to use it anywhere.
+          </p>
+        ) : null}
         <QrCode text={url} testId={`${testPrefix}-qr`} />
         <div className={styles.linkRow}>
           <input

@@ -442,8 +442,13 @@ export class BoardRoom extends DurableObject<Env> {
   }
 
   /** The link stops working, and any remote holding it is let go with `code`. */
-  private endRemote(code: 'unauthorised' | 'waiting', message: string, forget: boolean): void {
+  private endRemote(code: 'ended' | 'waiting', message: string, forget: boolean): void {
     if (forget) {
+      // Remembered as ended, so a link from it says so rather than waiting for ever.
+      const ended = [this.meta('remoteKey'), this.meta('watchKey'), ...this.endedKeys()]
+        .filter((each): each is string => Boolean(each))
+        .slice(0, 12);
+      this.setMeta('endedKeys', ended.join(' '));
       this.sql.exec(
         "DELETE FROM meta WHERE key IN ('remoteKey', 'watchKey', 'remoteUid', 'remoteTab')",
       );
@@ -451,18 +456,28 @@ export class BoardRoom extends DurableObject<Env> {
     for (const ws of this.remotes()) this.refuse(ws, code, message);
   }
 
+  /** Keys of the last few presentations that ended. */
+  private endedKeys(): string[] {
+    return (this.meta('endedKeys') ?? '').split(' ').filter(Boolean);
+  }
+
   /**
    * A remote control's handshake: the key from its link, which the presenter made and
-   * which works only while their page is connected. A wrong key, or a presentation
-   * that is over, is refused for good; a presenter momentarily away, for now.
+   * which works only while their page is connected. A link from a presentation that
+   * ended is refused for good; one whose key the room has not been given yet (the
+   * presenter's page was reconnecting as the link was made), or whose presenter is
+   * momentarily away, is told to wait, and tries again.
    */
   private authenticateRemote(ws: WebSocket, key: string): void {
     const expected = this.meta('remoteKey');
     const watchKey = this.meta('watchKey');
     const controls = Boolean(expected) && key === expected;
     const watches = Boolean(watchKey) && key === watchKey;
-    if (!REMOTE_KEY.test(key) || (!controls && !watches)) {
-      return this.refuse(ws, 'unauthorised', 'This link has ended');
+    if (!REMOTE_KEY.test(key)) return this.refuse(ws, 'unauthorised', 'Not a link');
+    if (!controls && !watches) {
+      return this.endedKeys().includes(key)
+        ? this.refuse(ws, 'ended', 'This presentation has ended')
+        : this.refuse(ws, 'waiting', 'Waiting for the presenter');
     }
     if (this.presenterSockets().length === 0) {
       return this.refuse(ws, 'waiting', 'Waiting for the presenter');
@@ -533,7 +548,7 @@ export class BoardRoom extends DurableObject<Env> {
 
   private refuse(
     ws: WebSocket,
-    code: 'unauthorised' | 'not-found' | 'bad-request' | 'revoked' | 'waiting',
+    code: 'unauthorised' | 'not-found' | 'bad-request' | 'revoked' | 'waiting' | 'ended',
     message: string,
   ) {
     this.sendJson(ws, { t: 'error', code, message });
@@ -543,6 +558,7 @@ export class BoardRoom extends DurableObject<Env> {
       'bad-request': 4400,
       revoked: 4403,
       waiting: 4409,
+      ended: 4410,
     };
     ws.close(close[code], message);
   }
@@ -776,7 +792,7 @@ export class BoardRoom extends DurableObject<Env> {
           const watch =
             typeof parsed.watch === 'string' && REMOTE_KEY.test(parsed.watch) ? parsed.watch : '';
           if (this.meta('remoteKey') !== parsed.key || (this.meta('watchKey') ?? '') !== watch) {
-            this.endRemote('unauthorised', 'This link has ended', false);
+            this.endRemote('ended', 'This presentation has ended', false);
           }
           this.setMeta('remoteKey', parsed.key);
           this.setMeta('watchKey', watch);
@@ -786,7 +802,7 @@ export class BoardRoom extends DurableObject<Env> {
         }
         case 'remote-close': {
           if (role !== 'owner' || this.meta('remoteUid') !== user.uid) return;
-          return this.endRemote('unauthorised', 'The presentation has ended', true);
+          return this.endRemote('ended', 'This presentation has ended', true);
         }
         case 'remote-state': {
           if (!this.presenterSockets().includes(ws)) return;

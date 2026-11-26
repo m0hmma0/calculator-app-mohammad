@@ -162,7 +162,10 @@ export function AudienceView({
           message: (message) => {
             if (message.t === 'remote-state') show(message.state.frame);
             else if (message.t === 'error' && message.code === 'waiting') setLinkStatus('waiting');
-            else if (message.t === 'error' && message.code === 'unauthorised') {
+            else if (
+              message.t === 'error' &&
+              (message.code === 'ended' || message.code === 'unauthorised')
+            ) {
               setLinkStatus('ended');
             }
           },

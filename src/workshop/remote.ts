@@ -32,9 +32,11 @@ interface RemoteStore {
   url: string | null;
   /** The slides-only link (26 November): the audience window on any device. */
   watchUrl: string | null;
+  /** No room (the signed-out board): the links reach only this browser's own tabs. */
+  local: boolean;
 }
 
-export const useRemote = create<RemoteStore>(() => ({ url: null, watchUrl: null }));
+export const useRemote = create<RemoteStore>(() => ({ url: null, watchUrl: null, local: false }));
 
 let room: RoomConnection | null = null;
 let key: string | null = null;
@@ -117,7 +119,12 @@ function channelFor(linkKey: string, controls: boolean): () => void {
 }
 
 function openLinks(): void {
-  if (key && watchKey) return;
+  if (key && watchKey) {
+    // Told again each time a link is shown: a first telling sent while the page was
+    // reconnecting would otherwise be lost, and the links would wait for ever.
+    room?.send({ t: 'remote-open', key, watch: watchKey });
+    return;
+  }
   key = newKey();
   watchKey = newKey();
   const remoteKey = key;
@@ -139,6 +146,7 @@ function openLinks(): void {
   useRemote.setState({
     url: linkUrl('remote', remoteKey),
     watchUrl: linkUrl('watch', slidesKey),
+    local: !room,
   });
 }
 

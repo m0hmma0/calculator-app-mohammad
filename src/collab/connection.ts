@@ -277,7 +277,8 @@ export class RoomConnection {
 
     // 4401: the token was refused. Worth one retry with a fresh token; after that, and
     // for 4404 (not this person's board), stop rather than hammer the room.
-    if (code === 4404 || (code === 4401 && this.attempts > 0)) {
+    // 4410: a remote control's presentation has ended.
+    if (code === 4404 || code === 4410 || (code === 4401 && this.attempts > 0)) {
       this.setStatus('refused');
       return;
     }

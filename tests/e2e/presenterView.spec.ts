@@ -562,6 +562,8 @@ test('a slides link in another tab shows the slide alone and follows the present
   await threeFrames(page);
   await page.getByTestId('present-start').click();
   await page.getByTestId('watch-link-open').click();
+  // The signed-out board says where its links work.
+  await expect(page.getByTestId('watch-link-local')).toContainText('only in other tabs');
   const link = await page.getByTestId('watch-link-link').inputValue();
   await page.getByTestId('watch-link-done').click();
 

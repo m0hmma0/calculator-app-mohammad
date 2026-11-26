@@ -55,7 +55,10 @@ export function RemoteView({ remoteKey, boardId }: { remoteKey: string; boardId:
               setStatus('live');
             } else if (message.t === 'error' && message.code === 'waiting') {
               setStatus('waiting');
-            } else if (message.t === 'error' && message.code === 'unauthorised') {
+            } else if (
+              message.t === 'error' &&
+              (message.code === 'ended' || message.code === 'unauthorised')
+            ) {
               setStatus('ended');
             }
           },

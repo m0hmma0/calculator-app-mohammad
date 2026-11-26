@@ -130,3 +130,14 @@
   border-color: var(--accent);
   color: var(--on-accent);
 }
+
+/* The signed-out board's links reach only this browser: said plainly. */
+.warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: #fff4e5;
+  color: #7a4100;
+  font-size: 13px;
+  line-height: 1.45;
+}

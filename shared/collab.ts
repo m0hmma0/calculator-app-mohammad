@@ -223,9 +223,18 @@ export type ServerMessage =
       message: string;
       /**
        * `read-only`: an edit from someone who may not edit, dropped. The socket stays.
-       * `waiting`: a remote control whose presenter is not connected; it tries again.
+       * `waiting`: a remote control or slides link whose presenter is not connected, or
+       * whose key the room has not been given yet; it tries again.
+       * `ended`: a link from a presentation that has ended; it stops.
        */
-      code: 'unauthorised' | 'not-found' | 'bad-request' | 'read-only' | 'revoked' | 'waiting';
+      code:
+        | 'unauthorised'
+        | 'not-found'
+        | 'bad-request'
+        | 'read-only'
+        | 'revoked'
+        | 'waiting'
+        | 'ended';
     };
 
 /**
