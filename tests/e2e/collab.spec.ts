@@ -10,8 +10,11 @@ import { API, createBoard, newAccount, signIn, tokenFor } from './accounts';
 
 const layers = (page: Page) => page.getByTestId('layers').locator('li');
 
-async function twoWindows(browser: Browser, label: string) {
+async function twoWindows(browser: Browser, label: string, twoPeople = false) {
   const account = newAccount(label);
+  // Two people where following a presenter matters: one's own other window is never
+  // made to follow (26 November).
+  const other = twoPeople ? newAccount(`${label}-b`) : account;
   const contextA = await browser.newContext();
   const contextB = await browser.newContext();
   const a = await contextA.newPage();
@@ -19,7 +22,18 @@ async function twoWindows(browser: Browser, label: string) {
 
   await signIn(a, account);
   const boardId = await createBoard(a);
-  await signIn(b, account);
+  if (twoPeople) {
+    const shared = await fetch(`${API}/api/shares/board/${boardId}/people`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await tokenFor(account)}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ email: `${other.uid}@example.test`, role: 'editor' }),
+    });
+    expect(shared.ok).toBe(true);
+  }
+  await signIn(b, other);
   await b.goto(`/b/${boardId}`);
 
   for (const page of [a, b]) {
@@ -416,7 +430,7 @@ test.describe('two windows on one board', () => {
 
   // Checklist item 9.
   test('following someone keeps your view on theirs, until you move it', async ({ browser }) => {
-    const { a, b, close } = await twoWindows(browser, 'follow');
+    const { a, b, close } = await twoWindows(browser, 'follow', true);
 
     // B opens A's card and follows; a thin frame in A's colour says so, nothing more.
     await b.getByTestId('peer-avatar').first().click();
@@ -457,7 +471,7 @@ test.describe('two windows on one board', () => {
   test('stopping following a presenter lasts only until they present again', async ({
     browser,
   }) => {
-    const { a, b, close } = await twoWindows(browser, 'represent');
+    const { a, b, close } = await twoWindows(browser, 'represent', true);
     await a.getByTestId('spotlight').click();
     await expect(b.getByTestId('following-frame')).toBeVisible();
 
@@ -479,13 +493,24 @@ test.describe('two windows on one board', () => {
     browser,
   }) => {
     const account = newAccount('phone');
+    // Someone else's phone: one's own is never made to follow (26 November).
+    const other = newAccount('phone-b');
     const desk = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const phone = await browser.newContext({ viewport: { width: 390, height: 700 } });
     const a = await desk.newPage();
     const b = await phone.newPage();
     await signIn(a, account);
     const boardId = await createBoard(a);
-    await signIn(b, account);
+    const shared = await fetch(`${API}/api/shares/board/${boardId}/people`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await tokenFor(account)}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ email: `${other.uid}@example.test`, role: 'editor' }),
+    });
+    expect(shared.ok).toBe(true);
+    await signIn(b, other);
     await b.goto(`/b/${boardId}`);
     for (const page of [a, b]) {
       await expect(page.getByTestId('connection-status')).toHaveAttribute(

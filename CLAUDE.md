@@ -409,6 +409,14 @@ and the presenter sends presence while `room.watched`, set when a link says hell
 without one, `watchLaser` frames on the channel). A screen not allowed to play sound
 unasked plays muted and shows "Tap for sound" (`audience-sound`).
 
+Presenting fixes (26 November, evening): `presenter()` in presence.ts never picks one's
+own account (another window or device of the same signed-in person is left free to
+edit; guests excepted), so spotlight tests use two people (`twoWindows(..., true)` in
+collab.spec and workshop.spec). "Follow me" is on the slide controls while presenting
+(`FollowMeToggle`, `present-follow-me`), presenter view included. Watching full screen
+fits the slide with no padding (`useWatching` in the follower's fit), as the audience
+window does.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

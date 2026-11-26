@@ -145,10 +145,17 @@ export function peerList(peers: Record<string, Peer>): Peer[] {
 }
 
 /** Whoever is presenting, unless this person has said they would rather not follow. */
-export function presenter(store: Pick<PresenceStore, 'peers' | 'dismissedSpotlight'>): Peer | null {
+export function presenter(
+  store: Pick<PresenceStore, 'peers' | 'dismissedSpotlight'> & { self?: PeerIdentity | null },
+): Peer | null {
   return (
     peerList(store.peers).find(
-      (peer) => peer.state?.spotlight && peer.session !== store.dismissedSpotlight,
+      (peer) =>
+        peer.state?.spotlight &&
+        peer.session !== store.dismissedSpotlight &&
+        // One's own other window or device presenting is not followed (asked for on 26
+        // November): edit in one, present in the other. A guest has no account to share.
+        !(store.self && !store.self.uid.startsWith('guest:') && peer.user.uid === store.self.uid),
     ) ?? null
   );
 }

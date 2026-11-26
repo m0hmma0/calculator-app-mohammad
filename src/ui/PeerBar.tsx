@@ -86,7 +86,11 @@ export function PeerBar() {
 
   if (!status) return null;
   const list = peerList(peers);
-  const leading = presenter({ peers, dismissedSpotlight: dismissed });
+  const leading = presenter({
+    peers,
+    dismissedSpotlight: dismissed,
+    self: usePresence.getState().self,
+  });
   const open = card ? peers[card] : undefined;
   // How many are following this person right now — shown on the Present button.
   const followers = list.filter((peer) => followsMe(peer, mySession)).length;

@@ -237,6 +237,14 @@
     justify-content: space-between;
     gap: 4px;
     padding: 4px;
+    /* A narrow phone with every button (Follow me on a shared board): one row that
+       scrolls, never two. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .presentBar > * {
+    flex-shrink: 0;
   }
 
   .presentBar .slideSteps {

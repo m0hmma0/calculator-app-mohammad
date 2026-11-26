@@ -127,7 +127,7 @@ async function stageCentre(page: Page, w = 160, h = 100) {
 
 // Checklist item 1 — the gate, from the follower's side.
 test('followers see the frame the presenter is on', async ({ browser }) => {
-  const { a, b, close } = await twoWindows(browser, 'present');
+  const { a, b, close } = await twoWindows(browser, 'present', true);
   try {
     // Two frames side by side; only the first has a rectangle in it.
     await drag(a, 'KeyR', [170, 230], [230, 270]);
@@ -162,7 +162,7 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
 test('a follower watches full screen: the slide alone, and the controls back after', async ({
   browser,
 }) => {
-  const { a, b, close } = await twoWindows(browser, 'watch');
+  const { a, b, close } = await twoWindows(browser, 'watch', true);
   try {
     // A wide slide, so its width decides how big it is shown.
     await drag(a, 'KeyR', [340, 220], [460, 280]);
@@ -192,6 +192,12 @@ test('a follower watches full screen: the slide alone, and the controls back aft
     await expect.poll(() => colourFraction(b, '--shape-1', centre)).toBeGreaterThan(0.9);
     const near = (x: number) => ({ x, y: size.height / 2 - 5, w: 10, h: 10 });
     await expect.poll(() => colourFraction(b, '--canvas-bg', near(40))).toBeGreaterThan(0.9);
+    // Edge to edge, as the audience window shows it: no dark margin at the sides.
+    const edge = (x: number) => ({ x, y: size.height / 2 - 5, w: 4, h: 10 });
+    await expect.poll(() => colourFraction(b, '--canvas-bg', edge(1))).toBeGreaterThan(0.9);
+    await expect
+      .poll(() => colourFraction(b, '--canvas-bg', edge(size.width - 5)))
+      .toBeGreaterThan(0.9);
     await expect
       .poll(() => colourFraction(b, '--canvas-bg', near(size.width - 50)))
       .toBeGreaterThan(0.9);
@@ -214,6 +220,49 @@ test('a follower watches full screen: the slide alone, and the controls back aft
     await a.getByTestId('present-stop').click();
     await expect.poll(() => b.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
     await expect(b.getByTestId('controls')).toBeVisible();
+  } finally {
+    await close();
+  }
+});
+
+// Asked for on 26 November: one's own other window or device is left free while one
+// presents — edit in one, present in the other — and "Follow me" sits on the slide
+// controls, where it turns following off and on for everyone else.
+test('one’s own other window is not made to follow; Follow me is on the slide controls', async ({
+  browser,
+}) => {
+  const same = await twoWindows(browser, 'self-present');
+  try {
+    await drag(same.a, 'KeyF', [100, 180], [300, 320]);
+    await same.a.keyboard.press('Escape');
+    await expect(layerItems(same.b)).toHaveCount(1);
+    await same.a.getByTestId('present-start').click();
+    await expect(same.a.getByTestId('present-follow-me')).toHaveAttribute('aria-checked', 'true');
+    // The same account's other window: no following frame, no prompt, still editing.
+    await same.b.waitForTimeout(1500);
+    await expect(same.b.getByTestId('following-frame')).toHaveCount(0);
+    await expect(same.b.getByTestId('watch-prompt')).toHaveCount(0);
+    await drag(same.b, 'KeyR', [400, 400], [460, 440]);
+    await expect(layerItems(same.b)).toHaveCount(2);
+  } finally {
+    await same.close();
+  }
+
+  const { a, b, close } = await twoWindows(browser, 'follow-toggle', true);
+  try {
+    await drag(a, 'KeyF', [100, 180], [300, 320]);
+    await a.keyboard.press('Escape');
+    await expect(layerItems(b)).toHaveCount(1);
+    await a.getByTestId('present-start').click();
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+    // Off: the other person is let go, and the presentation carries on here.
+    await a.getByTestId('present-follow-me').click();
+    await expect(a.getByTestId('present-follow-me')).toHaveAttribute('aria-checked', 'false');
+    await expect(b.getByTestId('following-frame')).toHaveCount(0);
+    await expect(a.getByTestId('presentation-bar')).toBeVisible();
+    // On again: they come back.
+    await a.getByTestId('present-follow-me').click();
+    await expect(b.getByTestId('following-frame')).toBeVisible();
   } finally {
     await close();
   }

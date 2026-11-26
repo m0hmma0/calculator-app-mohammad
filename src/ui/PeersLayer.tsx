@@ -71,7 +71,8 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   const leaderSession =
     following && peers[following]
       ? following
-      : (presenter({ peers, dismissedSpotlight: dismissed })?.session ?? null);
+      : (presenter({ peers, dismissedSpotlight: dismissed, self: usePresence.getState().self })
+          ?.session ?? null);
   const leader = leaderSession ? peers[leaderSession] : null;
   const chatAt = cursor ? boardToScreen(viewport, cursor) : null;
 

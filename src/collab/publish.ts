@@ -1,4 +1,5 @@
 import type { PresenceState } from '@shared/collab';
+import { useWatching } from '@/workshop/watching';
 import { fitToRect, viewportsEqual, type Viewport } from '@/canvas/viewport';
 import { laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { useBoardStore } from '@/state/boardStore';
@@ -161,7 +162,10 @@ function startFollowing(): () => void {
       ? board.elements.find((element) => element.id === leader.present?.frame)
       : undefined;
     if (frame) {
-      const fitted = fitToRect(frame, board.stageSize, PRESENT_PADDING);
+      // Watching full screen: edge to edge, as the audience window shows it, so a slide
+      // the shape of the screen fills it with no dark bars.
+      const padding = useWatching.getState().watching ? 0 : PRESENT_PADDING;
+      const fitted = fitToRect(frame, board.stageSize, padding);
       applied = fitted;
       board.setViewport(fitted);
       return;
@@ -179,6 +183,9 @@ function startFollowing(): () => void {
 
   const stopPresence = usePresence.subscribe((state, previous) => {
     if (state.peers !== previous.peers || state.following !== previous.following) apply();
+  });
+  const stopWatching = useWatching.subscribe((state, previous) => {
+    if (state.watching !== previous.watching) apply();
   });
 
   const stopBoard = useBoardStore.subscribe((state, previous) => {
@@ -201,6 +208,7 @@ function startFollowing(): () => void {
 
   return () => {
     stopPresence();
+    stopWatching();
     stopBoard();
   };
 }
