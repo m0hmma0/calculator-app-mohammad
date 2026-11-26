@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Role } from '@shared/sharing';
-import { canAnswer, canComment, canEdit } from '@shared/sharing';
+import { actsAsOwner, canAnswer, canComment, canEdit } from '@shared/sharing';
 
 interface BoardAccessStore {
   /** Null until the board says; the local board, with no server, is always 'owner'. */
@@ -25,8 +25,11 @@ export const useBoardAccess = create<BoardAccessStore>(() => ({
 }));
 
 export const selectCanEdit = (state: BoardAccessStore) => canEdit(state.role);
-/** The board's owner — the only one who presents, and who has the minimap. */
-export const selectIsOwner = (state: BoardAccessStore) => state.role === 'owner';
+/**
+ * Someone who runs the board as its owner: the owner, or a co-owner (26 November). They
+ * present, have the minimap, lock for others and manage sharing.
+ */
+export const selectIsOwner = (state: BoardAccessStore) => actsAsOwner(state.role);
 export const selectCanComment = (state: BoardAccessStore) => canComment(state.role);
 
 /**
@@ -35,10 +38,10 @@ export const selectCanComment = (state: BoardAccessStore) => canComment(state.ro
  * selected and unlocked on purpose, by anyone who edits.
  */
 export const lockedForMe = (element: { locked: boolean; lockMode?: 'others' | null }) =>
-  element.locked && !(element.lockMode === 'others' && useBoardAccess.getState().role === 'owner');
+  element.locked && !(element.lockMode === 'others' && actsAsOwner(useBoardAccess.getState().role));
 
-/** Only the board's owner locks things for others: the lock that leaves them free. */
-export const mayLockForOthers = () => useBoardAccess.getState().role === 'owner';
+/** Only the owner (or a co-owner) locks things for others: the lock that leaves them free. */
+export const mayLockForOthers = () => actsAsOwner(useBoardAccess.getState().role);
 
 /** Whether a click on a placeholder types into it here: anyone who edits, or answers. */
 export const canTypeInto = () => canAnswer(useBoardAccess.getState().role);

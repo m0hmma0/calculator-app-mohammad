@@ -786,7 +786,11 @@ export class BoardRoom extends DurableObject<Env> {
       switch (parsed.t) {
         // Presenting is the owner's, and so is the link that steers it.
         case 'remote-open': {
-          if (role !== 'owner' || typeof parsed.key !== 'string' || !REMOTE_KEY.test(parsed.key)) {
+          if (
+            !atLeast(role, 'coowner') ||
+            typeof parsed.key !== 'string' ||
+            !REMOTE_KEY.test(parsed.key)
+          ) {
             return;
           }
           const watch =
@@ -801,7 +805,7 @@ export class BoardRoom extends DurableObject<Env> {
           return;
         }
         case 'remote-close': {
-          if (role !== 'owner' || this.meta('remoteUid') !== user.uid) return;
+          if (!atLeast(role, 'coowner') || this.meta('remoteUid') !== user.uid) return;
           return this.endRemote('ended', 'This presentation has ended', true);
         }
         case 'remote-state': {

@@ -15,7 +15,7 @@ control pane, and who sees what)**, **Phase 12 (settings and shortcuts)**, **Pha
 role and locks)**, **14.1 (fixes)**, **14.2 (pictures, locks, panning)** and **Phase 15
 (undo after closing a board)** and **Phase 16 (dashboard organisation)** are built,
 tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0007 applied remotely) but not
+<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0008 applied remotely) but not
 yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
@@ -416,6 +416,18 @@ collab.spec and workshop.spec). "Follow me" is on the slide controls while prese
 (`FollowMeToggle`, `present-follow-me`), presenter view included. Watching full screen
 fits the slide with no padding (`useWatching` in the follower's fit), as the audience
 window does.
+
+Co-owner (26 November, migration 0008, applied remotely): a sixth role, `coowner`,
+between editor and owner (`RANK` in access.ts), for boards and folders, given to named
+people only (`LINK_ROLES` leaves it out of links). `actsAsOwner` (shared/sharing.ts) is
+what `selectIsOwner`, `lockedForMe`, `mayLockForOthers` and the Present shortcut now ask:
+a co-owner presents, uses Follow me, the remote and slides links (the room's
+`remote-open`/`remote-close` take `atLeast(role, 'coowner')`), has the minimap, locks for
+others and is not held by such locks, and opens Share; `ownedResource` in
+routes/sharing.ts lets them manage people, the link and export. Kept for the owner:
+`transferBoard` (`ownerOnly`), and everything tied to the owner's workspace (rename,
+move, archive, trash — those queries match `owner_id`). The board's badge reads
+"Co-owner".
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

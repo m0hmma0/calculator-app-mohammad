@@ -4,7 +4,7 @@
  * What someone may do with a board, weakest first. `answer` is a commenter who may
  * also type in placeholders — and change nothing else; the room checks every change.
  */
-export type Role = 'viewer' | 'commenter' | 'answer' | 'editor' | 'owner';
+export type Role = 'viewer' | 'commenter' | 'answer' | 'editor' | 'coowner' | 'owner';
 export type GrantRole = Exclude<Role, 'owner'>;
 export type Audience = 'anyone' | 'signed-in' | 'domain';
 export type ResourceType = 'board' | 'folder';
@@ -14,10 +14,19 @@ export const ROLE_LABEL: Record<Role, string> = {
   commenter: 'Can comment',
   answer: 'Can answer',
   editor: 'Can edit',
+  coowner: 'Co-owner',
   owner: 'Owner',
 };
 
-export const canEdit = (role: Role | null) => role === 'editor' || role === 'owner';
+export const canEdit = (role: Role | null) =>
+  role === 'editor' || role === 'coowner' || role === 'owner';
+/**
+ * Someone who runs the board as its owner does (26 November): presenting, Follow me,
+ * the remote and slides links, the minimap, "Lock for others" (and not being held by
+ * it), and its sharing. A co-owner is everything but the board's owner of record: the
+ * board stays in the owner's workspace, and only the owner deletes it or gives it away.
+ */
+export const actsAsOwner = (role: Role | null) => role === 'owner' || role === 'coowner';
 export const canComment = (role: Role | null) =>
   canEdit(role) || role === 'commenter' || role === 'answer';
 /** Someone who may type in placeholders: anyone who edits, and anyone who answers. */

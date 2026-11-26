@@ -11,6 +11,8 @@ import { api } from '@/api/client';
 import styles from './ShareDialog.module.css';
 
 const ROLES: GrantRole[] = ['viewer', 'commenter', 'answer', 'editor'];
+/** Named people may also be co-owners (26 November); a link never makes one. */
+const PERSON_ROLES: GrantRole[] = [...ROLES, 'coowner'];
 
 function untilText(at: number): string {
   return new Date(at).toLocaleString(undefined, {
@@ -285,7 +287,7 @@ export function ShareDialog({
                   data-testid="person-role"
                   onChange={(event) => setRole(event.target.value as GrantRole)}
                 >
-                  {ROLES.map((option) => (
+                  {PERSON_ROLES.map((option) => (
                     <option key={option} value={option}>
                       {ROLE_LABEL[option]}
                     </option>
@@ -320,7 +322,7 @@ export function ShareDialog({
                           )
                         }
                       >
-                        {ROLES.map((option) => (
+                        {PERSON_ROLES.map((option) => (
                           <option key={option} value={option}>
                             {ROLE_LABEL[option]}
                           </option>

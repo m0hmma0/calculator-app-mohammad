@@ -449,6 +449,9 @@ within it while presenting.
 - **Watching full screen.** Everyone following a presentation is offered "Watch full
   screen": the slide alone, no toolbar or panels, until they press Escape or the
   presentation ends.
+- **Co-owner.** A role for named people, on a board or a folder: they run the board as
+  its owner does — present, share, lock for others — but cannot delete it or give it
+  away, and no link makes co-owners.
 - **Share slides.** While presenting, a link (and QR code) that shows the slides alone —
   the audience window — on any screen: a projector's computer, a TV, phones. It follows
   the presenter, cannot move the slides, needs no sign-in, and ends with the presentation.

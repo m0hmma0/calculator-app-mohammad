@@ -26,7 +26,9 @@ import type { Env } from '../env';
 import { fail, json, newId } from '../http';
 import { settingsOf } from './settings';
 
-const GRANT_ROLES: readonly GrantRole[] = ['viewer', 'commenter', 'answer', 'editor'];
+const GRANT_ROLES: readonly GrantRole[] = ['viewer', 'commenter', 'answer', 'editor', 'coowner'];
+/** A link never makes its holders co-owners: that is given to named people only. */
+const LINK_ROLES: readonly GrantRole[] = ['viewer', 'commenter', 'answer', 'editor'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EXPIRY_MINUTES = 60 * 24 * 365;
 
@@ -138,12 +140,16 @@ export async function notify(
     .run();
 }
 
-/** Only the owner manages sharing. Returns the resource's title, or a failure. */
+/**
+ * The owner, or a co-owner, manages sharing (`ownerOnly`: the owner alone, for giving
+ * the board away). Returns the resource's title, or a failure.
+ */
 async function ownedResource(
   env: Env,
   account: Account,
   type: string,
   id: string,
+  ownerOnly = false,
 ): Promise<{ error: Response } | { type: ResourceType; name: string }> {
   if (!isResourceType(type)) return { error: fail('Unknown kind of thing to share', 404) };
   const row =
@@ -154,8 +160,18 @@ async function ownedResource(
       : await env.DB.prepare('SELECT name, owner_id, deleted_at FROM folders WHERE id = ?1')
           .bind(id)
           .first<{ name: string; owner_id: string; deleted_at: number | null }>();
-  if (!row || row.deleted_at !== null || row.owner_id !== account.uid) {
+  if (!row || row.deleted_at !== null) {
     return { error: fail('Only the owner can change how this is shared', 404) };
+  }
+  if (row.owner_id !== account.uid) {
+    const viewer = { uid: account.uid, email: account.email.toLowerCase() };
+    const access =
+      type === 'board'
+        ? await boardAccess(env, viewer, id, null)
+        : await folderAccess(env, viewer, id, null);
+    if (ownerOnly || !atLeast(access.role, 'coowner')) {
+      return { error: fail('Only the owner can change how this is shared', 404) };
+    }
   }
   return { type, name: row.name };
 }
@@ -252,7 +268,7 @@ export async function putLink(
   if ('error' in owned) return owned.error;
   const body = (await request.json().catch(() => ({}))) as Partial<PutLinkBody>;
 
-  if (!body.role || !GRANT_ROLES.includes(body.role))
+  if (!body.role || !LINK_ROLES.includes(body.role))
     return fail('Choose what the link allows', 400);
   if (!body.audience || !['anyone', 'signed-in', 'domain'].includes(body.audience)) {
     return fail('Choose who the link works for', 400);
@@ -460,7 +476,7 @@ export async function setViewerExport(request: Request, env: Env, account: Accou
  * and the board leaves their folders, which the new owner cannot see.
  */
 export async function transferBoard(request: Request, env: Env, account: Account, id: string) {
-  const owned = await ownedResource(env, account, 'board', id);
+  const owned = await ownedResource(env, account, 'board', id, true);
   if ('error' in owned) return owned.error;
   const body = (await request.json().catch(() => ({}))) as { email?: string };
   const email = String(body.email ?? '')

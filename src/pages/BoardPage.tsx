@@ -212,7 +212,7 @@ function BoardView({ boardId }: { boardId: string }) {
           }
           people={<PeerBar />}
           share={
-            owner ? (
+            role === 'owner' || role === 'coowner' ? (
               <button
                 type="button"
                 className={styles.share}

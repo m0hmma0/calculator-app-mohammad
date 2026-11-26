@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { actsAsOwner } from '@shared/sharing';
 import { enterOnBoard } from './keyboardBoard';
 import { closeHistory, useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
@@ -48,7 +49,7 @@ export function toggleFullScreen(): void {
  */
 function run(id: string): boolean {
   const store = useBoardStore.getState();
-  const owner = useBoardAccess.getState().role === 'owner';
+  const owner = actsAsOwner(useBoardAccess.getState().role);
 
   // The stamp tool; asked for again while in hand, the next stamp.
   if (id === 'tool.stamp') {

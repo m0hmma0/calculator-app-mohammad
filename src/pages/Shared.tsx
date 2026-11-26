@@ -13,6 +13,7 @@ const INVITE_VERB = {
   commenter: 'comment on',
   answer: 'answer on',
   editor: 'edit',
+  coowner: 'run',
 } as const;
 
 function Message({ title, body, testId }: { title: string; body: string; testId: string }) {

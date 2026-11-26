@@ -646,3 +646,124 @@ test.describe('owner controls', () => {
     await close(owner.context, bob.context);
   });
 });
+
+// Asked for on 26 November: a co-owner, for boards and folders, does what the owner
+// does — presents, manages sharing, locks for others — but the board stays the
+// owner's: they cannot give it away, and a link never makes co-owners.
+test.describe('a co-owner', () => {
+  test('of a folder presents a board in it and manages its sharing, as the owner does', async ({
+    browser,
+  }) => {
+    const owner = await person(browser, 'co-owner-a');
+    const cara = await person(browser, 'co-owner-cara');
+    const ed = await person(browser, 'co-owner-ed');
+    const api = async (account: Account, path: string, method: string, body?: unknown) =>
+      fetch(`${API}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${await tokenFor(account)}`,
+          'content-type': 'application/json',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    const folder = (await (
+      await api(owner.account, '/api/folders', 'POST', { name: 'Shared unit' })
+    ).json()) as {
+      folder: { id: string };
+    };
+    const folderId = folder.folder.id;
+    const board = (await (
+      await api(owner.account, '/api/boards', 'POST', { folderId, title: 'Lesson' })
+    ).json()) as { board: { id: string } };
+    const boardId = board.board.id;
+    expect(
+      (
+        await api(owner.account, `/api/shares/folder/${folderId}/people`, 'POST', {
+          email: emailOf(cara.account),
+          role: 'coowner',
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await api(owner.account, `/api/shares/board/${boardId}/people`, 'POST', {
+          email: emailOf(ed.account),
+          role: 'editor',
+        })
+      ).ok,
+    ).toBe(true);
+
+    // The co-owner opens the board (shared through its folder): marked so, and with
+    // the owner's controls — Present, Share — on a frame of their own.
+    await cara.page.goto(`/b/${boardId}`);
+    await expect(cara.page.getByTestId('connection-status')).toHaveAttribute(
+      'data-status',
+      'connected',
+    );
+    await expect(cara.page.getByTestId('board-title')).toBeVisible();
+    await expect(cara.page.getByText('Co-owner')).toBeVisible();
+    await cara.page.keyboard.press('KeyF');
+    await cara.page.mouse.move(100, 150);
+    await cara.page.mouse.down();
+    await cara.page.mouse.move(400, 350, { steps: 5 });
+    await cara.page.mouse.up();
+    await cara.page.keyboard.press('Escape');
+    await cara.page.getByTestId('present-start').click();
+    await expect(cara.page.getByTestId('presentation-counter')).toHaveText('1 / 1');
+    await expect(cara.page.getByTestId('remote-open')).toBeVisible();
+    await cara.page.getByTestId('present-stop').click();
+    await openShare(cara.page);
+    await expect(cara.page.getByTestId('share-dialog')).toBeVisible();
+    // Co-owner is offered for people, not for the link.
+    await expect(
+      cara.page.getByTestId('person-role').locator('option[value="coowner"]'),
+    ).toHaveCount(1);
+    await closeShare(cara.page);
+
+    // An editor of the same board does not present.
+    await ed.page.goto(`/b/${boardId}`);
+    await expect(ed.page.getByTestId('connection-status')).toHaveAttribute(
+      'data-status',
+      'connected',
+    );
+    await expect(ed.page.getByTestId('present-start')).toHaveCount(0);
+    await expect(ed.page.getByTestId('open-share')).toHaveCount(0);
+
+    // The API agrees: the co-owner shares the board, but cannot give it away, and no
+    // link makes co-owners.
+    expect(
+      (
+        await api(cara.account, `/api/shares/board/${boardId}/people`, 'POST', {
+          email: 'someone-else@example.test',
+          role: 'viewer',
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await api(cara.account, `/api/boards/${boardId}/transfer`, 'POST', {
+          email: emailOf(cara.account),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await api(owner.account, `/api/shares/board/${boardId}/link`, 'PUT', {
+          role: 'coowner',
+          audience: 'anyone',
+        })
+      ).status,
+    ).toBe(400);
+    // And an editor manages nothing.
+    expect(
+      (
+        await api(ed.account, `/api/shares/board/${boardId}/people`, 'POST', {
+          email: 'another@example.test',
+          role: 'viewer',
+        })
+      ).status,
+    ).toBe(404);
+
+    await close(owner.context, cara.context, ed.context);
+  });
+});
