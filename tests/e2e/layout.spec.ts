@@ -159,3 +159,64 @@ test.describe('a phone', () => {
     }
   });
 });
+
+/** Draws a frame and presents it, on whatever screen the test has. */
+async function presentOneFrame(page: Page) {
+  const stage = await box(page, 'stage');
+  await page.keyboard.press('KeyF');
+  await page.mouse.move(stage.x + 20, stage.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(stage.x + stage.width - 20, stage.y + stage.height - 40, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+  await page.getByTestId('present-start').click();
+  await expect(page.getByTestId('presentation-bar')).toBeVisible();
+}
+
+/** How many rows the bar's buttons sit in, by their middles (buttons differ in height). */
+async function rowsOfTools(page: Page) {
+  const middles: number[] = [];
+  for (const id of ['undo', 'tool-select', 'tool-laser', 'insert-menu', 'fullscreen']) {
+    const each = await box(page, id);
+    middles.push(each.y + each.height / 2);
+  }
+  return Math.max(...middles) - Math.min(...middles) < 12 ? 1 : 2;
+}
+
+// Asked for on 20 November: presenting on a phone, the tools take one row, before and
+// after full screen; the slide buttons are big and "Presenter view" is one line.
+test.describe('presenting on a phone held upright', () => {
+  test.use({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+
+  test('one row of tools, big slide buttons, labels on one line', async ({ page }) => {
+    await open(page);
+    await presentOneFrame(page);
+    expect(await rowsOfTools(page)).toBe(1);
+    const bar = await box(page, 'presentation-bar');
+    // The way through the slides takes the screen's width, with big buttons.
+    expect(bar.width).toBeGreaterThan(330);
+    const next = await box(page, 'slide-next');
+    expect(next.height).toBeGreaterThanOrEqual(44);
+    expect(next.width).toBeGreaterThanOrEqual(50);
+    const view = await box(page, 'presenter-view');
+    expect(view.height).toBeLessThan(44);
+    expect(view.x + view.width).toBeLessThanOrEqual(360);
+  });
+});
+
+test.describe('presenting on a phone held sideways', () => {
+  // A large phone on its side is wider than 900: still the bar along the top, not
+  // the pane, so the tools stay in one row.
+  test.use({ viewport: { width: 932, height: 430 }, isMobile: true, hasTouch: true });
+
+  test('the bar along the top, one row, before and after full screen', async ({ page }) => {
+    await open(page);
+    const controls = await box(page, 'controls');
+    expect(controls.width).toBeCloseTo(932, 0);
+    await presentOneFrame(page);
+    expect(await rowsOfTools(page)).toBe(1);
+    await page.getByTestId('fullscreen').click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    expect(await rowsOfTools(page)).toBe(1);
+  });
+});

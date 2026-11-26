@@ -12,6 +12,7 @@ import { INK_TRAIL_MS, MOVE_TRAIL_MS, isTrailAlive, pruneTrail, type LaserPoint 
  */
 let points: LaserPoint[] = [];
 let lifetimeMs = MOVE_TRAIL_MS;
+let mark = 0;
 const listeners = new Set<() => void>();
 
 const notify = () => {
@@ -21,8 +22,13 @@ const notify = () => {
 export function addLaserPoint(point: Point, inking: boolean, now = performance.now()): void {
   // Drawing leaves a trail that survives long enough to talk over; moving does not.
   lifetimeMs = inking ? INK_TRAIL_MS : MOVE_TRAIL_MS;
-  points = [...pruneTrail(points, { now, lifetimeMs }), { ...point, at: now }];
+  points = [...pruneTrail(points, { now, lifetimeMs }), { x: point.x, y: point.y, at: now, mark }];
   notify();
+}
+
+/** A press or a release of the laser: what follows is a mark of its own. */
+export function startLaserMark(): void {
+  mark += 1;
 }
 
 export function laserSnapshot(now = performance.now()): {

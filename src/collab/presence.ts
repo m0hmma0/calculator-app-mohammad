@@ -111,6 +111,7 @@ export function applyServerMessage(message: ServerMessage): void {
               x: point.x,
               y: point.y,
               at: now - point.age,
+              mark: point.m,
             })),
           }
         : null;

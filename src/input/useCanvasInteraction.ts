@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from 'react';
+import { swipeSlides } from '@/workshop/presentation';
 import { recognizeShape } from '@/ink/recognize';
 import { defaultTextBox, textHeight } from '@/text/measure';
 import { textDefaults } from '@/settings/settings';
@@ -42,7 +43,7 @@ import {
 } from '@/model/transform';
 import { keyBetween } from '@/model/zorder';
 import { snapMove, EMPTY_SNAP } from '@/snapping/snap';
-import { addLaserPoint } from '@/laser/laserTrail';
+import { addLaserPoint, startLaserMark } from '@/laser/laserTrail';
 import {
   eraseThrough,
   fromFlat,
@@ -76,7 +77,7 @@ const ERASER_RADIUS = 12; // screen px
 
 type Drag =
   | { kind: 'none' }
-  | { kind: 'pan'; pointerId: number; last: Point }
+  | { kind: 'pan'; pointerId: number; last: Point; origin: Point }
   | { kind: 'marquee'; pointerId: number; origin: Point; additive: boolean }
   | { kind: 'draw'; pointerId: number; origin: Point; element: BoardElement; moved: boolean }
   | {
@@ -254,7 +255,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     const beginPan = (event: PointerEvent) => {
       host.setPointerCapture(event.pointerId);
-      drag = { kind: 'pan', pointerId: event.pointerId, last: local(event) };
+      const at = local(event);
+      drag = { kind: 'pan', pointerId: event.pointerId, last: at, origin: at };
       useBoardStore.getState().setPanning(true);
       setCursor('grabbing');
     };
@@ -574,6 +576,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (tool === 'laser') {
         host.setPointerCapture(event.pointerId);
         drag = { kind: 'laser', pointerId: event.pointerId };
+        startLaserMark();
         addLaserPoint(board(event), true);
         return;
       }
@@ -1000,6 +1003,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     const finishDrag = () => {
       const store = useBoardStore.getState();
+      // Letting go of the laser ends its mark: the pointer moving on is a new one.
+      if (drag.kind === 'laser') startLaserMark();
 
       if (drag.kind === 'textbox') {
         store.setMarquee(null);
@@ -1116,7 +1121,11 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         store.setMarquee(null);
       }
 
-      if (drag.kind === 'pan') store.setPanning(false);
+      if (drag.kind === 'pan') {
+        store.setPanning(false);
+        // Presenting, the slide at its own size: a swipe across goes to the next slide.
+        swipeSlides(drag.last.x - drag.origin.x, drag.last.y - drag.origin.y);
+      }
       if (drag.kind === 'move') store.setSnapFeedback([], []);
       if (drag.kind === 'rotate') store.setRotationReadout(null);
 

@@ -111,7 +111,11 @@ export interface PresenceState {
   /** What this person can see: the top-left corner, zoom, and the size of the stage. */
   view: { x: number; y: number; zoom: number; width: number; height: number };
   /** Laser points with their age in milliseconds when sent. */
-  laser: { points: Array<{ x: number; y: number; age: number }>; lifetimeMs: number } | null;
+  laser: {
+    /** `m`: which mark (one press of the laser) the point belongs to. */
+    points: Array<{ x: number; y: number; age: number; m?: number }>;
+    lifetimeMs: number;
+  } | null;
   /** Cursor chat: what they are typing right now, if anything. */
   chat: string | null;
   /** Asking everyone to follow along. */

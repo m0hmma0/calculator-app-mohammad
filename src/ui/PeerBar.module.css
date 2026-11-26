@@ -290,7 +290,7 @@
 }
 
 /* In the pane down the right: the people in a column, their cards opening to its left. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .bar {
     flex-direction: column;
     align-items: stretch;

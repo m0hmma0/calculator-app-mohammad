@@ -290,7 +290,9 @@ Two things deliberately stay **out** of the shared document:
 
 - **The camera.** Where you are looking is personal; putting it in the document would
   drag collaborators around after each other. It goes in `localStorage`.
-- **The laser trail.** Ephemeral by definition — never saved, never undoable.
+- **The laser trail.** Ephemeral by definition — never saved, never undoable. A mark
+  drawn with it lasts a second and a half; each press starts a mark of its own
+  (`mark` on each point), and a new slide clears it on every screen.
 
 Boards persist to IndexedDB, so the app keeps working with the network down. It has no
 service worker yet, so a _reload_ while offline will not load the app itself; that
@@ -345,9 +347,10 @@ every sharing change.
 ## Workshop tools and rich content
 
 Every control for the board is in one place (`src/ui/BoardControls.tsx`): a pane down
-the right-hand side on a wide, landscape screen — `(min-width: 900px) and
-(orientation: landscape)`, the one query the layout's stylesheets share — and a bar
-along the top otherwise. Nothing sits at the bottom of the board. On a phone the bar
+the right-hand side on a wide, landscape screen — `(min-width: 900px) and (min-height:
+520px) and (orientation: landscape)`, the one query the layout's stylesheets share (a
+phone on its side is too short for it, since 20 November) — and a bar along the top
+otherwise. While presenting, the bar is one row: its buttons shrink, then it scrolls. Nothing sits at the bottom of the board. On a phone the bar
 is two rows at most: groups give way so items wrap one by one, and only if two rows
 still cannot hold them do the buttons shrink, a step at a time. It holds the way back
 and the board's name, undo and redo, the everyday tools (select, hand, pen,

@@ -1,10 +1,12 @@
 import { create } from 'zustand';
-import { centerOn, fitToRect } from '@/canvas/viewport';
+import { clearLaser } from '@/laser/laserTrail';
+import { centerOn, fitToRect, type Size, type Viewport } from '@/canvas/viewport';
+import type { Rect } from '@/geometry';
 import { usePresence } from '@/collab/presence';
 import { selectionAABB } from '@/model/bounds';
 import type { BoardElement } from '@/model/element';
 import { keysBetween } from '@/model/zorder';
-import { useBoardStore } from '@/state/boardStore';
+import { setViewportGuard, useBoardStore } from '@/state/boardStore';
 import { closeAudienceWindow, openAudienceWindow } from './audience';
 
 /** Margin around a frame in presentation, in screen pixels. */
@@ -150,27 +152,88 @@ export function renumberFrame(frameId: string, number: number): void {
   store.applyDiscrete(slidePatches(order));
 }
 
-function show(frameId: string | null) {
-  const store = useBoardStore.getState();
-  const frame = store.elements.find((element) => element.id === frameId);
-  usePresentation.setState({ frame: frame?.id ?? null });
-  usePresence.setState({ present: frame ? { frame: frame.id } : null });
-  if (!frame) return;
-  // In presenter view the notes take the bottom of the stage; the slide fits above.
-  const presenterView = usePresentation.getState().audience;
-  const inset = presenterView ? usePresentation.getState().notesInset : 0;
-  const size = { width: store.stageSize.width, height: store.stageSize.height - inset };
-  if (!presenterView) {
-    store.setViewport(fitToRect(frame, size, PRESENT_PADDING));
-    return;
-  }
+/** The part of the stage the slide is shown in: all of it, less presenter view's notes. */
+function slideArea(): Size {
+  const { stageSize } = useBoardStore.getState();
+  const { audience, notesInset } = usePresentation.getState();
+  return { width: stageSize.width, height: stageSize.height - (audience ? notesInset : 0) };
+}
+
+/** The view that shows the whole frame: the slide at its own size. */
+function fittedView(frame: Rect): Viewport {
+  const size = slideArea();
+  if (!usePresentation.getState().audience) return fitToRect(frame, size, PRESENT_PADDING);
   // In presenter view the big previous and next buttons sit either side: the slide
   // fits between them, centred.
   const room = { width: Math.max(1, size.width - 2 * ARROW_ROOM), height: size.height };
   const { zoom } = fitToRect(frame, room, PRESENT_PADDING);
-  store.setViewport(
-    centerOn({ x: 0, y: 0, zoom }, size, { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 }),
-  );
+  return centerOn({ x: 0, y: 0, zoom }, size, {
+    x: frame.x + frame.w / 2,
+    y: frame.y + frame.h / 2,
+  });
+}
+
+/**
+ * Where a view may go while a slide is on show (asked for on 20 November): never
+ * smaller than the slide's own size, which shows it whole and centred; zoomed in, only
+ * as far as the slide's edges — a side narrower than the screen stays centred.
+ */
+export function keepOnSlide(view: Viewport, frame: Rect, fitted: Viewport, size: Size): Viewport {
+  if (view.zoom <= fitted.zoom * 1.0001) return fitted;
+  const axis = (start: number, length: number, from: number, visible: number) =>
+    length <= visible
+      ? start + length / 2 - visible / 2
+      : Math.min(start + length - visible, Math.max(start, from));
+  return {
+    zoom: view.zoom,
+    x: axis(frame.x, frame.w, view.x, size.width / view.zoom),
+    y: axis(frame.y, frame.h, view.y, size.height / view.zoom),
+  };
+}
+
+/** The frame on show, while this window presents. */
+function presentedFrame(): BoardElement | null {
+  const { presenting, frame } = usePresentation.getState();
+  if (!presenting || !frame) return null;
+  return useBoardStore.getState().elements.find((element) => element.id === frame) ?? null;
+}
+
+const guardSlide = (view: Viewport): Viewport => {
+  const frame = presentedFrame();
+  return frame ? keepOnSlide(view, frame, fittedView(frame), slideArea()) : view;
+};
+
+/** True when the slide on show is at its own size, not zoomed into. */
+function atSlideSize(): boolean {
+  const frame = presentedFrame();
+  if (!frame) return false;
+  return useBoardStore.getState().viewport.zoom <= fittedView(frame).zoom * 1.0001;
+}
+
+/** A drag at least this far across, and mostly across, is a swipe to the next slide. */
+const SWIPE_PX = 50;
+
+/**
+ * A drag with the hand while presenting, when it ends: at the slide's own size, a
+ * swipe left goes on and a swipe right goes back. True if it moved the slides.
+ */
+export function swipeSlides(dx: number, dy: number): boolean {
+  if (!atSlideSize()) return false;
+  if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return false;
+  stepPresentation(dx < 0 ? 1 : -1);
+  return true;
+}
+
+function show(frameId: string | null) {
+  const store = useBoardStore.getState();
+  const frame = store.elements.find((element) => element.id === frameId);
+  // A new slide starts clean: no laser left from the last one (the room and the
+  // audience window hear the trail is gone, so every screen clears).
+  if ((frame?.id ?? null) !== usePresentation.getState().frame) clearLaser();
+  usePresentation.setState({ frame: frame?.id ?? null });
+  usePresence.setState({ present: frame ? { frame: frame.id } : null });
+  if (!frame) return;
+  store.setViewport(fittedView(frame));
 }
 
 let stopWatching: (() => void) | null = null;
@@ -189,6 +252,7 @@ export function startPresentation(): boolean {
   usePresence.setState({ spotlight: true, following: null });
   useBoardStore.getState().clearSelection();
   usePresentation.setState({ presenting: true });
+  setViewportGuard(guardSlide);
   show(first.id);
   // The chrome goes away, so the stage grows; the frame is refitted to the new size.
   const stopStage = useBoardStore.subscribe((state, previous) => {
@@ -212,6 +276,7 @@ export function stopPresentation(): void {
   closeAudienceWindow();
   stopWatching?.();
   stopWatching = null;
+  setViewportGuard(null);
   delete document.documentElement.dataset.presenting;
   usePresentation.setState({ presenting: false, frame: null });
   usePresence.setState({ spotlight: false, present: null });

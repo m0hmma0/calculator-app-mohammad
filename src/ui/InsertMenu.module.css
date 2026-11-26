@@ -322,7 +322,7 @@
  * In the pane down the right: the button spans the pane, and its menu opens to the
  * left of the pane, from the top of the screen, so it is never cut off below.
  */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .trigger {
     width: 100%;
     justify-content: center;

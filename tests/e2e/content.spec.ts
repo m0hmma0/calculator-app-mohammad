@@ -253,10 +253,28 @@ test.describe('laser pointer', () => {
     // …it creates no element…
     expect(await layerNames(page)).toHaveLength(0);
 
-    // …and it is gone on its own within the ink lifetime.
+    // …and it is gone on its own within the ink lifetime: a second and a half (it was
+    // five until 20 November).
     await expect
-      .poll(() => inkFraction(page, { x: 400, y: 380, w: 240, h: 40 }), { timeout: 9000 })
+      .poll(() => inkFraction(page, { x: 400, y: 380, w: 240, h: 40 }), { timeout: 2200 })
       .toBeLessThan(0.002);
+  });
+
+  test('each press is a mark of its own, never joined to the one before', async ({ page }) => {
+    await page.keyboard.press('KeyK');
+    await page.mouse.move(300, 300);
+    await page.mouse.down();
+    await page.mouse.move(400, 300, { steps: 8 });
+    await page.mouse.up();
+    // Straight to the next mark, before the first has faded.
+    await page.mouse.move(700, 500);
+    await page.mouse.down();
+    await page.mouse.move(800, 500, { steps: 8 });
+    // Both marks are there, and nothing runs between them.
+    expect(await inkFraction(page, { x: 300, y: 285, w: 100, h: 30 })).toBeGreaterThan(0.01);
+    expect(await inkFraction(page, { x: 700, y: 485, w: 100, h: 30 })).toBeGreaterThan(0.01);
+    expect(await inkFraction(page, { x: 520, y: 380, w: 60, h: 40 })).toBeLessThan(0.001);
+    await page.mouse.up();
   });
 
   test('survives a reload with no trace, because it was never stored', async ({ page }) => {

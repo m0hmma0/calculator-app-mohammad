@@ -431,7 +431,8 @@ export const useBoardStore = create<BoardState>((set, get) => {
       bump({ croppingId: null });
     },
 
-    setViewport: (viewport) => {
+    setViewport: (wanted) => {
+      const viewport = guarded(wanted);
       if (viewportsEqual(get().viewport, viewport)) return;
       set({ viewport });
     },
@@ -444,32 +445,32 @@ export const useBoardStore = create<BoardState>((set, get) => {
       if (openFit.waitingForSize) fitOnOpen();
     },
 
-    panBy: (dx, dy) => set({ viewport: panByScreen(get().viewport, dx, dy) }),
+    panBy: (dx, dy) => set({ viewport: guarded(panByScreen(get().viewport, dx, dy)) }),
 
     zoomByAt: (screenPoint, factor) => {
       const { viewport } = get();
-      set({ viewport: zoomAt(viewport, screenPoint, viewport.zoom * factor) });
+      set({ viewport: guarded(zoomAt(viewport, screenPoint, viewport.zoom * factor)) });
     },
 
     zoomStep: (direction) => {
       const { viewport, stageSize } = get();
       const next = direction > 0 ? viewport.zoom * ZOOM_STEP : viewport.zoom / ZOOM_STEP;
-      set({ viewport: zoomAtCenter(viewport, stageSize, next) });
+      set({ viewport: guarded(zoomAtCenter(viewport, stageSize, next)) });
     },
 
     zoomTo100: () => {
       const { viewport, stageSize } = get();
-      set({ viewport: zoomAtCenter(viewport, stageSize, 1) });
+      set({ viewport: guarded(zoomAtCenter(viewport, stageSize, 1)) });
     },
 
     zoomToFit: () => {
       const { elements, stageSize } = get();
       const bounds = unionRects(elements.map(elementAABB));
       if (!bounds) {
-        set({ viewport: { x: -stageSize.width / 2, y: -stageSize.height / 2, zoom: 1 } });
+        set({ viewport: guarded({ x: -stageSize.width / 2, y: -stageSize.height / 2, zoom: 1 }) });
         return;
       }
-      set({ viewport: fitToRect(bounds, stageSize) });
+      set({ viewport: guarded(fitToRect(bounds, stageSize)) });
     },
 
     zoomToSelection: () => {
@@ -479,7 +480,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
         return;
       }
       const bounds = selectionAABB(chosen);
-      if (bounds) set({ viewport: fitToRect(bounds, get().stageSize) });
+      if (bounds) set({ viewport: guarded(fitToRect(bounds, get().stageSize)) });
     },
 
     // Someone who may only view keeps the tools that change nothing.
@@ -1186,6 +1187,23 @@ function expectFitOnOpen(): void {
 }
 
 /** Fits the view to everything on the board, if it has anything and nobody has moved. */
+let viewportGuard: ((viewport: Viewport) => Viewport) | null = null;
+const guarded = (viewport: Viewport): Viewport =>
+  viewportGuard ? viewportGuard(viewport) : viewport;
+
+/**
+ * Bounds every change of view while it is set: presenting keeps the view on the slide
+ * (`keepOnSlide`). Null lets the view go anywhere again.
+ */
+export function setViewportGuard(guard: ((viewport: Viewport) => Viewport) | null): void {
+  viewportGuard = guard;
+  if (guard) {
+    const { viewport } = useBoardStore.getState();
+    const next = guard(viewport);
+    if (!viewportsEqual(viewport, next)) useBoardStore.setState({ viewport: next });
+  }
+}
+
 /**
  * A board that still has pages from before they were removed keeps its first; done
  * by someone who may edit (the board is not read-only), once the board's content is in (stored, or the room's).

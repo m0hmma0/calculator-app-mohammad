@@ -22,6 +22,7 @@ import { linkLabel, normaliseLink } from '@/text/marks';
 import { LinkField, LinkIcon } from './LinkField';
 import { HIGHLIGHTS, TEXT_COLOURS } from './palettes';
 import { ToolOptions } from './ToolOptions';
+import { FrameSizePicker } from './FrameSizePicker';
 import { TransitionPicker } from './TransitionPicker';
 import styles from './Inspector.module.css';
 
@@ -199,7 +200,10 @@ export function Inspector() {
           ) : null}
 
           {selected.every((element) => element.type === 'frame') ? (
-            <TransitionPicker frames={selected} />
+            <>
+              <FrameSizePicker frames={selected} />
+              <TransitionPicker frames={selected} />
+            </>
           ) : null}
 
           {first.type === 'code' && selected.length === 1 ? (

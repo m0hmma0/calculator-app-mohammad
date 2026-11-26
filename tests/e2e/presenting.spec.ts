@@ -188,6 +188,150 @@ test.describe('presenting', () => {
   });
 });
 
+/** The selection's place and size, as the side panel reads it. */
+async function geometry(page: Page) {
+  const read = async (id: string) => Number(await page.getByTestId(id).innerText());
+  return {
+    x: await read('geo-x'),
+    y: await read('geo-y'),
+    w: await read('geo-w'),
+    h: await read('geo-h'),
+  };
+}
+
+/** How much of an area of the canvas over the board (the laser's) has anything on it. */
+async function overFraction(page: Page, area: { x: number; y: number; w: number; h: number }) {
+  return page.evaluate((region) => {
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-over"]')!;
+    const bounds = canvas.getBoundingClientRect();
+    const dpr = canvas.width / bounds.width;
+    const data = canvas
+      .getContext('2d')!
+      .getImageData(
+        Math.round((region.x - bounds.left) * dpr),
+        Math.round((region.y - bounds.top) * dpr),
+        Math.max(1, Math.round(region.w * dpr)),
+        Math.max(1, Math.round(region.h * dpr)),
+      ).data;
+    let painted = 0;
+    for (let index = 3; index < data.length; index += 4) if (data[index]! > 40) painted += 1;
+    return painted / (data.length / 4);
+  }, area);
+}
+
+/** A drag with whatever tool is in hand, from one screen point to another. */
+async function sweep(page: Page, from: [number, number], to: [number, number]) {
+  await page.mouse.move(from[0], from[1]);
+  await page.mouse.down();
+  await page.mouse.move(to[0], to[1], { steps: 8 });
+  await page.mouse.up();
+}
+
+// Asked for on 20 November.
+test.describe('presenting with the hand and the laser', () => {
+  test('the hand swipes between slides, and zoomed in stays inside the slide', async ({ page }) => {
+    await threeFrames(page);
+    await present(page);
+    await page.getByTestId('tool-hand').click();
+    const stage = await stageBox(page);
+    const middle: [number, number] = [stage.x + stage.width / 2, stage.y + stage.height / 2];
+    const edges = [
+      { x: stage.x, y: stage.y, w: 14, h: stage.height },
+      { x: stage.x + stage.width - 14, y: stage.y, w: 14, h: stage.height },
+    ];
+
+    // At the slide's own size, a swipe left goes on, a swipe right goes back…
+    await sweep(page, middle, [middle[0] - 300, middle[1] + 10]);
+    await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
+    await sweep(page, middle, [middle[0] + 300, middle[1] - 10]);
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+    // …and a short drag, or one up and down, does neither and leaves the slide put.
+    await sweep(page, middle, [middle[0] - 20, middle[1]]);
+    await sweep(page, middle, [middle[0] + 40, middle[1] + 300]);
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+    for (const edge of edges) {
+      expect(await colourFraction(page, SURROUND, edge)).toBeGreaterThan(0.99);
+    }
+
+    // Zoomed in, the hand moves about the slide, but no further than its edges: the
+    // surround never comes into view, however far it is dragged.
+    for (let step = 0; step < 4; step += 1) await page.keyboard.press('Equal');
+    const whole = { x: stage.x, y: stage.y, w: stage.width, h: stage.height };
+    await expect.poll(() => colourFraction(page, SURROUND, whole)).toBeLessThan(0.01);
+    await sweep(page, [middle[0] - 400, middle[1] - 200], [middle[0] + 400, middle[1] + 250]);
+    await sweep(page, [middle[0] - 400, middle[1] - 200], [middle[0] + 400, middle[1] + 250]);
+    expect(await colourFraction(page, SURROUND, whole)).toBeLessThan(0.01);
+    await sweep(page, [middle[0] + 400, middle[1] + 250], [middle[0] - 400, middle[1] - 200]);
+    await sweep(page, [middle[0] + 400, middle[1] + 250], [middle[0] - 400, middle[1] - 200]);
+    expect(await colourFraction(page, SURROUND, whole)).toBeLessThan(0.01);
+    // A swipe while zoomed in moves about the slide, not to the next one.
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+
+    // Zooming out stops at the slide's own size, whole and centred again.
+    for (let step = 0; step < 8; step += 1) await page.keyboard.press('Minus');
+    for (const edge of edges) {
+      await expect.poll(() => colourFraction(page, SURROUND, edge)).toBeGreaterThan(0.99);
+    }
+    const centre = { x: middle[0] - 100, y: middle[1] - 60, w: 200, h: 120 };
+    expect(await colourFraction(page, SURROUND, centre)).toBeLessThan(0.01);
+  });
+
+  test('a new slide clears the laser at once', async ({ page }) => {
+    await threeFrames(page);
+    await present(page);
+    await page.getByTestId('tool-laser').click();
+    const stage = await stageBox(page);
+    const y = stage.y + stage.height / 2;
+    const area = { x: stage.x + 300, y: y - 30, w: 400, h: 60 };
+    // Drawing, and still holding the laser down, so the mark is fresh throughout.
+    await page.mouse.move(stage.x + 320, y);
+    await page.mouse.down();
+    await page.mouse.move(stage.x + 680, y, { steps: 8 });
+    expect(await overFraction(page, area)).toBeGreaterThan(0.01);
+    // On to the next slide and straight back: the mark is gone, though it would have
+    // stayed for a second and a half.
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+    // Once the board has redrawn (for a moment between, the canvas is blank anyway).
+    await page.waitForTimeout(200);
+    expect(await overFraction(page, area)).toBe(0);
+    await page.mouse.up();
+  });
+
+  test('a selected frame takes a shape that fills a phone or a laptop', async ({ page }) => {
+    await threeFrames(page);
+    // The first frame (the object list shows the newest at the top).
+    await layerItems(page).nth(2).click();
+    await expect(page.getByTestId('frame-sizes')).toBeVisible();
+    const before = await geometry(page);
+    const ratio = async () => {
+      const now = await geometry(page);
+      return now.w / now.h;
+    };
+    await page.getByTestId('frame-size-phone-portrait').click();
+    await expect.poll(ratio).toBeCloseTo(9 / 19.5, 2);
+    await expect(page.getByTestId('frame-size-phone-portrait')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // The same corner, and about the same size.
+    const portrait = await geometry(page);
+    expect(portrait.x).toBe(before.x);
+    expect(portrait.y).toBe(before.y);
+    expect(portrait.w * portrait.h).toBeGreaterThan(before.w * before.h * 0.95);
+    expect(portrait.w * portrait.h).toBeLessThan(before.w * before.h * 1.05);
+
+    await page.getByTestId('frame-size-laptop').click();
+    await expect.poll(ratio).toBeCloseTo(16 / 9, 2);
+    await page.getByTestId('frame-size-phone-landscape').click();
+    await expect.poll(ratio).toBeCloseTo(19.5 / 9, 2);
+    // This screen: the browser's screen, 1280 by 720 here.
+    await page.getByTestId('frame-size-screen').click();
+    await expect.poll(ratio).toBeCloseTo(1280 / 720, 2);
+  });
+});
+
 test.describe('numbered frames', () => {
   test('"Number frames automatically" gives every frame its place back, in one undo step', async ({
     page,

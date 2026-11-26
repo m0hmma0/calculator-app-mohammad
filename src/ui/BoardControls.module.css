@@ -10,7 +10,7 @@
  * The board's controls. A bar along the top by default — a tablet held upright, a
  * narrow window, a phone — and a pane down the right-hand side on a wide, landscape
  * screen (the second half of this file). The query is the same everywhere the
- * layout depends on it: (min-width: 900px) and (orientation: landscape).
+ * layout depends on it: (min-width: 900px) and (min-height: 520px) and (orientation: landscape).
  */
 .controls {
   /* Every button in the controls is this size; a phone squeezes it to fit. */
@@ -171,8 +171,28 @@ button.name:hover {
   }
 }
 
+/*
+ * Presenting, the bar is one row whatever the screen (asked for on 20 November): the
+ * buttons shrink first (data-squeeze), and if one row still cannot hold them it
+ * scrolls sideways rather than wrapping.
+ */
+.controls[data-presenting] {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: safe center;
+  scrollbar-width: none;
+}
+
+.controls[data-presenting]::-webkit-scrollbar {
+  display: none;
+}
+
+.controls[data-presenting] > * {
+  flex-shrink: 0;
+}
+
 /* ---- A wide, landscape screen: a pane down the right-hand side ---- */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .shell {
     flex-direction: row-reverse;
   }
@@ -244,7 +264,7 @@ button.name:hover {
 }
 
 /* A short landscape screen: smaller buttons, so the pane still fits. */
-@media (min-width: 900px) and (orientation: landscape) and (max-height: 700px) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) and (max-height: 700px) {
   .controls {
     --btn: 28px;
     gap: 6px;

@@ -40,7 +40,7 @@ body {
   --pane-w: 0px;
 }
 
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   :root {
     --pane-w: 112px;
     --topbar-h: 0px;

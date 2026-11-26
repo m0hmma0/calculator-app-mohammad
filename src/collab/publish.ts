@@ -35,6 +35,7 @@ function currentPresence(): PresenceState {
               x: point.x,
               y: point.y,
               age: Math.round(now - point.at),
+              m: point.mark,
             })),
           }
         : null,

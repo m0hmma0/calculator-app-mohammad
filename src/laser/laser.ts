@@ -2,6 +2,11 @@ import type { Point } from '@/geometry';
 
 export interface LaserPoint extends Point {
   at: number;
+  /**
+   * Which mark it belongs to: each press of the laser starts a new one, and so does
+   * letting go, so a mark is never joined to the one before it. Absent counts as 0.
+   */
+  mark?: number;
 }
 
 /**
@@ -10,7 +15,25 @@ export interface LaserPoint extends Point {
  * then dissolves on its own. Neither is ever written to the document.
  */
 export const MOVE_TRAIL_MS = 900;
-export const INK_TRAIL_MS = 5000;
+/** Long enough to point at something while saying it (20 November: was 5 seconds). */
+export const INK_TRAIL_MS = 1500;
+
+/** The points split into their marks, in order, each to be drawn on its own. */
+export function laserMarks<T extends { mark?: number }>(points: readonly T[]): T[][] {
+  const marks: T[][] = [];
+  let current: T[] = [];
+  let mark: number | undefined;
+  for (const point of points) {
+    if (current.length > 0 && (point.mark ?? 0) !== mark) {
+      marks.push(current);
+      current = [];
+    }
+    mark = point.mark ?? 0;
+    current.push(point);
+  }
+  if (current.length > 0) marks.push(current);
+  return marks;
+}
 
 export interface TrailOptions {
   now: number;

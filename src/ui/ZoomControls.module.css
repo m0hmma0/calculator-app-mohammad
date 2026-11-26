@@ -63,7 +63,7 @@
 }
 
 /* In the pane down the right: out, the zoom and in, across its width. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .embedded {
     justify-content: space-between;
     gap: 0;

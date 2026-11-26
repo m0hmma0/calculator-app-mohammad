@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
 import { usePresence } from '@/collab/presence';
+import type { LaserPoint } from '@/laser/laser';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
 import { useEmbeds } from '@/state/embedStore';
@@ -25,6 +26,7 @@ export interface SentPoint {
   x: number;
   y: number;
   age: number;
+  mark?: number;
 }
 
 export interface SentTrail {
@@ -244,8 +246,13 @@ function feed(channel: BroadcastChannel, opened: Window): () => void {
     const now = performance.now();
     const own = laserSnapshot(now);
     const trails: SentTrail[] = [];
-    const toSent = (points: readonly { x: number; y: number; at: number }[]) =>
-      points.map((point) => ({ x: point.x, y: point.y, age: Math.round(now - point.at) }));
+    const toSent = (points: readonly LaserPoint[]) =>
+      points.map((point) => ({
+        x: point.x,
+        y: point.y,
+        age: Math.round(now - point.at),
+        mark: point.mark,
+      }));
     if (own.points.length > 0) {
       trails.push({ points: toSent(own.points), lifetimeMs: own.lifetimeMs });
     }

@@ -155,7 +155,29 @@ export function makePlayer(
         vy: number;
         spin: number;
         delay: number;
+        /** The shard cut out of the old slide once, ahead, and where it sits. */
+        piece: HTMLCanvasElement;
+        left: number;
+        top: number;
       }> = [];
+      // Cutting each shard out once, rather than drawing the whole old slide through
+      // a clip for every shard on every frame, is what lets a phone play it smoothly.
+      const cut = (triangle: Array<{ x: number; y: number }>) => {
+        const left = Math.floor(Math.min(...triangle.map((point) => point.x)));
+        const top = Math.floor(Math.min(...triangle.map((point) => point.y)));
+        const right = Math.ceil(Math.max(...triangle.map((point) => point.x)));
+        const bottom = Math.ceil(Math.max(...triangle.map((point) => point.y)));
+        const piece = canvasOf(right - left, bottom - top);
+        const pieceContext = piece.getContext('2d')!;
+        pieceContext.beginPath();
+        pieceContext.moveTo(triangle[0]!.x - left, triangle[0]!.y - top);
+        pieceContext.lineTo(triangle[1]!.x - left, triangle[1]!.y - top);
+        pieceContext.lineTo(triangle[2]!.x - left, triangle[2]!.y - top);
+        pieceContext.closePath();
+        pieceContext.clip();
+        pieceContext.drawImage(from, -left, -top);
+        return { piece, left, top };
+      };
       for (let r = 0; r < rows; r += 1) {
         for (let c = 0; c < cols; c += 1) {
           const a = points[r]![c]!;
@@ -184,6 +206,7 @@ export function makePlayer(
               vy: Math.sin(away) * speed - random() * reach * 0.15,
               spin: (random() - 0.5) * 6,
               delay: distance * 0.35,
+              ...cut(triangle),
             });
           }
         }
@@ -212,8 +235,7 @@ export function makePlayer(
             ctx.lineTo(shard.triangle[1]!.x, shard.triangle[1]!.y);
             ctx.lineTo(shard.triangle[2]!.x, shard.triangle[2]!.y);
             ctx.closePath();
-            ctx.clip();
-            ctx.drawImage(from, 0, 0);
+            ctx.drawImage(shard.piece, shard.left, shard.top);
             // A glint along each crack.
             ctx.strokeStyle = `rgba(255,255,255,${0.55 * (1 - local)})`;
             ctx.lineWidth = Math.max(1, w / 900);

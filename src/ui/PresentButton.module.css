@@ -33,7 +33,7 @@
 }
 
 /* In the pane down the right: the pane's whole width, the words wrapping if they must. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .present {
     height: auto;
     min-height: var(--btn, 32px);

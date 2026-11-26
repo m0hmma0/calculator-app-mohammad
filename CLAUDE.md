@@ -31,7 +31,7 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a** (built), **17b** and **17c**, then keyboard use (the old 17, now **17d**). Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a** and **17b** (built) and **17c**, then keyboard use (the old 17, now **17d**). Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -313,6 +313,24 @@ where the page tabs were and keeps the test id `present-start`; Insert has neith
 nor Presenter view, which opens from the slide controls (`presenter-view`). The
 spotlight button reads "Follow me" / "Stop follow me".
 
+Phase 17b (20 November): presenting on a phone, the hand and the laser. While a slide
+is on show, every change of view goes through `setViewportGuard(guardSlide)` in the
+store (set at `startPresentation`, cleared at stop): `keepOnSlide` never lets the zoom
+go below the slide's fitted size (`fittedView`, which `show` also uses) and, zoomed in,
+keeps the view inside the frame (a side narrower than the screen stays centred). A
+hand drag that ends at the fitted size calls `swipeSlides` (50 px, mostly across).
+Laser points carry `mark` (a press starts one, a release ends it; `laserMarks` splits
+them, `renderLaser` draws each alone), sent as `m` in presence and `mark` to the
+audience window; `INK_TRAIL_MS` is 1500; `show` clears the laser when the frame
+changes. Transitions are drawn at `TRANSITION_DENSITY` (1.25 picture pixels to a screen
+pixel) and shatter cuts its shards once, ahead: at a 6× slower CPU, 14–45 frames per
+effect instead of 5–24. `FrameSizePicker` (side panel, frames): This screen,
+phones both ways (19.5:9), laptops 16:9 and 16:10, keeping the corner and the area
+(`src/workshop/frameSizes.ts`). The presenting bar is one row (`data-presenting`:
+nowrap, scrolls; the squeeze aims for one row by overflow); along the bottom of a
+phone the slide bar takes the width with 48 px arrows. The browser's own "drag from
+the top to exit full screen" notice cannot be changed by a page.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.
@@ -496,8 +514,9 @@ wrangler dev exited`), so only the tests caught at that moment fail and CI retri
 - **The controls are a pane on the right at Playwright's default 1280×720** (wide and
   landscape), 112 px wide, so the board ends at x = 1168 and starts at y = 0. A test
   of the bar along the top sets a tall viewport. The layout is decided by one media
-  query, `(min-width: 900px) and (orientation: landscape)`, repeated in each
-  stylesheet that depends on it; `--pane-w` (global.css) is the pane's width there.
+  query, `(min-width: 900px) and (min-height: 520px) and (orientation: landscape)`,
+  repeated in each stylesheet that depends on it; `--pane-w` (global.css) is the
+  pane's width there. A phone on its side (under 520 px tall) gets the bar since 17b.
 - **A board opens fitted to its contents** (`fitOnOpen`), not where its camera was
   left — but only if it has contents, so a test drawing on a fresh board in two
   windows still sees the same coordinates in both.

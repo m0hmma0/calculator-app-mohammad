@@ -55,7 +55,7 @@
 }
 
 /* In the pane down the right: undo and redo side by side, the tools two by two. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .wrap {
     flex-direction: column;
     align-items: stretch;

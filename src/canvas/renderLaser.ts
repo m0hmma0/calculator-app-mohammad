@@ -1,5 +1,5 @@
 import getStroke from 'perfect-freehand';
-import { trailOpacity, type LaserPoint } from '@/laser/laser';
+import { laserMarks, trailOpacity, type LaserPoint } from '@/laser/laser';
 import { boardToScreen, type Viewport } from './viewport';
 import type { CanvasColors } from './theme';
 
@@ -25,6 +25,17 @@ export function renderLaser(
 ): void {
   const options = { now, lifetimeMs };
   const live = points.filter((point) => trailOpacity(point, options) > 0.01);
+  // Each press of the laser is a mark of its own, never joined to the one before.
+  for (const mark of laserMarks(live)) renderMark(ctx, vp, mark, options, color);
+}
+
+function renderMark(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  live: readonly LaserPoint[],
+  options: { now: number; lifetimeMs: number },
+  color: string,
+): void {
   if (live.length < 2) return;
 
   // Pressure carries the taper: the newest point is full width, older ones thinner.

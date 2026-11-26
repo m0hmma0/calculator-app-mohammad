@@ -64,7 +64,7 @@
 }
 
 /* In the pane down the right: the way back and Share span the pane. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 520px) and (orientation: landscape) {
   .back {
     text-align: center;
     padding: 4px 6px;

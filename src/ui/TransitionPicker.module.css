@@ -59,3 +59,31 @@
 .tile[aria-checked='true'] .name {
   color: var(--accent);
 }
+
+/* Frame sizes: a row of plain choices that wraps. */
+.sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.size {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.size:hover {
+  border-color: var(--text-muted);
+}
+
+.size[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}

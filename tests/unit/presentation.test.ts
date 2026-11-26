@@ -6,6 +6,7 @@ import {
   hasFrameNumbers,
   selectedFrame,
   slidePatches,
+  keepOnSlide,
 } from '@/workshop/presentation';
 
 const frame = (id: string, x: number, y: number, w = 200, h = 140): BoardElement =>
@@ -114,5 +115,43 @@ describe('where presenting starts', () => {
     expect(hasFrameNumbers(board)).toBe(false);
     expect(hasFrameNumbers([...board, { ...frame('n', 600, 0), slide: 'a0' }])).toBe(true);
     expect(hasFrameNumbers([{ ...frame('n', 600, 0), slide: null }])).toBe(false);
+  });
+});
+
+describe('the view while a slide is on show', () => {
+  const frame = { x: 0, y: 0, w: 1600, h: 900 };
+  const size = { width: 800, height: 600 };
+  // The whole slide, centred: 0.5 fits its width.
+  const fitted = { x: 0, y: -150, zoom: 0.5 };
+
+  it('never goes smaller than the slide, and at its size shows it whole', () => {
+    expect(keepOnSlide({ x: 500, y: 500, zoom: 0.2 }, frame, fitted, size)).toEqual(fitted);
+    expect(keepOnSlide({ x: -300, y: 40, zoom: 0.5 }, frame, fitted, size)).toEqual(fitted);
+  });
+
+  it('zoomed in, moves inside the slide but never past its edges', () => {
+    // At 1×, 800×600 of the slide shows: x may run 0..800, y 0..300.
+    expect(keepOnSlide({ x: 200, y: 100, zoom: 1 }, frame, fitted, size)).toEqual({
+      x: 200,
+      y: 100,
+      zoom: 1,
+    });
+    expect(keepOnSlide({ x: -500, y: 9000, zoom: 1 }, frame, fitted, size)).toEqual({
+      x: 0,
+      y: 300,
+      zoom: 1,
+    });
+    expect(keepOnSlide({ x: 5000, y: -20, zoom: 1 }, frame, fitted, size)).toEqual({
+      x: 800,
+      y: 0,
+      zoom: 1,
+    });
+  });
+
+  it('keeps a side that still fits centred', () => {
+    // At 0.6× the slide is 960 wide (more than the screen) but 540 high (less).
+    const view = keepOnSlide({ x: 100, y: -400, zoom: 0.6 }, frame, fitted, size);
+    expect(view.x).toBe(100);
+    expect(view.y).toBeCloseTo(450 - 600 / 0.6 / 2, 6);
   });
 });

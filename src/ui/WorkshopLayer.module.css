@@ -219,6 +219,47 @@
   padding: 4px 8px;
 }
 
+/* Along the bottom, every label on one line. */
+.presentBar button {
+  white-space: nowrap;
+}
+
+/*
+ * A phone (asked for on 20 November): the bar takes the screen's width, and the way
+ * back and on gets the room — big previous and next buttons either side of the count.
+ */
+@media (max-width: 640px), (max-height: 519px) {
+  .presentBar {
+    left: 8px;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    transform: none;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .presentBar .slideSteps {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .presentBar .slideSteps button {
+    flex: 1 1 0;
+    min-width: 52px;
+    height: 48px;
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  .presentBar .exit,
+  .presentBar .viewToggle {
+    flex: none;
+    min-height: 40px;
+    padding: 0 10px;
+  }
+}
+
 /* Presenter view: big previous and next buttons at the slide's sides. */
 .arrows {
   position: absolute;

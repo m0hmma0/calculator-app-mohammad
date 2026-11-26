@@ -13,15 +13,33 @@ const reducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
-function copyOf(canvas: HTMLCanvasElement): HTMLCanvasElement {
+/**
+ * At most this many picture pixels to a screen pixel while a transition plays. A
+ * phone's board has nearly three, so each frame of an effect moved eight or nine
+ * times the pixels it needed and a phone drew only a few frames of it: the slide
+ * seemed to jump (20 November). Motion hides the softness; the slide underneath is
+ * sharp again the moment it ends.
+ */
+const TRANSITION_DENSITY = 1.25;
+
+/** How much smaller than the board's own canvas a transition is drawn. */
+function transitionScale(canvas: HTMLCanvasElement): number {
+  const shown = canvas.getBoundingClientRect().width;
+  if (!(shown > 0)) return 1;
+  return Math.min(1, TRANSITION_DENSITY / (canvas.width / shown));
+}
+
+function copyOf(canvas: HTMLCanvasElement, scale: number): HTMLCanvasElement {
   const copy = document.createElement('canvas');
-  copy.width = canvas.width;
-  copy.height = canvas.height;
+  copy.width = Math.max(1, Math.round(canvas.width * scale));
+  copy.height = Math.max(1, Math.round(canvas.height * scale));
   const ctx = copy.getContext('2d')!;
-  ctx.drawImage(canvas, 0, 0);
+  ctx.drawImage(canvas, 0, 0, copy.width, copy.height);
   // And what is drawn over the web pages, on the canvas above them.
   const over = canvas.parentElement?.querySelector<HTMLCanvasElement>('canvas[data-board-over]');
-  if (over && over !== canvas && over.width === canvas.width) ctx.drawImage(over, 0, 0);
+  if (over && over !== canvas && over.width === canvas.width) {
+    ctx.drawImage(over, 0, 0, copy.width, copy.height);
+  }
   return copy;
 }
 
@@ -58,9 +76,11 @@ export function SlideTransition({ source }: { source: RefObject<HTMLCanvasElemen
       if (!board || !overlay || !isTransition(kind) || kind === 'none') return;
       stop();
       const run = running;
-      const from = copyOf(board);
-      overlay.width = board.width;
-      overlay.height = board.height;
+      const size = { width: board.width, height: board.height };
+      const scale = transitionScale(board);
+      const from = copyOf(board, scale);
+      overlay.width = from.width;
+      overlay.height = from.height;
       overlay.hidden = false;
       const ctx = overlay.getContext('2d')!;
       ctx.drawImage(from, 0, 0);
@@ -74,10 +94,10 @@ export function SlideTransition({ source }: { source: RefObject<HTMLCanvasElemen
           return;
         }
         // The board was resized meanwhile: no transition rather than a torn one.
-        if (board.width !== from.width || board.height !== from.height) return stop();
+        if (board.width !== size.width || board.height !== size.height) return stop();
         let player: Player;
         try {
-          player = makePlayer(kind, from, copyOf(board), arriving, reducedMotion());
+          player = makePlayer(kind, from, copyOf(board, scale), arriving, reducedMotion());
         } catch {
           return stop();
         }

@@ -54,7 +54,8 @@ export function BoardControls({
   const editable = useBoardAccess(selectCanEdit);
   const presenting = usePresentation((state) => state.presenting);
   const ref = useRef<HTMLElement | null>(null);
-  useSqueezeToTwoRows(ref);
+  // Two rows at most on a phone; one while presenting.
+  useSqueezeToRows(ref, presenting ? 1 : 2);
 
   // Presenting keeps what draws on the slide — the tools, Insert, undo and redo —
   // and the way through the slides; everything about the board itself steps aside.
@@ -227,7 +228,7 @@ function FullScreenButton() {
  * On a phone the bar wraps onto a second row before anything gets smaller; only if
  * two rows still cannot hold it do the buttons shrink, a step at a time.
  */
-function useSqueezeToTwoRows(ref: RefObject<HTMLElement | null>) {
+function useSqueezeToRows(ref: RefObject<HTMLElement | null>, rows: number) {
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -238,14 +239,16 @@ function useSqueezeToTwoRows(ref: RefObject<HTMLElement | null>) {
       }
       for (let step = 0; step <= SQUEEZE_STEPS; step += 1) {
         node.setAttribute('data-squeeze', String(step));
-        if (rowsOf(node) <= 2) return;
+        // One row does not wrap (it would scroll), so it fits when nothing overflows.
+        const fits = rows === 1 ? node.scrollWidth <= node.clientWidth + 1 : rowsOf(node) <= rows;
+        if (fits) return;
       }
     };
     fit();
     const observer = new ResizeObserver(() => fit());
     observer.observe(node.parentElement ?? node);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [ref, rows]);
 }
 
 /** How many rows the bar's items have wrapped onto. */

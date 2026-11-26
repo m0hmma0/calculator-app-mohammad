@@ -169,7 +169,12 @@ export function AudienceView({ channelName }: { channelName: string }) {
           trails.current = message.trails.map((trail) => ({
             lifetimeMs: trail.lifetimeMs,
             color: trail.color,
-            points: trail.points.map((point) => ({ x: point.x, y: point.y, at: now - point.age })),
+            points: trail.points.map((point) => ({
+              x: point.x,
+              y: point.y,
+              at: now - point.age,
+              mark: point.mark,
+            })),
           }));
           if (laserFrame === 0) laserFrame = requestAnimationFrame(pumpLaser);
           break;
