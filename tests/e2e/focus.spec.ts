@@ -78,6 +78,8 @@ test('the share dialog: every stop has a ring, and Escape gives the focus back',
   await page.getByTestId('open-share').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('share-dialog')).toBeVisible();
+  // Its controls come once the board's sharing has loaded; tab through them then.
+  await expect(page.getByTestId('link-enabled')).toBeVisible();
   // The dialog has the focus to begin with.
   await expect
     .poll(() =>
