@@ -446,6 +446,9 @@ within it while presenting.
   (`dropExtraPages`, not an undo step; version history still has them). Elements may
   still carry an old `page` field, and the page list is still read, for boards nobody
   has edited since.
+- **Watching full screen.** Everyone following a presentation is offered "Watch full
+  screen": the slide alone, no toolbar or panels, until they press Escape or the
+  presentation ends.
 - **Remote control.** While presenting, Remote control shows a link and a QR code: on a
   phone or in another tab it is presenter view — the slide, the next one, the notes, a
   clock — with big Previous and Next buttons (or a swipe). No sign-in; it works only

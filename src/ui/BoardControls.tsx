@@ -61,7 +61,13 @@ export function BoardControls({
   // and the way through the slides; everything about the board itself steps aside.
   if (presenting) {
     return (
-      <header className={styles.controls} ref={ref} data-testid="controls" data-presenting="true">
+      <header
+        className={styles.controls}
+        ref={ref}
+        data-testid="controls"
+        data-presenting="true"
+        data-watch-hide
+      >
         <SlideControls placement="pane" />
         <ToolBar />
         {editable ? (
@@ -77,7 +83,7 @@ export function BoardControls({
   }
 
   return (
-    <header className={styles.controls} ref={ref} data-testid="controls">
+    <header className={styles.controls} ref={ref} data-testid="controls" data-watch-hide>
       <div className={styles.head}>
         {leading}
         {onRenameBoard ? (

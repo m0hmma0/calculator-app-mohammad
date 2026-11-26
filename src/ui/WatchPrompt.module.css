@@ -1,0 +1,88 @@
+/* A card at the top of a follower's board, out of the slide's way. */
+.prompt {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-size: 13.5px;
+  pointer-events: auto;
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.watch {
+  flex: none;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-2);
+}
+
+/* Watching where the page could not go full screen: a quiet way back. */
+.exit {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 9;
+  padding: 6px 12px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 999px;
+  background: rgb(16 18 23 / 0.6);
+  color: #fff;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* In real full screen there is Escape: no button over the slide. */
+:global(html:fullscreen) .exit {
+  display: none;
+}

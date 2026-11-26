@@ -377,6 +377,16 @@ share dialog and checks every stop has a ring (outline or box-shadow). The comma
 palette's field and cursor chat keep `outline: none` (the caret, and an accent border,
 show their focus).
 
+Watching full screen (26 November, asked for after 17d): someone following a presenter
+gets `WatchPrompt` at the top of their board ("Ana is presenting — Watch full screen",
+`watch-prompt`, `watch-fullscreen`, `watch-dismiss`). Watching (`src/workshop/watching.ts`)
+sets `html[data-watching]` and asks for the browser's full screen (it needs the press);
+CSS hides everything marked `data-watch-hide` (the controls), the stage's
+`data-present-hide` children and the following frame, so the slide is alone. Leaving full
+screen, or the presentation ending, ends it; where a page cannot go full screen (an
+iPhone) a small Exit shows instead. A follower now refits the presenter's frame when its
+own stage changes size (`startFollowing` in publish.ts), which full screen needs.
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

@@ -206,3 +206,14 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/*
+ * Watching a presentation full screen (a follower pressed "Watch full screen"): the
+ * slide alone. The controls (marked data-watch-hide) and everything about the board
+ * step aside, as they do for the presenter, and the thin following frame too.
+ */
+:global(html[data-watching]) [data-watch-hide],
+:global(html[data-watching]) .stage > [data-present-hide],
+:global(html[data-watching]) [data-testid='following-frame'] {
+  display: none !important;
+}

@@ -119,7 +119,7 @@ export function startPresence(room: RoomConnection): PresenceHandle {
 }
 
 /** The session being followed: chosen by clicking an avatar, or a presenter. */
-function leaderSession(presence = usePresence.getState()): string | null {
+export function leaderSession(presence = usePresence.getState()): string | null {
   if (presence.following && presence.peers[presence.following]) return presence.following;
   return presenter(presence)?.session ?? null;
 }
@@ -182,6 +182,11 @@ function startFollowing(): () => void {
   });
 
   const stopBoard = useBoardStore.subscribe((state, previous) => {
+    // This screen changed size (full screen, a phone turned): fit the leader again.
+    if (state.stageSize !== previous.stageSize && applied) {
+      apply();
+      return;
+    }
     if (state.viewport === previous.viewport || !applied) return;
     if (viewportsEqual(state.viewport, applied)) return;
     // The view moved, and not because of the leader: this person took the wheel.

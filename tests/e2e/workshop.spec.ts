@@ -157,6 +157,68 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
   }
 });
 
+// Asked for on 26 November: a follower can watch the presentation full screen, with
+// no toolbar or anything else about the board, and gets the controls back after.
+test('a follower watches full screen: the slide alone, and the controls back after', async ({
+  browser,
+}) => {
+  const { a, b, close } = await twoWindows(browser, 'watch');
+  try {
+    // A wide slide, so its width decides how big it is shown.
+    await drag(a, 'KeyR', [340, 220], [460, 280]);
+    await drag(a, 'KeyF', [100, 200], [700, 300]);
+    await a.keyboard.press('Escape');
+    await expect(layerItems(b)).toHaveCount(2);
+    await expect(b.getByTestId('watch-prompt')).toHaveCount(0);
+
+    await a.getByTestId('present-start').click();
+    const prompt = b.getByTestId('watch-prompt');
+    await expect(prompt).toContainText('is presenting');
+    // Not for the presenter.
+    await expect(a.getByTestId('watch-prompt')).toHaveCount(0);
+
+    await b.getByTestId('watch-fullscreen').click();
+    await expect.poll(() => b.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    // Nothing but the board: no controls, no prompt, and the stage is the whole window.
+    await expect(b.getByTestId('controls')).toBeHidden();
+    await expect(prompt).toHaveCount(0);
+    const size = b.viewportSize()!;
+    const stage = (await b.getByTestId('stage').boundingBox())!;
+    expect(stage.width).toBeCloseTo(size.width, 0);
+    expect(stage.height).toBeCloseTo(size.height, 0);
+    // The slide fills it, refitted to the bigger stage: its sides come out to the
+    // margins, where the controls were.
+    const centre = await stageCentre(b);
+    await expect.poll(() => colourFraction(b, '--shape-1', centre)).toBeGreaterThan(0.9);
+    const near = (x: number) => ({ x, y: size.height / 2 - 5, w: 10, h: 10 });
+    await expect.poll(() => colourFraction(b, '--canvas-bg', near(40))).toBeGreaterThan(0.9);
+    await expect
+      .poll(() => colourFraction(b, '--canvas-bg', near(size.width - 50)))
+      .toBeGreaterThan(0.9);
+
+    // Out of full screen (Escape, or the browser's own way out): the controls come back.
+    await b.evaluate(() => document.exitFullscreen());
+    await expect(b.getByTestId('controls')).toBeVisible();
+    await expect(prompt).toBeVisible();
+
+    // Waved away, the prompt stays away for this presentation.
+    await b.getByTestId('watch-dismiss').click();
+    await expect(prompt).toHaveCount(0);
+
+    // Watching again, then the presenter stops: full screen ends by itself.
+    await a.getByTestId('present-stop').click();
+    await a.getByTestId('present-start').click();
+    await expect(prompt).toBeVisible();
+    await b.getByTestId('watch-fullscreen').click();
+    await expect.poll(() => b.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    await a.getByTestId('present-stop').click();
+    await expect.poll(() => b.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+    await expect(b.getByTestId('controls')).toBeVisible();
+  } finally {
+    await close();
+  }
+});
+
 // Presenter view on an account board: the audience window opens at the board's own
 // address, takes the board from this window rather than the room, and is nobody new
 // on the board. The notes are kept on the frame, in the room's copy too.

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { WatchPrompt } from './WatchPrompt';
 import { describeSelection, tabThrough, takeRefocusBoard } from '@/input/keyboardBoard';
 import { shortcutLabel } from '@/input/shortcuts';
 import { useSettings } from '@/settings/settings';
@@ -378,6 +379,7 @@ export function CanvasStage() {
       <CommentPins />
       <WorkshopLayer />
       <PresenterNotes />
+      <WatchPrompt />
       <PresenterCamera />
       <EffectsLayer />
       <ToolOptions />
