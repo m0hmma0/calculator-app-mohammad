@@ -13,3 +13,13 @@ export function remoteParams(): { key: string; boardId: string | null } | null {
   if (!REMOTE_KEY.test(key)) return null;
   return { key, boardId: boardId && /^[\w-]{1,64}$/.test(boardId) ? boardId : null };
 }
+
+/** A slides-only link's page: `#watch=<key>` and, with a room, `&b=<board>`. */
+export function watchParams(): { key: string; boardId: string | null } | null {
+  if (typeof location === 'undefined' || !location.hash.startsWith('#watch=')) return null;
+  const params = new URLSearchParams(location.hash.slice(1));
+  const key = params.get('watch') ?? '';
+  const boardId = params.get('b');
+  if (!REMOTE_KEY.test(key)) return null;
+  return { key, boardId: boardId && /^[\w-]{1,64}$/.test(boardId) ? boardId : null };
+}

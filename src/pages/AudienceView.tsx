@@ -7,6 +7,8 @@ import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
 import { boardToScreen, fitToRect, viewportsEqual } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import { REMOTE_ORIGIN, type BoardDoc } from '@/doc/board';
+import { RoomConnection } from '@/collab/connection';
+import { remoteChannelName, type FromRemote, type ToRemote } from '@/workshop/remote';
 import type { LaserPoint } from '@/laser/laser';
 import { isTrailAlive } from '@/laser/laser';
 import { openAudienceDocument, useBoardStore } from '@/state/boardStore';
@@ -38,10 +40,22 @@ interface Trail {
  * controls, nothing to press. It follows the presenter's window (`src/workshop/
  * audience.ts`) and cannot steer it. A double-click, or F, fills the screen.
  */
-export function AudienceView({ channelName }: { channelName: string }) {
+export function AudienceView({
+  channelName = null,
+  link = null,
+}: {
+  /** Opened from presenter view: the presenter's window feeds it on this channel. */
+  channelName?: string | null;
+  /** Opened from a slides-only link (26 November), on any device. */
+  link?: { key: string; boardId: string | null } | null;
+}) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const trails = useRef<Trail[]>([]);
   const [heard, setHeard] = useState(false);
+  /** A slides link: where it stands, for the words shown while there is no slide. */
+  const [linkStatus, setLinkStatus] = useState<'connecting' | 'waiting' | 'live' | 'ended'>(
+    'connecting',
+  );
   const [lonely, setLonely] = useState(false);
   const [idle, setIdle] = useState(false);
   const [full, setFull] = useState(() => Boolean(document.fullscreenElement));
@@ -126,8 +140,61 @@ export function AudienceView({ channelName }: { channelName: string }) {
     redrawRef.current = redraw;
   }, [redraw]);
 
+  // From a slides link: the board from its room (or, on the signed-out board, from the
+  // presenter's tab in this browser), and the slide the presenter is on.
+  useEffect(() => {
+    if (!link) return;
+    const board: BoardDoc = openAudienceDocument();
+    usePresentation.setState({ presenting: true, frame: null });
+    const show = (frame: string | null) => {
+      usePresentation.setState({ frame });
+      setLinkStatus('live');
+      redraw();
+    };
+    if (link.boardId) {
+      const room = new RoomConnection(
+        board,
+        link.boardId,
+        {
+          status: (status) => {
+            if (status === 'refused') setLinkStatus('ended');
+          },
+          message: (message) => {
+            if (message.t === 'remote-state') show(message.state.frame);
+            else if (message.t === 'error' && message.code === 'waiting') setLinkStatus('waiting');
+            else if (message.t === 'error' && message.code === 'unauthorised') {
+              setLinkStatus('ended');
+            }
+          },
+          history: () => {},
+          synced: () => redraw(),
+        },
+        link.key,
+      );
+      room.start();
+      return () => room.stop();
+    }
+    const channel = new BroadcastChannel(remoteChannelName(link.key));
+    channel.onmessage = (event: MessageEvent<ToRemote>) => {
+      const message = event.data;
+      if (message.t === 'doc') Y.applyUpdate(board.doc, message.update, REMOTE_ORIGIN);
+      else if (message.t === 'state') show(message.state.frame);
+      else if (message.t === 'end') setLinkStatus('ended');
+    };
+    channel.postMessage({ t: 'hello' } satisfies FromRemote);
+    const quiet = setTimeout(
+      () => setLinkStatus((now) => (now === 'connecting' ? 'waiting' : now)),
+      LONELY_MS,
+    );
+    return () => {
+      clearTimeout(quiet);
+      channel.close();
+    };
+  }, [link, redraw]);
+
   // The board, the slide and the rest, from the presenter's window.
   useEffect(() => {
+    if (!channelName) return;
     const board: BoardDoc = openAudienceDocument();
     // Never the presenter: nothing here may be presented from or followed.
     usePresentation.setState({ presenting: true, frame: null });
@@ -313,7 +380,18 @@ export function AudienceView({ channelName }: { channelName: string }) {
           Full screen
         </button>
       ) : null}
-      {!heard && lonely ? (
+      {link && linkStatus !== 'live' ? (
+        <p className={styles.lonely} data-testid="audience-link-status" data-status={linkStatus}>
+          {linkStatus === 'ended'
+            ? 'This presentation has ended.'
+            : linkStatus === 'waiting'
+              ? link.boardId
+                ? 'Waiting for the presenter…'
+                : 'Open the presentation in this browser to see its slides here.'
+              : 'Connecting…'}
+        </p>
+      ) : null}
+      {!link && !heard && lonely ? (
         <p className={styles.lonely} data-testid="audience-lonely">
           This window shows the slides from presenter view. Start presenter view on the board to use
           it.

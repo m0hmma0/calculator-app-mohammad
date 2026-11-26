@@ -28,14 +28,17 @@ export type ToRemote =
 export const remoteChannelName = (key: string) => `sabboura-remote-${key}`;
 
 interface RemoteStore {
-  /** The link while it works, or null. */
+  /** The remote control's link while it works, or null. */
   url: string | null;
+  /** The slides-only link (26 November): the audience window on any device. */
+  watchUrl: string | null;
 }
 
-export const useRemote = create<RemoteStore>(() => ({ url: null }));
+export const useRemote = create<RemoteStore>(() => ({ url: null, watchUrl: null }));
 
 let room: RoomConnection | null = null;
 let key: string | null = null;
+let watchKey: string | null = null;
 let stops: Array<() => void> = [];
 
 /** The board's live connection, while there is one; the remote needs it. */
@@ -51,11 +54,11 @@ function newKey(): string {
     .replace(/=+$/, '');
 }
 
-/** The address of the remote: this page, with the key (and the board) in its hash. */
-function remoteUrl(remoteKey: string): string {
+/** A link's address: this page, with the key (and the board) in its hash. */
+function linkUrl(kind: 'remote' | 'watch', linkKey: string): string {
   const here = new URL(location.href);
   const boardId = room ? currentBoardId() : null;
-  here.hash = boardId ? `remote=${remoteKey}&b=${boardId}` : `remote=${remoteKey}`;
+  here.hash = boardId ? `${kind}=${linkKey}&b=${boardId}` : `${kind}=${linkKey}`;
   return here.toString();
 }
 
@@ -72,16 +75,57 @@ function act(action: RemoteAction): void {
   else stepPresentation(Infinity);
 }
 
-/** Makes the link (once per presentation) and returns it. */
+/** The remote control's link (both links are made together, once per presentation). */
 export function openRemote(): string {
-  const existing = useRemote.getState().url;
-  if (existing && key) return existing;
+  openLinks();
+  return useRemote.getState().url!;
+}
+
+/** The slides-only link. */
+export function openWatchLink(): string {
+  openLinks();
+  return useRemote.getState().watchUrl!;
+}
+
+/** On the signed-out board: feeds one link's tabs the board and the slide. */
+function channelFor(linkKey: string, controls: boolean): () => void {
+  const channel = new BroadcastChannel(remoteChannelName(linkKey));
+  const post = (message: ToRemote) => channel.postMessage(message);
+  const doc = boardDoc().doc;
+  const onUpdate = (update: Uint8Array) => post({ t: 'doc', update });
+  doc.on('update', onUpdate);
+  channel.onmessage = (event: MessageEvent<FromRemote>) => {
+    const message = event.data;
+    if (message?.t === 'hello') {
+      post({ t: 'doc', update: Y.encodeStateAsUpdate(doc) });
+      post({ t: 'state', state: state() });
+    } else if (controls && message?.t === 'remote' && REMOTE_ACTIONS.includes(message.action)) {
+      act(message.action);
+    }
+  };
+  const stopState = usePresentation.subscribe((now, before) => {
+    if (now.frame !== before.frame || now.audienceSince !== before.audienceSince) {
+      post({ t: 'state', state: state() });
+    }
+  });
+  return () => {
+    stopState();
+    doc.off('update', onUpdate);
+    post({ t: 'end' });
+    channel.close();
+  };
+}
+
+function openLinks(): void {
+  if (key && watchKey) return;
   key = newKey();
+  watchKey = newKey();
   const remoteKey = key;
+  const slidesKey = watchKey;
 
   if (room) {
     const connection = room;
-    connection.send({ t: 'remote-open', key: remoteKey });
+    connection.send({ t: 'remote-open', key: remoteKey, watch: slidesKey });
     const sendState = () => connection.send({ t: 'remote-state', state: state() });
     stops.push(
       usePresentation.subscribe((now, before) => {
@@ -89,37 +133,13 @@ export function openRemote(): string {
       }),
     );
   } else {
-    const channel = new BroadcastChannel(remoteChannelName(remoteKey));
-    const post = (message: ToRemote) => channel.postMessage(message);
-    const doc = boardDoc().doc;
-    const onUpdate = (update: Uint8Array) => post({ t: 'doc', update });
-    doc.on('update', onUpdate);
-    channel.onmessage = (event: MessageEvent<FromRemote>) => {
-      const message = event.data;
-      if (message?.t === 'hello') {
-        post({ t: 'doc', update: Y.encodeStateAsUpdate(doc) });
-        post({ t: 'state', state: state() });
-      } else if (message?.t === 'remote' && REMOTE_ACTIONS.includes(message.action)) {
-        act(message.action);
-      }
-    };
-    stops.push(
-      usePresentation.subscribe((now, before) => {
-        if (now.frame !== before.frame || now.audienceSince !== before.audienceSince) {
-          post({ t: 'state', state: state() });
-        }
-      }),
-      () => {
-        doc.off('update', onUpdate);
-        post({ t: 'end' });
-        channel.close();
-      },
-    );
+    stops.push(channelFor(remoteKey, true), channelFor(slidesKey, false));
   }
 
-  const url = remoteUrl(remoteKey);
-  useRemote.setState({ url });
-  return url;
+  useRemote.setState({
+    url: linkUrl('remote', remoteKey),
+    watchUrl: linkUrl('watch', slidesKey),
+  });
 }
 
 /** The presentation is over: the link stops working, and remotes are told. */
@@ -129,7 +149,8 @@ export function closeRemote(): void {
   for (const stop of stops) stop();
   stops = [];
   key = null;
-  useRemote.setState({ url: null });
+  watchKey = null;
+  useRemote.setState({ url: null, watchUrl: null });
 }
 
 /**
@@ -143,7 +164,7 @@ export function handleRemoteMessage(message: ServerMessage): void {
     if (message.action === 'hello') room.send({ t: 'remote-state', state: state() });
     else if (REMOTE_ACTIONS.includes(message.action)) act(message.action);
   } else if (message.t === 'ready') {
-    room.send({ t: 'remote-open', key });
+    room.send({ t: 'remote-open', key, watch: watchKey ?? undefined });
     room.send({ t: 'remote-state', state: state() });
   }
 }

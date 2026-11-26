@@ -35,6 +35,8 @@ interface Attachment {
   joinedAt: number;
   /** A remote control (Phase 17c): sees the board, moves the slides, is nobody's peer. */
   remote?: boolean;
+  /** A slides-only link: a remote that may only look (26 November). */
+  watchOnly?: boolean;
 }
 
 /** Take a full snapshot after this many updates, so loading never replays thousands. */
@@ -442,7 +444,9 @@ export class BoardRoom extends DurableObject<Env> {
   /** The link stops working, and any remote holding it is let go with `code`. */
   private endRemote(code: 'unauthorised' | 'waiting', message: string, forget: boolean): void {
     if (forget) {
-      this.sql.exec("DELETE FROM meta WHERE key IN ('remoteKey', 'remoteUid', 'remoteTab')");
+      this.sql.exec(
+        "DELETE FROM meta WHERE key IN ('remoteKey', 'watchKey', 'remoteUid', 'remoteTab')",
+      );
     }
     for (const ws of this.remotes()) this.refuse(ws, code, message);
   }
@@ -454,15 +458,18 @@ export class BoardRoom extends DurableObject<Env> {
    */
   private authenticateRemote(ws: WebSocket, key: string): void {
     const expected = this.meta('remoteKey');
-    if (!expected || !REMOTE_KEY.test(key) || key !== expected) {
-      return this.refuse(ws, 'unauthorised', 'This remote control link has ended');
+    const watchKey = this.meta('watchKey');
+    const controls = Boolean(expected) && key === expected;
+    const watches = Boolean(watchKey) && key === watchKey;
+    if (!REMOTE_KEY.test(key) || (!controls && !watches)) {
+      return this.refuse(ws, 'unauthorised', 'This link has ended');
     }
     if (this.presenterSockets().length === 0) {
       return this.refuse(ws, 'waiting', 'Waiting for the presenter');
     }
     const user: PeerIdentity = {
       uid: `remote:${key.slice(0, 8)}`,
-      name: 'Remote control',
+      name: controls ? 'Remote control' : 'Slides',
       picture: null,
       color: colorFor(`remote:${key}`),
     };
@@ -474,6 +481,7 @@ export class BoardRoom extends DurableObject<Env> {
       link: null,
       tab: null,
       remote: true,
+      watchOnly: !controls,
     };
     ws.serializeAttachment(attachment);
     this.sendJson(ws, {
@@ -748,9 +756,10 @@ export class BoardRoom extends DurableObject<Env> {
         return this.refuse(ws, 'unauthorised', 'Sign in first');
       }
 
-      const { remote, tab } = this.attachment(ws);
-      // A remote control may press its buttons, and nothing else.
+      const { remote, tab, watchOnly } = this.attachment(ws);
+      // A remote control may press its buttons, and nothing else; a slides link, nothing.
       if (remote) {
+        if (watchOnly) return;
         if (parsed.t !== 'remote' || !REMOTE_ACTIONS.includes(parsed.action)) return;
         for (const socket of this.presenterSockets()) {
           this.sendJson(socket, { t: 'remote', action: parsed.action });
@@ -764,10 +773,13 @@ export class BoardRoom extends DurableObject<Env> {
           if (role !== 'owner' || typeof parsed.key !== 'string' || !REMOTE_KEY.test(parsed.key)) {
             return;
           }
-          if (this.meta('remoteKey') !== parsed.key) {
-            this.endRemote('unauthorised', 'This remote control link has ended', false);
+          const watch =
+            typeof parsed.watch === 'string' && REMOTE_KEY.test(parsed.watch) ? parsed.watch : '';
+          if (this.meta('remoteKey') !== parsed.key || (this.meta('watchKey') ?? '') !== watch) {
+            this.endRemote('unauthorised', 'This link has ended', false);
           }
           this.setMeta('remoteKey', parsed.key);
+          this.setMeta('watchKey', watch);
           this.setMeta('remoteUid', user.uid);
           this.setMeta('remoteTab', tab ?? '');
           return;

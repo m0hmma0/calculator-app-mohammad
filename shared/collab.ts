@@ -157,8 +157,11 @@ export type ClientMessage =
   | { t: 'history' }
   | { t: 'history-state'; seq: number; req: number }
   | { t: 'checkpoint'; name: string }
-  /** The owner, presenting, makes a remote control link (`key`) for this page. */
-  | { t: 'remote-open'; key: string }
+  /**
+   * The owner, presenting, makes a remote control link (`key`) for this page, and a
+   * slides-only link (`watch`) that shows the slides and cannot move them.
+   */
+  | { t: 'remote-open'; key: string; watch?: string }
   /** The presentation is over: the link stops working and any remote is let go. */
   | { t: 'remote-close' }
   /** The presenter tells the remotes where the talk is. */

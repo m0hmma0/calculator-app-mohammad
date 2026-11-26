@@ -449,6 +449,9 @@ within it while presenting.
 - **Watching full screen.** Everyone following a presentation is offered "Watch full
   screen": the slide alone, no toolbar or panels, until they press Escape or the
   presentation ends.
+- **Share slides.** While presenting, a link (and QR code) that shows the slides alone —
+  the audience window — on any screen: a projector's computer, a TV, phones. It follows
+  the presenter, cannot move the slides, needs no sign-in, and ends with the presentation.
 - **Remote control.** While presenting, Remote control shows a link and a QR code: on a
   phone or in another tab it is presenter view — the slide, the next one, the notes, a
   clock — with big Previous and Next buttons (or a swipe). No sign-in; it works only

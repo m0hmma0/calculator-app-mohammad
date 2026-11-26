@@ -387,6 +387,17 @@ screen, or the presentation ending, ends it; where a page cannot go full screen 
 iPhone) a small Exit shows instead. A follower now refits the presenter's frame when its
 own stage changes size (`startFollowing` in publish.ts), which full screen needs.
 
+Slides link (26 November, asked for: "share the audience window"): while presenting,
+"Share slides" (`ShareSlidesButton`, beside Remote control; test ids `watch-link-*`) gives
+a second link, `#watch=<key>` (+ `&b=<board>`), made together with the remote control's
+(`openLinks` in remote.ts; `remote-open` now carries `watch`, kept as `watchKey` in the
+room's meta). `main.tsx` renders `AudienceView` with `link` for it: the audience window
+fed from the room (a `RoomConnection` with the key, the slide from `remote-state`) or, on
+the signed-out board, from the presenter's tab over `sabboura-remote-<key>`. The room
+lets it in like a remote but `watchOnly`: every message from it is ignored. It ends with
+the presentation, like the remote. Not carried to it yet: the laser, and video/sound
+play/pause (the audience window gets those from presenter view's channel only).
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

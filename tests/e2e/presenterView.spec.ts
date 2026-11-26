@@ -554,3 +554,28 @@ test.describe('presenter view, tidied', () => {
     await expect(audience.getByTestId('audience-fullscreen')).toHaveCount(0);
   });
 });
+
+// 26 November: the slides shared as a link; on the signed-out board, another tab.
+test('a slides link in another tab shows the slide alone and follows the presenter', async ({
+  page,
+}) => {
+  await threeFrames(page);
+  await page.getByTestId('present-start').click();
+  await page.getByTestId('watch-link-open').click();
+  const link = await page.getByTestId('watch-link-link').inputValue();
+  await page.getByTestId('watch-link-done').click();
+
+  const screen = await page.context().newPage();
+  await screen.goto(link);
+  const audience = screen.getByTestId('audience');
+  await expect(audience).not.toHaveAttribute('data-frame', '');
+  const first = (await audience.getAttribute('data-frame'))!;
+  await expect
+    .poll(() => middleFraction(screen, 'audience-canvas', '#ffffff'))
+    .toBeGreaterThan(0.5);
+  await page.keyboard.press('ArrowRight');
+  await expect(audience).not.toHaveAttribute('data-frame', first);
+
+  await page.getByTestId('present-stop').click();
+  await expect(screen.getByTestId('audience-link-status')).toHaveText(/has ended/);
+});

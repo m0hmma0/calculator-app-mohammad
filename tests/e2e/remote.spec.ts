@@ -98,3 +98,78 @@ test('a made-up remote key is refused while a real one works, and gets nothing',
   await context.close();
   await strangerContext.close();
 });
+
+// Asked for on 26 November: the audience window shared as a link — the slides alone,
+// on any device, following the presenter, unable to move them.
+test('a slides link shows the slides on another device, and cannot move them', async ({
+  browser,
+}) => {
+  const owner = newAccount('watch-link');
+  const presenterContext = await browser.newContext();
+  const page = await presenterContext.newPage();
+  await signIn(page, owner);
+  const boardId = await createBoard(page);
+  await drag(page, 'KeyF', [80, 140], [320, 320]);
+  await drag(page, 'KeyF', [380, 140], [620, 320]);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('present-start').click();
+  await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 2');
+
+  await page.getByTestId('watch-link-open').click();
+  await expect(page.getByTestId('watch-link-qr')).toBeVisible();
+  const link = await page.getByTestId('watch-link-link').inputValue();
+  expect(link).toContain('#watch=');
+  await page.getByTestId('watch-link-done').click();
+
+  const screenContext = await browser.newContext();
+  const screen = await screenContext.newPage();
+  await screen.goto(link);
+  const audience = screen.getByTestId('audience');
+  await expect(audience).toBeVisible();
+  await expect(audience).not.toHaveAttribute('data-frame', '');
+  const first = (await audience.getAttribute('data-frame'))!;
+  // The slide is drawn: its white fills the middle of the dark screen.
+  const middle = () =>
+    screen.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="audience-canvas"]')!;
+      const [r, g, b] = canvas
+        .getContext('2d')!
+        .getImageData(Math.round(canvas.width / 2), Math.round(canvas.height / 2), 1, 1).data;
+      return r! + g! + b!;
+    });
+  await expect.poll(middle).toBeGreaterThan(600);
+  // The presenter moves on; the screen follows.
+  await page.keyboard.press('ArrowRight');
+  await expect(audience).not.toHaveAttribute('data-frame', first);
+  await expect(audience).not.toHaveAttribute('data-frame', '');
+
+  // Sent by hand with the slides link's key, a "next" is ignored: it only looks.
+  const watchKey = new URL(link).hash.match(/watch=([\w-]+)/)![1]!;
+  await screen.evaluate(
+    ([board, key]) =>
+      new Promise<void>((resolve) => {
+        const ws = new WebSocket(
+          `${location.origin.replace('http', 'ws')}/api/boards/${board}/room`,
+        );
+        ws.onopen = () => ws.send(JSON.stringify({ t: 'auth', token: '', remote: key }));
+        ws.onmessage = (event) => {
+          if (typeof event.data === 'string' && event.data.includes('"ready"')) {
+            ws.send(JSON.stringify({ t: 'remote', action: 'previous' }));
+            setTimeout(() => {
+              ws.close();
+              resolve();
+            }, 800);
+          }
+        };
+      }),
+    [boardId, watchKey] as const,
+  );
+  await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 2');
+
+  // The presentation ends: so does the link.
+  await page.getByTestId('present-stop').click();
+  await expect(screen.getByTestId('audience-link-status')).toHaveText(/has ended/);
+
+  await presenterContext.close();
+  await screenContext.close();
+});
