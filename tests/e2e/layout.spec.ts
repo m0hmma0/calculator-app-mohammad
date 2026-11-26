@@ -42,7 +42,7 @@ test.describe('a wide screen', () => {
       'tool-highlighter',
       'insert-menu',
       'tools-menu',
-      'page-tab-0',
+      'present-start',
       'toggle-pane',
       'view-minimap',
       'zoom-readout',
@@ -150,7 +150,7 @@ test.describe('a phone', () => {
       'tool-laser',
       'insert-menu',
       'tools-menu',
-      'page-tab-0',
+      'present-start',
       'zoom-readout',
     ]) {
       const each = await box(page, id);

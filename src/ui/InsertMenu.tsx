@@ -13,14 +13,7 @@ import {
 import { celebrate, EFFECTS } from '@/fun/effects';
 import { shortcutLabel, withKey } from '@/input/shortcuts';
 import { useSettings } from '@/settings/settings';
-import {
-  frameNumbers,
-  hasFrameNumbers,
-  numberFramesAutomatically,
-  selectedFrame,
-  startPresentation,
-  startPresenterView,
-} from '@/workshop/presentation';
+import { hasFrameNumbers, numberFramesAutomatically } from '@/workshop/presentation';
 import {
   clearVote,
   endVote,
@@ -65,10 +58,6 @@ export function InsertMenu() {
   const setTool = useBoardStore((state) => state.setTool);
   const setStamp = useBoardStore((state) => state.setStamp);
   const elements = useBoardStore((state) => state.elements);
-  const selection = useBoardStore((state) => state.selection);
-  // Presenting starts from the selected frame, if there is one.
-  const startFrame = selectedFrame(elements, selection);
-  const startNumber = startFrame ? frameNumbers(elements).get(startFrame.id) : undefined;
   const numbered = hasFrameNumbers(elements);
   const minimap = useUiPrefs((state) => state.minimap);
   const sound = useUiPrefs((state) => state.sound);
@@ -298,42 +287,6 @@ export function InsertMenu() {
           ) : null}
 
           <p className={styles.label}>Workshop</p>
-          {owner ? (
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.item}
-              data-testid="present-start"
-              onClick={() => {
-                if (startPresentation()) setOpen(false);
-                else setNotice('Add a frame first — each frame is one slide.');
-              }}
-            >
-              <PresentIcon />
-              <span>{startNumber ? `Present from frame ${startNumber}` : 'Present frames'}</span>
-            </button>
-          ) : null}
-          {owner ? (
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.item}
-              title="Only the slides in a window of their own, for sharing or recording your screen; notes and controls stay here"
-              data-testid="present-presenter-view"
-              onClick={() => {
-                const result = startPresenterView();
-                if (result === 'started') setOpen(false);
-                else if (result === 'no-frames') {
-                  setNotice('Add a frame first — each frame is one slide.');
-                } else {
-                  setNotice('The browser blocked the window: allow pop-ups for this site.');
-                }
-              }}
-            >
-              <PresentIcon />
-              <span>Presenter view</span>
-            </button>
-          ) : null}
           {editable ? (
             <button
               type="button"
@@ -533,9 +486,6 @@ const TableIcon = () => (
   <Icon path="M2.5 3.5h11v9h-11zM2.5 6.5h11M2.5 9.5h11M6.2 3.5v9M9.8 3.5v9" />
 );
 const ImportIcon = () => <Icon path="M8 2.5v7.5M5 7l3 3 3-3M3 11.5v2h10v-2" />;
-const PresentIcon = () => (
-  <Icon path="M2.5 3h11v7.5h-11zM8 10.5V13M5.5 13.5h5M7 5.2v3.1l2.6-1.55Z" />
-);
 /** A "1" beside lines of a list: numbers given by place. */
 const NumberIcon = () => <Icon path="M3 4.3l1.3-.8v5.2M3 8.7h2.6M7.5 4.5h6M7.5 8h6M7.5 11.5h6" />;
 const TimerIcon = () => (

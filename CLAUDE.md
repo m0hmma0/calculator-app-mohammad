@@ -31,14 +31,14 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the next phase is **17**. Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a** (built), **17b** and **17c**, then keyboard use (the old 17, now **17d**). Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
 the accessibility audit.
 
-Phase 9 in one paragraph: pages (`element.page`, absent = first page; the camera is
-stored per page), presentation (`src/workshop/presentation.ts`, followers fit the
+Phase 9 in one paragraph: pages (`element.page`, absent = first page; removed on 20
+November — see below), presentation (`src/workshop/presentation.ts`, followers fit the
 presenter's frame via presence `present`), a timer and dot votes in the document's
 meta map and `votes` map (`src/workshop/workshop.ts`; the room's clock comes in the
 welcome message as `now`), tables/code/embeds as element types, `/api/unfurl` for link
@@ -300,6 +300,18 @@ Record; the row shows the room left (`recordingSpace`), amber under 2 GB. A full
 mid-recording (`page.close({ runBeforeUnload: false })`) and recover it in a new page —
 they wait for `record-stored` first: under load nothing may reach the disk in the
 first seconds. The folder test stands an OPFS folder in for the picker.
+
+Phase 17a (20 November; the user's mobile and presenting list became 17a, 17b and 17c,
+and keyboard use of the canvas moved after them): pages are gone. `dropExtraPages`
+(`src/doc/board.ts`) keeps the page list's first page, makes its things plain, deletes
+the rest and empties the list, as `SYSTEM_ORIGIN` (not undoable, sent to the room); the
+store's `dropOldPages` runs it when the stored copy is in and again at the room's first
+sync, and it does nothing on a read-only board. The store still has `page`/`setPage`,
+and history still replays an old step's page list, for boards nobody has edited since.
+`PresentButton` (owner only, hidden while presenting, disabled without frames) sits
+where the page tabs were and keeps the test id `present-start`; Insert has neither it
+nor Presenter view, which opens from the slide controls (`presenter-view`). The
+spotlight button reads "Follow me" / "Stop follow me".
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

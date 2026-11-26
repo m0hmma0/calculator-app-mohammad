@@ -95,7 +95,6 @@ async function frameIds(page: Page) {
 const numberOf = (page: Page, id: string) => page.getByTestId(`frame-order-${id}`);
 
 async function present(page: Page) {
-  await page.getByTestId('insert-menu').click();
   await page.getByTestId('present-start').click();
   await expect(page.getByTestId('presentation-bar')).toBeVisible();
 }
@@ -155,7 +154,7 @@ test.describe('presenting', () => {
       await expect(page.getByTestId(id), id).toBeVisible();
     }
     // What is about the board rather than the slide steps aside.
-    for (const id of ['tools-menu', 'zoom-readout', 'page-tab-0', 'board-title']) {
+    for (const id of ['tools-menu', 'zoom-readout', 'present-start', 'board-title']) {
       await expect(page.getByTestId(id), id).toHaveCount(0);
     }
 
@@ -220,7 +219,12 @@ test.describe('numbered frames', () => {
     // The middle frame, clicked where nothing is on it.
     await page.mouse.click(500, 300);
     await expect(page.getByTestId('geo-x')).toHaveText('380');
+    // Presenting is on the controls, where the pages were; Insert no longer has it.
     await page.getByTestId('insert-menu').click();
+    await expect(page.getByTestId('insert-import')).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /present/i })).toHaveCount(0);
+    await page.getByTestId('insert-menu').click();
+    await expect(page.getByTestId('insert-import')).toHaveCount(0);
     await expect(page.getByTestId('present-start')).toHaveText('Present from frame 2');
     await page.getByTestId('present-start').click();
     await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
@@ -236,7 +240,6 @@ test.describe('numbered frames', () => {
     await expect(page.getByTestId('presentation-counter')).toHaveText('3 / 3');
     await page.getByTestId('present-stop').click();
     await page.keyboard.press('Escape');
-    await page.getByTestId('insert-menu').click();
     await expect(page.getByTestId('present-start')).toHaveText('Present frames');
     await page.getByTestId('present-start').click();
     await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');

@@ -84,7 +84,6 @@ test.describe('presentation', () => {
 
   test('arrow keys walk the frames, each filling the screen', async ({ page }) => {
     await threeFrames(page);
-    await page.getByTestId('insert-menu').click();
     await page.getByTestId('present-start').click();
 
     await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
@@ -132,9 +131,9 @@ test.describe('presentation', () => {
   });
 
   test('says so when there is nothing to present', async ({ page }) => {
-    await page.getByTestId('insert-menu').click();
-    await page.getByTestId('present-start').click();
-    await expect(page.getByText('Add a frame first')).toBeVisible();
+    // The button is there but cannot be pressed, and says why.
+    await expect(page.getByTestId('present-start')).toBeDisabled();
+    await expect(page.getByTestId('present-start')).toHaveAttribute('title', /Add a frame first/);
     await expect(page.getByTestId('presentation-bar')).toBeHidden();
   });
 });
@@ -341,43 +340,6 @@ test.describe('a fresh browser', () => {
     await page.keyboard.press('KeyM');
     await expect(page.getByTestId('minimap')).toHaveCount(0);
   });
-});
-
-// Checklist item 7.
-test('each page keeps its own content and its own view', async ({ page }) => {
-  await drag(page, 'KeyR', [300, 300], [400, 380]);
-  await expect(layerItems(page)).toHaveCount(1);
-  const firstZoom = await page.getByTestId('zoom-readout').innerText();
-
-  await page.getByTestId('add-page').click();
-  await expect(page.getByTestId('page-tab-1')).toHaveText('Page 2');
-  // A new page is empty.
-  await expect(layerItems(page)).toHaveCount(0);
-  await drag(page, 'KeyO', [500, 300], [600, 380]);
-  await drag(page, 'KeyO', [650, 300], [750, 380]);
-  await expect(layerItems(page)).toHaveCount(2);
-  // Zoom in on this page only.
-  await page.keyboard.press('Escape');
-  await page.keyboard.press('Equal');
-  await page.keyboard.press('Equal');
-  const secondZoom = await page.getByTestId('zoom-readout').innerText();
-  expect(secondZoom).not.toBe(firstZoom);
-
-  await page.getByTestId('page-tab-0').click();
-  await expect(layerItems(page)).toHaveCount(1);
-  await expect(page.getByTestId('zoom-readout')).toHaveText(firstZoom);
-
-  await page.getByTestId('page-tab-1').click();
-  await expect(layerItems(page)).toHaveCount(2);
-  await expect(page.getByTestId('zoom-readout')).toHaveText(secondZoom);
-
-  // And both survive a reload.
-  await page.reload();
-  await expect(page.getByTestId('page-tab-1')).toBeVisible();
-  await page.getByTestId('page-tab-1').click();
-  await expect(layerItems(page)).toHaveCount(2);
-  await page.getByTestId('page-tab-0').click();
-  await expect(layerItems(page)).toHaveCount(1);
 });
 
 const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" onload="window.ranScript = true">

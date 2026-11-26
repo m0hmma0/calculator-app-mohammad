@@ -7,7 +7,13 @@ import { Link } from '@/router/router';
 import { useBoardAccess } from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
 import { ROLE_LABEL, canEdit, type Role } from '@shared/sharing';
-import { fitOnOpen, openBoardDocument, setBoardReadOnly, useBoardStore } from '@/state/boardStore';
+import {
+  dropOldPages,
+  fitOnOpen,
+  openBoardDocument,
+  setBoardReadOnly,
+  useBoardStore,
+} from '@/state/boardStore';
 import { useWorkspace } from '@/state/workspaceStore';
 import { BoardControls, BoardShell } from '@/ui/BoardControls';
 import { CanvasStage } from '@/ui/CanvasStage';
@@ -96,6 +102,7 @@ function BoardView({ boardId }: { boardId: string }) {
             history: applyHistoryState,
             synced: () => {
               usePresence.setState({ synced: true });
+              dropOldPages();
               // The room's copy is in: the view shows all of it.
               fitOnOpen();
             },

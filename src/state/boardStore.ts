@@ -3,11 +3,9 @@ import type { Transaction } from 'yjs';
 import type { MarkFormats } from '@/text/marks';
 import { fitted, textHeight } from '@/text/measure';
 import {
-  addPage,
   applyPatches,
   createBoard,
-  deletePage,
-  renamePage,
+  dropExtraPages,
   deleteElements,
   insertElements,
   replaceAll,
@@ -153,9 +151,6 @@ interface BoardState {
   pages: PageInfo[];
   page: string;
   setPage: (id: string) => void;
-  addPage: () => void;
-  renamePage: (id: string, name: string) => void;
-  deletePage: (id: string) => void;
   setOnline: (online: boolean) => void;
 
   devPanelOpen: boolean;
@@ -375,24 +370,6 @@ export const useBoardStore = create<BoardState>((set, get) => {
       setViewportScope(openBoardId ? `${openBoardId}:${id}` : `local:${id}`);
       set({ page: id, selection: [], viewport: loadViewport() });
       binding?.refresh();
-    },
-
-    addPage: () => {
-      const id = addPage(board, `Page ${get().pages.length + 1}`);
-      if (id) get().setPage(id);
-    },
-
-    renamePage: (id, name) => {
-      const trimmed = name.replace(/\s+/g, ' ').trim().slice(0, 60);
-      if (trimmed) renamePage(board, id, trimmed);
-    },
-
-    deletePage: (id) => {
-      const { pages } = get();
-      if (pages.length < 2) return;
-      const next = pages.find((page) => page.id !== id)!;
-      if (get().page === id) get().setPage(next.id);
-      deletePage(board, id);
     },
 
     // Someone who answers undoes their own typing: the only changes they have made.
@@ -1181,7 +1158,10 @@ function attachDocument(doc: BoardDoc): void {
   useBoardStore.setState({ hydrated: false });
   void doc.whenReady.then(() => {
     useBoardStore.setState({ hydrated: true });
-    if (doc === board) fitOnOpen();
+    if (doc === board) {
+      dropOldPages();
+      fitOnOpen();
+    }
   });
 }
 
@@ -1206,6 +1186,14 @@ function expectFitOnOpen(): void {
 }
 
 /** Fits the view to everything on the board, if it has anything and nobody has moved. */
+/**
+ * A board that still has pages from before they were removed keeps its first; done
+ * by someone who may edit (the board is not read-only), once the board's content is in (stored, or the room's).
+ */
+export function dropOldPages(): void {
+  if (dropExtraPages(board)) useBoardStore.getState().setPage(FIRST_PAGE);
+}
+
 export function fitOnOpen(): void {
   const state = useBoardStore.getState();
   if (openFit.from === null || state.viewport !== openFit.from) return;

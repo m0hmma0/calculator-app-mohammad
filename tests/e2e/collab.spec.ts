@@ -445,8 +445,10 @@ test.describe('two windows on one board', () => {
     await expect(b.getByTestId('following-frame')).toHaveCount(0);
     await expect(a.getByTestId('follows-you')).toHaveCount(0);
 
-    // Presenting brings everyone along without them having to ask, and counts them.
+    // "Follow me" brings everyone along without them having to ask, and counts them.
+    await expect(a.getByTestId('spotlight')).toHaveText('Follow me');
     await a.getByTestId('spotlight').click();
+    await expect(a.getByTestId('spotlight')).toContainText('Stop follow me');
     await expect(b.getByTestId('following-frame')).toBeVisible();
     await expect(a.getByTestId('follower-count')).toHaveText('1/1 following');
     await close();

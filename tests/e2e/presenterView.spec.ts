@@ -70,7 +70,6 @@ async function middleFraction(page: Page, canvasId: string, colour: string, shar
 
 /** Presents, then opens presenter view from the slide controls; returns its window. */
 async function openPresenterView(page: Page) {
-  await page.getByTestId('insert-menu').click();
   await page.getByTestId('present-start').click();
   await expect(page.getByTestId('presentation-bar')).toBeVisible();
   const opened = page.context().waitForEvent('page');
@@ -287,7 +286,6 @@ test.describe('presenter view, round two', () => {
     await drag(page, 'KeyF', [100, 150], [1000, 600]);
     await drag(page, 'KeyF', [1010, 150], [1150, 300]);
     await page.keyboard.press('Escape');
-    await page.getByTestId('insert-menu').click();
     await page.getByTestId('present-start').click();
     await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 2');
 

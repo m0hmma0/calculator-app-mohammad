@@ -209,7 +209,6 @@ test.describe('celebrations', () => {
     await page.mouse.down();
     await page.mouse.move(500, 400, { steps: 4 });
     await page.mouse.up();
-    await page.getByTestId('insert-menu').click();
     await page.getByTestId('present-start').click();
     await expect(page.getByTestId('presentation-bar')).toBeVisible();
     await page.keyboard.press('Numpad1');

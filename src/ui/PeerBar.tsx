@@ -166,7 +166,7 @@ export function PeerBar() {
           data-testid="spotlight"
           onClick={() => usePresence.setState({ spotlight: !spotlight })}
         >
-          {spotlight ? 'Stop presenting' : 'Present'}
+          {spotlight ? 'Stop follow me' : 'Follow me'}
           {spotlight && list.length > 0 ? (
             <span className={styles.followers} data-testid="follower-count">
               {followers}/{list.length} following

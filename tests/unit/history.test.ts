@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import {
-  addPage,
   applyPatches,
   createBoard,
   deleteElements,
   insertElements,
   readElements,
   REMOTE_ORIGIN,
+  transactLocal,
   type BoardDoc,
 } from '@/doc/board';
 import { bindBoard } from '@/doc/binding';
@@ -18,7 +18,7 @@ import {
   type HistoryStep,
   type HistoryStorage,
 } from '@/doc/history';
-import { patchYElement, readPages } from '@/doc/schema';
+import { pagesOf, patchYElement, readPages } from '@/doc/schema';
 import { createElement, type BoardElement } from '@/model/element';
 
 const shape = (id: string, overrides: Partial<BoardElement> = {}): BoardElement => ({
@@ -153,12 +153,19 @@ describe('undo across visits', () => {
     second.close();
   });
 
+  // Steps saved before pages were removed (20 November) may still carry a page list.
   it('takes words and pages back too', async () => {
     const storage = memoryStorage();
     const first = await visit(storage);
     insertElements(first.board, [shape('a', { text: 'Hello' })]);
     step(first.board, { a: { text: 'Hello there' } });
-    addPage(first.board, 'Page 2');
+    transactLocal(first.board, () =>
+      pagesOf(first.board.doc).push([
+        { id: 'p1', name: 'Page 1' },
+        { id: 'p2', name: 'Page 2' },
+      ]),
+    );
+    first.board.undoManager.stopCapturing();
     const second = await visit(storage, first.close());
     expect(readPages(second.board.doc)).toHaveLength(2);
     second.undo();

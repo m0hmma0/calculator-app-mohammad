@@ -42,9 +42,9 @@ async function presenterView(page: Page) {
   await drag(page, 'KeyF', [80, 140], [560, 420]);
   await drag(page, 'KeyF', [620, 140], [1100, 420]);
   await page.keyboard.press('Escape');
-  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('present-start').click();
   const opened = page.context().waitForEvent('page');
-  await page.getByTestId('present-presenter-view').click();
+  await page.getByTestId('presenter-view').click();
   const audience = await opened;
   await expect(audience.getByTestId('audience')).toBeVisible();
   return audience;
@@ -320,9 +320,9 @@ test('the camera sits over a video on the slide, not behind it', async ({ page }
   await page.mouse.click(1100, 690);
   await drag(page, 'KeyF', [10, 10], [1150, 700]);
   await page.keyboard.press('Escape');
-  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('present-start').click();
   const opened = page.context().waitForEvent('page');
-  await page.getByTestId('present-presenter-view').click();
+  await page.getByTestId('presenter-view').click();
   const audience = await opened;
   await expect(audience.locator('video[data-testid="embed-player"]')).toHaveCount(1);
   await page.getByTestId('record-camera').click();

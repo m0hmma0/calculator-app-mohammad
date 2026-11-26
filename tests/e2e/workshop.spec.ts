@@ -136,7 +136,6 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
     await a.keyboard.press('Escape');
     await expect(layerItems(b)).toHaveCount(3);
 
-    await a.getByTestId('insert-menu').click();
     await a.getByTestId('present-start').click();
     await expect(a.getByTestId('presentation-counter')).toHaveText('1 / 2');
 
@@ -173,9 +172,9 @@ test('presenter view on an account board: the slides in a window of their own', 
     await expect(layerItems(b)).toHaveCount(3);
     const people = await b.getByTestId('peer-avatar').count();
 
-    await a.getByTestId('insert-menu').click();
+    await a.getByTestId('present-start').click();
     const opened = a.context().waitForEvent('page');
-    await a.getByTestId('present-presenter-view').click();
+    await a.getByTestId('presenter-view').click();
     const audience = await opened;
     expect(new URL(audience.url()).pathname).toBe(new URL(a.url()).pathname);
     await expect(audience.getByTestId('audience')).toBeVisible();
@@ -214,9 +213,9 @@ test('presenter view on an account board: the slides in a window of their own', 
       await signIn(again, account);
       await again.goto(new URL(a.url()).pathname);
       await expect(layerItems(again)).toHaveCount(3);
-      await again.getByTestId('insert-menu').click();
+      await again.getByTestId('present-start').click();
       const reopened = again.context().waitForEvent('page');
-      await again.getByTestId('present-presenter-view').click();
+      await again.getByTestId('presenter-view').click();
       await reopened;
       await expect(again.getByTestId('presenter-notes-field')).toHaveValue(
         'Only for the presenter',
@@ -597,7 +596,6 @@ test('a celebration plays for everyone on the board, and ends by itself', async 
 
     // While presenting too, number pad 2 is a drum roll — for the audience as well.
     await drag(a, 'KeyF', [200, 200], [500, 400]);
-    await a.getByTestId('insert-menu').click();
     await a.getByTestId('present-start').click();
     await a.keyboard.press('Numpad2');
     await expect(b.getByTestId('celebration')).toHaveAttribute('data-effect', 'drumroll');

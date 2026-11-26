@@ -270,47 +270,26 @@ export function replaceAll(board: BoardDoc, incoming: readonly BoardElement[]): 
 }
 
 /**
- * Pages. The list lives in the document, so everyone sees the same pages; which one
- * a person is looking at is theirs alone. The implicit first page is written out the
- * first time a second one is added.
+ * Pages are gone (20 November): a board shows one page. A board that had more keeps
+ * its first page and loses the rest — they stay in version history. The first page's
+ * things become plain (no `page`), and the page list is emptied. Not undoable, and
+ * written by whoever edits and opens the board first; a no-op on any board without a
+ * page list.
  */
-export function addPage(board: BoardDoc, name: string): string | null {
-  if (board.readOnly) return null;
-  const id = `pg_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  transactLocal(board, () => {
-    const pages = pagesOf(board.doc);
-    if (pages.length === 0) pages.push([{ id: FIRST_PAGE, name: 'Page 1' }]);
-    pages.push([{ id, name }]);
-  });
-  board.undoManager.stopCapturing();
-  return id;
-}
-
-export function renamePage(board: BoardDoc, id: string, name: string): void {
-  transactLocal(board, () => {
-    const pages = pagesOf(board.doc);
-    if (pages.length === 0) pages.push([{ id: FIRST_PAGE, name: 'Page 1' }]);
-    const index = pages.toArray().findIndex((page) => page.id === id);
-    if (index === -1) return;
-    pages.delete(index, 1);
-    pages.insert(index, [{ id, name }]);
-  });
-  board.undoManager.stopCapturing();
-}
-
-/** Removes a page and everything on it. The last page cannot go. */
-export function deletePage(board: BoardDoc, id: string): void {
-  transactLocal(board, () => {
-    const pages = pagesOf(board.doc);
-    const list = pages.toArray();
-    const index = list.findIndex((page) => page.id === id);
-    if (index === -1 || list.length < 2) return;
-    pages.delete(index, 1);
+export function dropExtraPages(board: BoardDoc): boolean {
+  if (board.readOnly) return false;
+  const pages = pagesOf(board.doc);
+  if (pages.length === 0) return false;
+  const keep = pages.get(0).id;
+  board.doc.transact(() => {
     const doomed: string[] = [];
     board.elements.forEach((map, elementId) => {
-      if ((map.get('page') ?? FIRST_PAGE) === id) doomed.push(elementId);
+      const page = (map.get('page') as string | undefined) ?? FIRST_PAGE;
+      if (page !== keep) doomed.push(elementId);
+      else if (map.has('page')) map.delete('page');
     });
     for (const elementId of doomed) board.elements.delete(elementId);
-  });
-  board.undoManager.stopCapturing();
+    pages.delete(0, pages.length);
+  }, SYSTEM_ORIGIN);
+  return true;
 }

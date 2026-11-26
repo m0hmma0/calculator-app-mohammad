@@ -12,7 +12,7 @@ import { toggleMinimap, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { usePresentation } from '@/workshop/presentation';
 import { InsertMenu } from './InsertMenu';
 import { SlideControls } from './WorkshopLayer';
-import { PageBar } from './PageBar';
+import { PresentButton } from './PresentButton';
 import { ToolBar } from './ToolBar';
 import { ToolsMenu } from './ToolsMenu';
 import { ZoomControls } from './ZoomControls';
@@ -125,7 +125,7 @@ export function BoardShell({ children }: { children: ReactNode }) {
   return <div className={styles.shell}>{children}</div>;
 }
 
-/** Pages, the side panel, the minimap, full screen and zoom. */
+/** Presenting the frames, the side panel, the minimap, full screen and zoom. */
 function ViewControls() {
   const pane = useUiPrefs((state) => state.pane);
   const minimap = useUiPrefs((state) => state.minimap);
@@ -134,7 +134,7 @@ function ViewControls() {
 
   return (
     <div className={styles.view} role="group" aria-label="View">
-      <PageBar embedded />
+      <PresentButton />
       <div className={styles.viewButtons}>
         {editable ? (
           <button

@@ -144,7 +144,8 @@ are each a column, so a row still reads left to right). Choosing a number for on
 gives every frame on the page its number, so from then on the order stays as it is
 wherever the frames are moved. Insert → **Number frames automatically** takes the
 chosen numbers away again (one step to undo), so every frame is numbered by where it
-is once more. **Present** starts from the selected frame — or the frame holding what
+is once more. **Present frames** (on the controls; no longer in Insert, nor is
+Presenter view, which opens from the slide controls) starts from the selected frame — or the frame holding what
 is selected — and says so ("Present from frame 3"); with nothing selected, from frame 1.
 Ctrl/⌘ Enter does the same. The order is a fractional key on each frame (`slide`). Presenting shows the frame and nothing else, on a dark
 surround, without its outline or title, for the presenter and for everyone following;
@@ -350,7 +351,7 @@ along the top otherwise. Nothing sits at the bottom of the board. On a phone the
 is two rows at most: groups give way so items wrap one by one, and only if two rows
 still cannot hold them do the buttons shrink, a step at a time. It holds the way back
 and the board's name, undo and redo, the everyday tools (select, hand, pen,
-highlighter, eraser, laser), two menus, who is here, Share, pages, the side panel, the
+highlighter, eraser, laser), two menus, who is here, Share, **Present frames** (where the pages were), the side panel, the
 minimap, full screen and zoom. On a wide screen menus and cards open to the pane's
 left; the pen's options stand at the board's right edge (left of the side panel when
 it is open), and top centre on a tall screen. **Insert** (orange) has shapes, lines and
@@ -435,10 +436,12 @@ they are following you (an eye on their avatar says the same), follow or stop, a
 "Show their screen edges", which outlines their screen on your board so you can keep
 within it while presenting.
 
-- **Pages.** A board has pages along the bottom; each keeps its own content and its
-  own camera. Elements carry a `page` field — absent means the first page, so every
-  board from before pages still opens unchanged.
-- **Presentation.** Workshop → Present frames. Frames play in their numbers' order (see
+- **Pages** were removed on 20 November: a board is one page. A board that had more
+  keeps its first page; the rest are deleted the first time someone who edits opens it
+  (`dropExtraPages`, not an undo step; version history still has them). Elements may
+  still carry an old `page` field, and the page list is still read, for boards nobody
+  has edited since.
+- **Presentation.** **Present frames**, on the controls. Frames play in their numbers' order (see
   "Presenting, frames and media" above: down each column, then the next); arrow keys, Space and Page Up/Down move, Escape
   leaves. Presenting is spotlighting: everyone else on the board follows, and each
   follower's screen fits the same frame.

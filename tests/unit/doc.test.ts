@@ -4,13 +4,14 @@ import {
   applyPatches,
   createBoard,
   deleteElements,
+  dropExtraPages,
   insertElements,
   readElements,
   replaceAll,
   transactLocal,
   REMOTE_ORIGIN,
 } from '@/doc/board';
-import { formatYText, fromYElement, toYElement } from '@/doc/schema';
+import { formatYText, fromYElement, pagesOf, toYElement } from '@/doc/schema';
 import { createElement, type BoardElement } from '@/model/element';
 
 const shape = (id: string, overrides: Partial<BoardElement> = {}): BoardElement => ({
@@ -324,5 +325,54 @@ describe('formatting on part of a text', () => {
       { from: 5, to: 9, highlight: '#8ef0a0', bold: true },
     ]);
     board.destroy();
+  });
+});
+
+describe('a board that had pages', () => {
+  /** As the board was written before pages were removed: a page list, things on each. */
+  function withPages(first: string, elements: BoardElement[]) {
+    const board = createBoard();
+    board.doc.transact(() => {
+      pagesOf(board.doc).push([
+        { id: first, name: 'Page 1' },
+        { id: 'pg_2', name: 'Page 2' },
+      ]);
+      for (const element of elements) board.elements.set(element.id, toYElement(element));
+    }, REMOTE_ORIGIN);
+    return board;
+  }
+
+  it('keeps its first page and loses the rest, as nobody’s undo step', () => {
+    const board = withPages('p1', [shape('a'), shape('b', { page: 'pg_2' })]);
+    expect(dropExtraPages(board)).toBe(true);
+    expect(readElements(board).map((element) => element.id)).toEqual(['a']);
+    expect(pagesOf(board.doc).length).toBe(0);
+    expect(board.undoManager.canUndo()).toBe(false);
+    expect(dropExtraPages(board)).toBe(false);
+    board.destroy();
+  });
+
+  it('keeps a first page that was not the original one, its things now plain', () => {
+    // Page 1 was deleted once, so the list starts with a later page.
+    const board = withPages('pg_9', [shape('a', { page: 'pg_9' }), shape('b')]);
+    dropExtraPages(board);
+    const left = readElements(board);
+    expect(left.map((element) => element.id)).toEqual(['a']);
+    expect(left[0]!.page).toBeUndefined();
+    board.destroy();
+  });
+
+  it('is left alone without a page list, and by someone who only reads', () => {
+    const plain = createBoard();
+    insertElements(plain, [shape('a')]);
+    expect(dropExtraPages(plain)).toBe(false);
+    expect(readElements(plain)).toHaveLength(1);
+    plain.destroy();
+
+    const viewer = withPages('p1', [shape('a'), shape('b', { page: 'pg_2' })]);
+    viewer.readOnly = true;
+    expect(dropExtraPages(viewer)).toBe(false);
+    expect(readElements(viewer)).toHaveLength(2);
+    viewer.destroy();
   });
 });
