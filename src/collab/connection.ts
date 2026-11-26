@@ -90,6 +90,8 @@ export class RoomConnection {
     private readonly doc: BoardDoc,
     private readonly boardId: string,
     private readonly on: RoomEvents,
+    /** A remote control's key, in place of this person's sign-in. */
+    private readonly remote: string | null = null,
   ) {}
 
   start(): void {
@@ -174,6 +176,10 @@ export class RoomConnection {
     this.assembler = new FrameAssembler();
 
     ws.onopen = async () => {
+      if (this.remote) {
+        ws.send(JSON.stringify({ t: 'auth', token: '', remote: this.remote, tab: PAGE_ID }));
+        return;
+      }
       // A refreshed token if the old one has expired; Firebase handles that.
       const token = await currentIdToken(this.attempts > 0);
       if (ws !== this.ws) return;

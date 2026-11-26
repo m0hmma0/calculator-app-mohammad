@@ -18,6 +18,7 @@ import { isTypingTarget, mediaFullScreen } from '@/input/useShortcuts';
 import { rectsIntersect } from '@/geometry';
 import { useFrameOnShow } from '@/workshop/onShow';
 import { useSidePane } from './layout';
+import { RemoteControlButton } from './RemoteControl';
 import styles from './WorkshopLayer.module.css';
 
 /** What each presenting shortcut does; Settings can change the keys. */
@@ -197,6 +198,7 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
   const frame = usePresentation((state) => state.frame);
   const audience = usePresentation((state) => state.audience);
   const notesInset = usePresentation((state) => state.notesInset);
+  const notesSide = usePresentation((state) => state.notesSide);
   const elements = useBoardStore((state) => state.elements);
   const sidePane = useSidePane();
   const [blocked, setBlocked] = useState(false);
@@ -207,8 +209,14 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
   return (
     <div
       className={placement === 'pane' ? styles.slidesInPane : styles.presentBar}
-      // Along the bottom, it sits above presenter view's notes.
-      style={placement === 'bottom' && audience ? { bottom: notesInset + 12 } : undefined}
+      // Along the bottom, it sits above presenter view's notes, or left of them.
+      style={
+        placement === 'bottom' && audience
+          ? notesSide === 'right'
+            ? { right: notesInset + 8, left: 8, transform: 'none' }
+            : { bottom: notesInset + 12 }
+          : undefined
+      }
       role="group"
       aria-label="Presentation"
       data-testid="presentation-bar"
@@ -253,6 +261,7 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
       >
         {audience ? 'End presenter view' : 'Presenter view'}
       </button>
+      <RemoteControlButton compact={placement === 'bottom'} />
       {blocked && !audience ? (
         <span className={styles.blocked} role="alert" data-testid="presenter-view-blocked">
           The browser blocked the window: allow pop-ups for this site, then try again.
@@ -279,12 +288,16 @@ function SlideArrows() {
   const audience = usePresentation((state) => state.audience);
   const frame = usePresentation((state) => state.frame);
   const notesInset = usePresentation((state) => state.notesInset);
+  const notesSide = usePresentation((state) => state.notesSide);
   const elements = useBoardStore((state) => state.elements);
   if (!presenting || !audience) return null;
   const frames = framesInOrder(elements);
   const index = frames.findIndex((each) => each.id === frame);
   return (
-    <div className={styles.arrows} style={{ bottom: notesInset }}>
+    <div
+      className={styles.arrows}
+      style={notesSide === 'right' ? { bottom: 0, right: notesInset } : { bottom: notesInset }}
+    >
       <button
         type="button"
         className={styles.arrow}

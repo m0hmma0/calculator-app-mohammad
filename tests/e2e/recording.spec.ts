@@ -47,6 +47,8 @@ async function presenterView(page: Page) {
   await page.getByTestId('presenter-view').click();
   const audience = await opened;
   await expect(audience.getByTestId('audience')).toBeVisible();
+  // Recording is behind its switch in presenter view (Phase 17c).
+  await page.getByTestId('presenter-show-record').click();
   return audience;
 }
 
@@ -325,6 +327,7 @@ test('the camera sits over a video on the slide, not behind it', async ({ page }
   await page.getByTestId('presenter-view').click();
   const audience = await opened;
   await expect(audience.locator('video[data-testid="embed-player"]')).toHaveCount(1);
+  await page.getByTestId('presenter-show-record').click();
   await page.getByTestId('record-camera').click();
   const camera = audience.getByTestId('audience-camera');
   await expect(camera).toBeVisible();

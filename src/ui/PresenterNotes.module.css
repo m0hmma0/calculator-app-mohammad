@@ -1,11 +1,13 @@
-/* Presenter view's notes, along the bottom of the board; the slide fits above them. */
+/*
+ * Presenter view's notes, along the bottom of the board, or down its right on a phone
+ * held sideways; the slide fits beside them. The size is set by script (the divider).
+ */
 .notes {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 3;
-  height: clamp(190px, 36%, 360px);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -17,11 +19,170 @@
   font-size: 14px;
 }
 
+/* Down the right: the whole height, the divider on its left edge. */
+.notes[data-side='right'] {
+  left: auto;
+  top: 0;
+  border-top: 0;
+  border-left: 1px solid var(--border);
+  padding: 8px 10px;
+  gap: 6px;
+}
+
+/* The edge to drag: a wide target along the panel's edge, a short grip drawn on it. */
+.divider {
+  position: absolute;
+  z-index: 1;
+  touch-action: none;
+}
+
+.divider[data-side='bottom'] {
+  left: 0;
+  right: 0;
+  top: -7px;
+  height: 14px;
+  cursor: row-resize;
+}
+
+.divider[data-side='right'] {
+  top: 0;
+  bottom: 0;
+  left: -7px;
+  width: 14px;
+  cursor: col-resize;
+}
+
+.divider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transform: translate(-50%, -50%);
+}
+
+.divider[data-side='bottom']::after {
+  width: 44px;
+  height: 4px;
+}
+
+.divider[data-side='right']::after {
+  width: 4px;
+  height: 44px;
+}
+
+.divider:hover::after {
+  background: var(--accent);
+}
+
+/* One row, whatever the width: the words give way first, then it scrolls sideways. */
 .head {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px 16px;
+  gap: 12px;
+  min-width: 0;
+  /* Room for the buttons' borders: a row that scrolls clips what touches its edge. */
+  padding: 2px 1px;
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.head > * {
+  flex-shrink: 0;
+}
+
+.head > .next {
+  flex-shrink: 1;
+}
+
+/* Words where there is room; on a narrow screen, the switches' icons and "Close". */
+.icon,
+.short {
+  display: none;
+}
+
+@media (max-width: 640px), (max-height: 519px) {
+  .long {
+    display: none;
+  }
+
+  .icon,
+  .short {
+    display: inline;
+  }
+
+  .head {
+    gap: 8px;
+  }
+
+  .head > .next {
+    display: none;
+  }
+}
+
+.notes[data-side='right'] .next {
+  display: none;
+}
+
+.switches {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.toggle {
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.toggle[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.toggle:disabled {
+  cursor: default;
+}
+
+/* Stamps and celebrations: one row each, scrolling sideways. */
+.row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: none;
+}
+
+.chip {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.chip:hover {
+  background: var(--surface-2);
 }
 
 .where {
@@ -52,6 +213,7 @@
 }
 
 .close {
+  white-space: nowrap;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -138,4 +300,21 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
+}
+
+/* Down the right: the next slide above the notes, not beside them. */
+.notes[data-side='right'] .body {
+  flex-direction: column-reverse;
+}
+
+.notes[data-side='right'] .upNext {
+  height: 34%;
+  width: 100%;
+  max-width: none;
+  aspect-ratio: auto;
+  flex: 0 0 auto;
+}
+
+.notes[data-side='right'] .field {
+  font-size: 16px;
 }

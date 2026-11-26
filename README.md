@@ -444,6 +444,11 @@ within it while presenting.
   (`dropExtraPages`, not an undo step; version history still has them). Elements may
   still carry an old `page` field, and the page list is still read, for boards nobody
   has edited since.
+- **Remote control.** While presenting, Remote control shows a link and a QR code: on a
+  phone or in another tab it is presenter view — the slide, the next one, the notes, a
+  clock — with big Previous and Next buttons (or a swipe). No sign-in; it works only
+  while that presentation runs. On the signed-out board, only in another tab of the same
+  browser.
 - **Presentation.** **Present frames**, on the controls. Frames play in their numbers' order (see
   "Presenting, frames and media" above: down each column, then the next); arrow keys, Space and Page Up/Down move, Escape
   leaves. Presenting is spotlighting: everyone else on the board follows, and each

@@ -146,11 +146,40 @@ export type ClientMessage =
       guest?: { id: string; name: string } | null;
       /** This open page, the same on every reconnection, so the room can replace it. */
       tab?: string;
+      /**
+       * A remote control: the key from its link, in place of a token. It works only
+       * while the presenter who made it is presenting, and it lets its holder see the
+       * board and move the slides, nothing more.
+       */
+      remote?: string;
     }
   | { t: 'presence'; state: PresenceState }
   | { t: 'history' }
   | { t: 'history-state'; seq: number; req: number }
-  | { t: 'checkpoint'; name: string };
+  | { t: 'checkpoint'; name: string }
+  /** The owner, presenting, makes a remote control link (`key`) for this page. */
+  | { t: 'remote-open'; key: string }
+  /** The presentation is over: the link stops working and any remote is let go. */
+  | { t: 'remote-close' }
+  /** The presenter tells the remotes where the talk is. */
+  | { t: 'remote-state'; state: RemoteState }
+  /** A remote's button: passed to the presenter's page. */
+  | { t: 'remote'; action: RemoteAction };
+
+/** What a remote control can ask the presenter's page to do. */
+export type RemoteAction = 'next' | 'previous' | 'first' | 'last';
+
+export const REMOTE_ACTIONS: readonly RemoteAction[] = ['next', 'previous', 'first', 'last'];
+
+/** Where the talk is, for a remote control: the slide, and when presenting began. */
+export interface RemoteState {
+  frame: string | null;
+  /** Epoch milliseconds, for the remote's clock; null before it began. */
+  since: number | null;
+}
+
+/** A remote control's key: what its link carries. */
+export const REMOTE_KEY = /^[\w-]{20,64}$/;
 
 export type ServerMessage =
   | {
@@ -172,6 +201,10 @@ export type ServerMessage =
   | { t: 'presence'; session: string; user: PeerIdentity; state: PresenceState }
   /** One per UPDATE or SYNC_STEP2 received, once it is stored. */
   | { t: 'ack' }
+  /** To the presenter: a remote's button, or `hello` when a remote has connected. */
+  | { t: 'remote'; action: RemoteAction | 'hello' }
+  /** To a remote: where the talk is. */
+  | { t: 'remote-state'; state: RemoteState }
   | {
       t: 'history';
       first: number;
@@ -185,8 +218,11 @@ export type ServerMessage =
   | {
       t: 'error';
       message: string;
-      /** `read-only`: an edit from someone who may not edit, dropped. The socket stays. */
-      code: 'unauthorised' | 'not-found' | 'bad-request' | 'read-only' | 'revoked';
+      /**
+       * `read-only`: an edit from someone who may not edit, dropped. The socket stays.
+       * `waiting`: a remote control whose presenter is not connected; it tries again.
+       */
+      code: 'unauthorised' | 'not-found' | 'bad-request' | 'read-only' | 'revoked' | 'waiting';
     };
 
 /**

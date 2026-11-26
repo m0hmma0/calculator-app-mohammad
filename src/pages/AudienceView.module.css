@@ -62,3 +62,26 @@
   inset: 0;
   z-index: 1;
 }
+
+/* Before full screen, while the pointer moves: the way into it. Nothing in full screen. */
+.fullScreen {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 999px;
+  background: rgb(16 18 23 / 0.8);
+  color: #fff;
+  font: 600 14px/1 var(--font-ui, system-ui, sans-serif);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.fullScreen:hover {
+  background: rgb(16 18 23 / 0.95);
+}

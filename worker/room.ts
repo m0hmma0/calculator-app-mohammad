@@ -5,6 +5,8 @@ import {
   FRAME,
   FrameAssembler,
   frame,
+  REMOTE_ACTIONS,
+  REMOTE_KEY,
   splitFrame,
   type ClientMessage,
   type HistoryCheckpoint,
@@ -31,6 +33,8 @@ interface Attachment {
   tab: string | null;
   /** When the socket opened, for telling a quiet window from a vanished one. */
   joinedAt: number;
+  /** A remote control (Phase 17c): sees the board, moves the slides, is nobody's peer. */
+  remote?: boolean;
 }
 
 /** Take a full snapshot after this many updates, so loading never replays thousands. */
@@ -419,6 +423,73 @@ export class BoardRoom extends DurableObject<Env> {
   }
 
   /** Everyone signed in on this board, except `except`. */
+  /** The remote controls connected now. */
+  private remotes(): WebSocket[] {
+    return this.others(null).filter((ws) => this.attachment(ws).remote === true);
+  }
+
+  /** The presenter's page that made the remote control link: its open sockets. */
+  private presenterSockets(): WebSocket[] {
+    const uid = this.meta('remoteUid');
+    const tab = this.meta('remoteTab');
+    if (!uid) return [];
+    return this.others(null).filter((ws) => {
+      const { user, tab: own, remote } = this.attachment(ws);
+      return !remote && user?.uid === uid && (tab === '' || own === tab);
+    });
+  }
+
+  /** The link stops working, and any remote holding it is let go with `code`. */
+  private endRemote(code: 'unauthorised' | 'waiting', message: string, forget: boolean): void {
+    if (forget) {
+      this.sql.exec("DELETE FROM meta WHERE key IN ('remoteKey', 'remoteUid', 'remoteTab')");
+    }
+    for (const ws of this.remotes()) this.refuse(ws, code, message);
+  }
+
+  /**
+   * A remote control's handshake: the key from its link, which the presenter made and
+   * which works only while their page is connected. A wrong key, or a presentation
+   * that is over, is refused for good; a presenter momentarily away, for now.
+   */
+  private authenticateRemote(ws: WebSocket, key: string): void {
+    const expected = this.meta('remoteKey');
+    if (!expected || !REMOTE_KEY.test(key) || key !== expected) {
+      return this.refuse(ws, 'unauthorised', 'This remote control link has ended');
+    }
+    if (this.presenterSockets().length === 0) {
+      return this.refuse(ws, 'waiting', 'Waiting for the presenter');
+    }
+    const user: PeerIdentity = {
+      uid: `remote:${key.slice(0, 8)}`,
+      name: 'Remote control',
+      picture: null,
+      color: colorFor(`remote:${key}`),
+    };
+    const attachment: Attachment = {
+      ...this.attachment(ws),
+      user,
+      role: 'viewer',
+      viewer: null,
+      link: null,
+      tab: null,
+      remote: true,
+    };
+    ws.serializeAttachment(attachment);
+    this.sendJson(ws, {
+      t: 'ready',
+      session: attachment.session,
+      you: user,
+      role: 'viewer',
+      now: Date.now(),
+      peers: [],
+    });
+    this.sendJson(ws, { t: 'role', role: 'viewer', canExport: false });
+    // The presenter's page answers with where the talk is.
+    for (const socket of this.presenterSockets())
+      this.sendJson(socket, { t: 'remote', action: 'hello' });
+  }
+
   private others(except: WebSocket | null): WebSocket[] {
     return this.ctx
       .getWebSockets()
@@ -454,11 +525,17 @@ export class BoardRoom extends DurableObject<Env> {
 
   private refuse(
     ws: WebSocket,
-    code: 'unauthorised' | 'not-found' | 'bad-request' | 'revoked',
+    code: 'unauthorised' | 'not-found' | 'bad-request' | 'revoked' | 'waiting',
     message: string,
   ) {
     this.sendJson(ws, { t: 'error', code, message });
-    const close = { 'not-found': 4404, unauthorised: 4401, 'bad-request': 4400, revoked: 4403 };
+    const close = {
+      'not-found': 4404,
+      unauthorised: 4401,
+      'bad-request': 4400,
+      revoked: 4403,
+      waiting: 4409,
+    };
     ws.close(close[code], message);
   }
 
@@ -482,7 +559,8 @@ export class BoardRoom extends DurableObject<Env> {
 
     for (const ws of this.ctx.getWebSockets()) {
       const attachment = this.attachment(ws);
-      if (!attachment.user) continue;
+      // A remote control holds the presenter's key, not a grant: the key is its check.
+      if (!attachment.user || attachment.remote) continue;
       const access = await boardAccess(this.env, attachment.viewer, boardId, attachment.link);
       if (!access.role) {
         this.refuse(ws, 'revoked', 'Your access to this board has been removed');
@@ -597,10 +675,12 @@ export class BoardRoom extends DurableObject<Env> {
     this.lastSweep = 0;
     this.sweep();
 
-    const peers = this.others(ws).map((other) => {
-      const { session, user: peer } = this.attachment(other);
-      return { session, user: peer! };
-    });
+    const peers = this.others(ws)
+      .filter((other) => !this.attachment(other).remote)
+      .map((other) => {
+        const { session, user: peer } = this.attachment(other);
+        return { session, user: peer! };
+      });
     this.sendJson(ws, {
       t: 'ready',
       session: attachment.session,
@@ -659,17 +739,59 @@ export class BoardRoom extends DurableObject<Env> {
       }
 
       if (!user) {
+        if (parsed.t === 'auth' && typeof parsed.remote === 'string' && !parsed.token) {
+          return this.authenticateRemote(ws, parsed.remote);
+        }
         if (parsed.t === 'auth' && typeof parsed.token === 'string') {
           return this.authenticate(ws, parsed);
         }
         return this.refuse(ws, 'unauthorised', 'Sign in first');
       }
 
+      const { remote, tab } = this.attachment(ws);
+      // A remote control may press its buttons, and nothing else.
+      if (remote) {
+        if (parsed.t !== 'remote' || !REMOTE_ACTIONS.includes(parsed.action)) return;
+        for (const socket of this.presenterSockets()) {
+          this.sendJson(socket, { t: 'remote', action: parsed.action });
+        }
+        return;
+      }
+
       switch (parsed.t) {
+        // Presenting is the owner's, and so is the link that steers it.
+        case 'remote-open': {
+          if (role !== 'owner' || typeof parsed.key !== 'string' || !REMOTE_KEY.test(parsed.key)) {
+            return;
+          }
+          if (this.meta('remoteKey') !== parsed.key) {
+            this.endRemote('unauthorised', 'This remote control link has ended', false);
+          }
+          this.setMeta('remoteKey', parsed.key);
+          this.setMeta('remoteUid', user.uid);
+          this.setMeta('remoteTab', tab ?? '');
+          return;
+        }
+        case 'remote-close': {
+          if (role !== 'owner' || this.meta('remoteUid') !== user.uid) return;
+          return this.endRemote('unauthorised', 'The presentation has ended', true);
+        }
+        case 'remote-state': {
+          if (!this.presenterSockets().includes(ws)) return;
+          const frameId = parsed.state?.frame;
+          const since = parsed.state?.since;
+          const state = {
+            frame: typeof frameId === 'string' ? frameId.slice(0, 64) : null,
+            since: typeof since === 'number' && Number.isFinite(since) ? since : null,
+          };
+          for (const socket of this.remotes()) this.sendJson(socket, { t: 'remote-state', state });
+          return;
+        }
         case 'presence': {
           if (message.length > MAX_PRESENCE_BYTES) return;
           const relay = JSON.stringify({ t: 'presence', session, user, state: parsed.state });
-          for (const other of this.others(ws)) {
+          // Not to a remote control: it shows the slide, not where people point.
+          for (const other of this.others(ws).filter((each) => !this.attachment(each).remote)) {
             try {
               other.send(relay);
             } catch {
@@ -783,14 +905,19 @@ export class BoardRoom extends DurableObject<Env> {
   private leave(ws: WebSocket): void {
     // A page closing may be the last thing this room hears for a while.
     this.flush();
-    const { session, user } = this.attachment(ws);
+    const { session, user, remote } = this.attachment(ws);
+    const wasPresenter = this.presenterSockets().includes(ws);
     this.assemblers.delete(session);
     try {
       ws.close(1000, 'Bye');
     } catch {
       // Already closed.
     }
-    if (!user) return;
+    if (!user || remote) return;
     for (const other of this.others(ws)) this.sendJson(other, { t: 'leave', session });
+    // The presenter's page has gone: remotes wait (and try again) until it is back.
+    if (wasPresenter && this.presenterSockets().length === 0) {
+      this.endRemote('waiting', 'Waiting for the presenter', false);
+    }
   }
 }

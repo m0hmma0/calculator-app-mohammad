@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { SIDE_PANE_QUERY } from '@/ui/layout';
 import { clearLaser } from '@/laser/laserTrail';
 import { centerOn, fitToRect, type Size, type Viewport } from '@/canvas/viewport';
 import type { Rect } from '@/geometry';
@@ -8,6 +9,7 @@ import type { BoardElement } from '@/model/element';
 import { keysBetween } from '@/model/zorder';
 import { setViewportGuard, useBoardStore } from '@/state/boardStore';
 import { closeAudienceWindow, openAudienceWindow } from './audience';
+import { closeRemote } from './remote';
 
 /** Margin around a frame in presentation, in screen pixels. */
 export const PRESENT_PADDING = 24;
@@ -23,10 +25,14 @@ interface PresentationStore {
   audience: boolean;
   /** When it opened, for the presenter's clock. */
   audienceSince: number | null;
+  /** When presenting began (epoch ms), for a remote control's clock. */
+  startedAt: number | null;
   /** Videos and sounds the audience window could not play, so heard here instead. */
   heardHere: readonly string[];
-  /** The notes along the bottom in presenter view, in pixels: the slide fits above them. */
+  /** Presenter view's notes, in pixels: the slide fits beside them. */
   notesInset: number;
+  /** Where they are: along the bottom, or (a phone on its side) down the right. */
+  notesSide: 'bottom' | 'right';
   /** A transition is playing over the board (`SlideTransition`); videos wait under it. */
   transitioning: boolean;
 }
@@ -36,8 +42,10 @@ export const usePresentation = create<PresentationStore>(() => ({
   frame: null,
   audience: false,
   audienceSince: null,
+  startedAt: null,
   heardHere: [],
   notesInset: 0,
+  notesSide: 'bottom',
   transitioning: false,
 }));
 
@@ -152,11 +160,26 @@ export function renumberFrame(frameId: string, number: number): void {
   store.applyDiscrete(slidePatches(order));
 }
 
-/** The part of the stage the slide is shown in: all of it, less presenter view's notes. */
+/**
+ * Room kept along the bottom for the slide controls, where they sit over the board
+ * (a tall screen or a phone; on a wide one they are in the pane), so they never cover
+ * the slide.
+ */
+const BAR_ROOM = 64;
+
+/**
+ * The part of the stage the slide is shown in: all of it, less presenter view's notes
+ * and the slide controls along the bottom.
+ */
 function slideArea(): Size {
   const { stageSize } = useBoardStore.getState();
-  const { audience, notesInset } = usePresentation.getState();
-  return { width: stageSize.width, height: stageSize.height - (audience ? notesInset : 0) };
+  const { audience, notesInset, notesSide } = usePresentation.getState();
+  const inset = audience ? notesInset : 0;
+  const bar =
+    typeof window !== 'undefined' && !window.matchMedia?.(SIDE_PANE_QUERY).matches ? BAR_ROOM : 0;
+  return notesSide === 'right'
+    ? { width: stageSize.width - inset, height: stageSize.height - bar }
+    : { width: stageSize.width, height: stageSize.height - inset - bar };
 }
 
 /** The view that shows the whole frame: the slide at its own size. */
@@ -251,7 +274,7 @@ export function startPresentation(): boolean {
   // Presenting is spotlighting: everyone else on the board follows along.
   usePresence.setState({ spotlight: true, following: null });
   useBoardStore.getState().clearSelection();
-  usePresentation.setState({ presenting: true });
+  usePresentation.setState({ presenting: true, startedAt: Date.now() });
   setViewportGuard(guardSlide);
   show(first.id);
   // The chrome goes away, so the stage grows; the frame is refitted to the new size.
@@ -260,7 +283,11 @@ export function startPresentation(): boolean {
   });
   // Presenter view opening or closing, or its notes growing, changes the room too.
   const stopNotes = usePresentation.subscribe((state, previous) => {
-    if (state.audience !== previous.audience || state.notesInset !== previous.notesInset) {
+    if (
+      state.audience !== previous.audience ||
+      state.notesInset !== previous.notesInset ||
+      state.notesSide !== previous.notesSide
+    ) {
       show(state.frame);
     }
   });
@@ -274,11 +301,12 @@ export function startPresentation(): boolean {
 export function stopPresentation(): void {
   // The audience window goes with the presentation, as a slide show's does.
   closeAudienceWindow();
+  closeRemote();
   stopWatching?.();
   stopWatching = null;
   setViewportGuard(null);
   delete document.documentElement.dataset.presenting;
-  usePresentation.setState({ presenting: false, frame: null });
+  usePresentation.setState({ presenting: false, frame: null, startedAt: null });
   usePresence.setState({ spotlight: false, present: null });
 }
 

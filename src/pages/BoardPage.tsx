@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { handleRemoteMessage, setRemoteRoom } from '@/workshop/remote';
 import { applyHistoryMessage, applyHistoryState, attachHistory } from '@/collab/history';
 import { applyServerMessage, resetPresence, usePresence } from '@/collab/presence';
 import { startPresence, type PresenceHandle } from '@/collab/publish';
@@ -95,6 +96,7 @@ function BoardView({ boardId }: { boardId: string }) {
               applyServerMessage(message);
               applyHistoryMessage(message);
               if (message.t === 'role') applyRole(message.role, message.canExport);
+              handleRemoteMessage(message);
               if (message.t === 'comments') void useComments.getState().refresh();
               // Someone new should see everyone at once, not at their next movement.
               if (message.t === 'join' || message.t === 'ready') presence?.publishNow();
@@ -114,6 +116,7 @@ function BoardView({ boardId }: { boardId: string }) {
         }
         sync = started;
         presence = startPresence(started.room);
+        setRemoteRoom(started.room);
         attachHistory(started.room, doc);
         void useComments.getState().open(boardId);
         setStatus('ready');
@@ -124,6 +127,7 @@ function BoardView({ boardId }: { boardId: string }) {
 
     return () => {
       cancelled = true;
+      setRemoteRoom(null);
       presence?.stop();
       attachHistory(null, null);
       useComments.getState().close();

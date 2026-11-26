@@ -44,6 +44,7 @@ export function AudienceView({ channelName }: { channelName: string }) {
   const [heard, setHeard] = useState(false);
   const [lonely, setLonely] = useState(false);
   const [idle, setIdle] = useState(false);
+  const [full, setFull] = useState(() => Boolean(document.fullscreenElement));
   const [camera, setCamera] = useState<CameraLayout | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const frameId = usePresentation((state) => state.frame);
@@ -246,11 +247,14 @@ export function AudienceView({ channelName }: { channelName: string }) {
     const onKey = (event: KeyboardEvent) => {
       if (event.code === 'KeyF' && !event.ctrlKey && !event.metaKey && !event.altKey) toggle();
     };
+    const onChange = () => setFull(Boolean(document.fullscreenElement));
     window.addEventListener('dblclick', toggle);
     window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onChange);
     return () => {
       window.removeEventListener('dblclick', toggle);
       window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onChange);
     };
   }, []);
 
@@ -286,6 +290,29 @@ export function AudienceView({ channelName }: { channelName: string }) {
         <AudienceCamera layout={camera} stream={cameraStream} />
       ) : null}
       <EffectsLayer />
+      {/* Full screen is the slide and nothing else: the button shows only before it,
+          and only while the pointer moves, so it is never in a recording. */}
+      {!full && !idle ? (
+        <button
+          type="button"
+          className={styles.fullScreen}
+          data-testid="audience-fullscreen"
+          onClick={() => void document.documentElement.requestFullscreen().catch(() => {})}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Full screen
+        </button>
+      ) : null}
       {!heard && lonely ? (
         <p className={styles.lonely} data-testid="audience-lonely">
           This window shows the slides from presenter view. Start presenter view on the board to use

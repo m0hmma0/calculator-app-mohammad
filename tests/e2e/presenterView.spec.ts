@@ -68,6 +68,43 @@ async function middleFraction(page: Page, canvasId: string, colour: string, shar
   );
 }
 
+/** How much of an area of the board's canvas is close to a colour, in page pixels. */
+async function fraction(
+  page: Page,
+  colour: string,
+  area: { x: number; y: number; w: number; h: number },
+) {
+  return page.evaluate(
+    ([wanted, region]) => {
+      const probe = document.createElement('canvas').getContext('2d')!;
+      probe.fillStyle = wanted;
+      probe.fillRect(0, 0, 1, 1);
+      const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="board-canvas"]')!;
+      const bounds = canvas.getBoundingClientRect();
+      const dpr = canvas.width / bounds.width;
+      const data = canvas
+        .getContext('2d')!
+        .getImageData(
+          Math.round((region.x - bounds.left) * dpr),
+          Math.round((region.y - bounds.top) * dpr),
+          Math.max(1, Math.round(region.w * dpr)),
+          Math.max(1, Math.round(region.h * dpr)),
+        ).data;
+      let near = 0;
+      for (let index = 0; index < data.length; index += 4) {
+        const distance =
+          Math.abs(data[index]! - r!) +
+          Math.abs(data[index + 1]! - g!) +
+          Math.abs(data[index + 2]! - b!);
+        if (distance < 40) near += 1;
+      }
+      return near / (data.length / 4);
+    },
+    [colour, area] as const,
+  );
+}
+
 /** Presents, then opens presenter view from the slide controls; returns its window. */
 async function openPresenterView(page: Page) {
   await page.getByTestId('present-start').click();
@@ -373,5 +410,147 @@ test.describe('presenter view, round two', () => {
     });
     expect(prevented).toBe(false);
     await page.evaluate(() => document.exitFullscreen());
+  });
+});
+
+// Phase 17c on the signed-out board: there is no room, so the remote control is
+// another tab of this browser, fed by the presenter's tab.
+test('a remote control in another tab moves the slides, shows the notes, and ends with them', async ({
+  page,
+}) => {
+  await threeFrames(page);
+  await page.getByTestId('present-start').click();
+  await expect(page.getByTestId('presentation-counter')).toHaveText('1 / 3');
+  await page.getByTestId('remote-open').click();
+  const link = await page.getByTestId('remote-link').inputValue();
+  await page.getByTestId('remote-done').click();
+
+  const remote = await page.context().newPage();
+  await remote.goto(link);
+  await expect(remote.getByTestId('remote-slide')).toHaveText(/Slide 1 of 3/);
+  await expect(remote.getByTestId('remote-notes')).toHaveText(/No notes/);
+  await remote.getByTestId('remote-next-button').click();
+  await expect(page.getByTestId('presentation-counter')).toHaveText('2 / 3');
+  await expect(remote.getByTestId('remote-slide')).toHaveText(/Slide 2 of 3/);
+  // A swipe across the slide, too.
+  const slide = (await remote.getByTestId('remote-current').boundingBox())!;
+  await remote.mouse.move(slide.x + slide.width * 0.8, slide.y + slide.height / 2);
+  await remote.mouse.down();
+  await remote.mouse.move(slide.x + slide.width * 0.2, slide.y + slide.height / 2, { steps: 5 });
+  await remote.mouse.up();
+  await expect(page.getByTestId('presentation-counter')).toHaveText('3 / 3');
+
+  await page.getByTestId('present-stop').click();
+  await expect(remote.getByTestId('remote-status')).toHaveText(/has ended/);
+});
+
+// Phase 17c: presenter view's parts behind switches, a divider, notes that keep their
+// place, and full screen in the audience window.
+test.describe('presenter view, tidied', () => {
+  test('recording, stamps and celebrations show only when switched on, and stay so', async ({
+    page,
+  }) => {
+    await threeFrames(page);
+    await openPresenterView(page);
+    // All hidden to begin with.
+    await expect(page.getByTestId('record-camera')).toHaveCount(0);
+    await expect(page.getByTestId('presenter-stamps')).toHaveCount(0);
+    await expect(page.getByTestId('presenter-celebrations')).toHaveCount(0);
+
+    await page.getByTestId('presenter-show-record').click();
+    await expect(page.getByTestId('record-camera')).toBeVisible();
+    await page.getByTestId('presenter-show-stamps').click();
+    await page.getByTestId('presenter-stamp-⭐').click();
+    await expect(page.getByTestId('presenter-stamp-⭐')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('presenter-show-celebrations').click();
+    await page.getByTestId('presenter-celebrate-confetti').click();
+    await expect(page.getByTestId('celebration-play').first()).toBeAttached();
+
+    // Switched off, gone; and the choices are remembered next time.
+    await page.getByTestId('presenter-show-record').click();
+    await expect(page.getByTestId('record-camera')).toHaveCount(0);
+    await page.getByTestId('audience-close').click();
+    await expect(page.getByTestId('presenter-notes')).toHaveCount(0);
+    const opened = page.context().waitForEvent('page');
+    await page.getByTestId('presenter-view').click();
+    await opened;
+    await expect(page.getByTestId('presenter-stamps')).toBeVisible();
+    await expect(page.getByTestId('presenter-celebrations')).toBeVisible();
+    await expect(page.getByTestId('record-camera')).toHaveCount(0);
+  });
+
+  test('the divider gives the notes more room, and the slide fits what is left', async ({
+    page,
+  }) => {
+    await threeFrames(page);
+    await openPresenterView(page);
+    const notes = page.getByTestId('presenter-notes');
+    const before = (await notes.boundingBox())!;
+    const handle = (await page.getByTestId('presenter-divider').boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y - 150, { steps: 6 });
+    await page.mouse.up();
+    const after = (await notes.boundingBox())!;
+    expect(after.height).toBeGreaterThan(before.height + 120);
+    // The slide sits above the notes still: the surround just above them, nothing of
+    // the slide under them.
+    const stage = (await page.getByTestId('stage').boundingBox())!;
+    const above = { x: stage.x, y: after.y - 12, w: stage.width, h: 8 };
+    await expect.poll(() => fraction(page, SURROUND, above)).toBeGreaterThan(0.95);
+    // Remembered.
+    await page.reload();
+    await page.getByTestId('present-start').click();
+    const opened = page.context().waitForEvent('page');
+    await page.getByTestId('presenter-view').click();
+    await opened;
+    const again = (await page.getByTestId('presenter-notes').boundingBox())!;
+    expect(Math.abs(again.height - after.height)).toBeLessThan(4);
+  });
+
+  test('each slide’s notes keep their place, and the wheel scrolls them', async ({ page }) => {
+    await threeFrames(page);
+    await openPresenterView(page);
+    const field = page.getByTestId('presenter-notes-field');
+    const long = Array.from({ length: 40 }, (_, index) => `Line ${index + 1}`).join('\n');
+    await field.fill(long);
+    await field.evaluate((node) => (node.scrollTop = 0));
+
+    // The wheel over the notes scrolls them, not the board.
+    const box = (await field.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 300);
+    await expect.poll(() => field.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+    const kept = await field.evaluate((node) => node.scrollTop);
+
+    // To the next slide and back: where it was.
+    await page.getByTestId('slide-next-big').click();
+    await expect(page.getByTestId('presenter-slide')).toHaveText(/Slide 2 of 3/);
+    await page.getByTestId('slide-previous-big').click();
+    await expect(page.getByTestId('presenter-slide')).toHaveText(/Slide 1 of 3/);
+    await expect.poll(() => field.evaluate((node) => node.scrollTop)).toBe(kept);
+  });
+
+  test('on a phone on its side the notes sit down the right', async ({ page }) => {
+    await threeFrames(page);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await openPresenterView(page);
+    const notes = page.getByTestId('presenter-notes');
+    await expect(notes).toHaveAttribute('data-side', 'right');
+    const box = (await notes.boundingBox())!;
+    expect(box.x + box.width).toBeCloseTo(844, 0);
+    expect(box.height).toBeGreaterThan(300);
+  });
+
+  test('the audience window’s full-screen button leaves only the slide', async ({ page }) => {
+    await threeFrames(page);
+    const audience = await openPresenterView(page);
+    await audience.mouse.move(300, 300);
+    await audience.getByTestId('audience-fullscreen').click();
+    await expect
+      .poll(() => audience.evaluate(() => Boolean(document.fullscreenElement)))
+      .toBe(true);
+    await audience.mouse.move(320, 320);
+    await expect(audience.getByTestId('audience-fullscreen')).toHaveCount(0);
   });
 });

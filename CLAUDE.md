@@ -31,7 +31,7 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a** and **17b** (built) and **17c**, then keyboard use (the old 17, now **17d**). Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a**, **17b** and **17c** (built), then keyboard use (the old 17, now **17d**). Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -330,6 +330,34 @@ phones both ways (19.5:9), laptops 16:9 and 16:10, keeping the corner and the ar
 nowrap, scrolls; the squeeze aims for one row by overflow); along the bottom of a
 phone the slide bar takes the width with 48 px arrows. The browser's own "drag from
 the top to exit full screen" notice cannot be changed by a page.
+
+Phase 17c (20 November): presenter view and a remote control. **Remote control**
+(`src/workshop/remote.ts`, `src/pages/RemoteView.tsx`): while presenting, "Remote
+control" (slide controls; `RemoteControlButton`, a QR code by `qrcode-generator`) makes
+a link — this page plus `#remote=<key>` and, with a room, `&b=<board>` (`remoteMode.ts`;
+`main.tsx` renders `RemoteView`). With a room, the presenter sends `remote-open` (owner
+only; the room keeps `remoteKey`, `remoteUid`, `remoteTab` in its meta table), and a
+remote authenticates with `{t:'auth', token:'', remote: key}`: the room lets it in as a
+viewer of the document (`attachment.remote`), never a peer (no join/leave, no presence
+to or from it, skipped by `reauthorize`), passes its `remote` actions to the presenter's
+sockets and the presenter's `remote-state` (frame, since) to it. A wrong key, or a
+presentation that ended (`remote-close` at `stopPresentation` → `closeRemote`), is
+refused for good (4401); a presenter momentarily disconnected is `waiting` (4409, the
+remote retries). On the signed-out board a BroadcastChannel (`sabboura-remote-<key>`)
+carries the document and the same messages, so the remote must be another tab of this
+browser. Link only, no sign-in (agreed): it can read the board, notes included, and move
+the slides; nothing else. **Presenter view**: Record, Stamps and Celebrations switches
+(`uiPrefs.presenterRecord` etc., all off at first; recording is never hidden while it
+runs — tests turn `presenter-show-record` on first); a divider (`presenter-divider`,
+`uiPrefs.notesShare`); on a short landscape stage (a phone on its side) the notes go
+down the right (`notesSide`, `slideArea` in presentation.ts); `BAR_ROOM` keeps the slide
+clear of the slide controls along the bottom; the head row is one row (icons and
+"Close" on narrow screens); notes keep their scroll per slide (`useNotesScroll`), and
+the wheel scrolls them (the panel is no longer `data-wheel-pans`). `SlidePicture` draws a
+slide for presenter view's next slide and the remote. The audience window has a
+full-screen button (`audience-fullscreen`), only before full screen and while the
+pointer moves. Not done: one row for the slide controls in the 112 px pane (the pane is
+too narrow; on phones they are one row since 17b).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

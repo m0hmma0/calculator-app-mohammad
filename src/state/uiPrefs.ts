@@ -16,6 +16,15 @@ interface UiPrefs {
   sound: boolean;
   /** Timer lengths used most recently, newest first, in seconds. */
   recentTimers: number[];
+  /**
+   * Presenter view's own parts, each shown by its switch (asked for on 20 November):
+   * recording, the stamps and the celebrations. All hidden to begin with.
+   */
+  presenterRecord: boolean;
+  presenterStamps: boolean;
+  presenterCelebrations: boolean;
+  /** How much of the stage presenter view's notes take, from 0.15 to 0.8; null: the usual. */
+  notesShare: number | null;
 }
 
 const KEY = 'sabboura:ui';
@@ -29,6 +38,10 @@ function load(): UiPrefs {
     geometry: false,
     sound: true,
     recentTimers: [],
+    presenterRecord: false,
+    presenterStamps: false,
+    presenterCelebrations: false,
+    notesShare: null,
   };
   try {
     const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<UiPrefs>;
@@ -43,6 +56,13 @@ function load(): UiPrefs {
             .filter((seconds) => Number.isFinite(seconds) && seconds > 0)
             .slice(0, MAX_RECENT_TIMERS)
         : [],
+      presenterRecord: stored.presenterRecord === true,
+      presenterStamps: stored.presenterStamps === true,
+      presenterCelebrations: stored.presenterCelebrations === true,
+      notesShare:
+        typeof stored.notesShare === 'number' && Number.isFinite(stored.notesShare)
+          ? Math.min(0.8, Math.max(0.15, stored.notesShare))
+          : null,
     };
   } catch {
     return fallback;

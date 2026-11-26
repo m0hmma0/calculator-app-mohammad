@@ -26,6 +26,7 @@
     "mediabunny": "^1.65.2",
     "pdfjs-dist": "^4.10.38",
     "perfect-freehand": "^1.2.3",
+    "qrcode-generator": "1.4.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "y-indexeddb": "^9.0.12",
