@@ -815,11 +815,32 @@ export class BoardRoom extends DurableObject<Env> {
           for (const socket of this.remotes()) this.sendJson(socket, { t: 'remote-state', state });
           return;
         }
+        case 'remote-media': {
+          if (!this.presenterSockets().includes(ws)) return;
+          const media = parsed.media;
+          if (!media || typeof media.id !== 'string' || media.id.length > 64) return;
+          const clean = {
+            id: media.id,
+            playing: media.playing === true,
+            time: Number.isFinite(media.time) ? Math.max(0, media.time) : 0,
+            rate: Number.isFinite(media.rate) ? Math.min(4, Math.max(0.25, media.rate)) : 1,
+          };
+          for (const socket of this.remotes().filter((each) => this.attachment(each).watchOnly)) {
+            this.sendJson(socket, { t: 'remote-media', media: clean });
+          }
+          return;
+        }
         case 'presence': {
           if (message.length > MAX_PRESENCE_BYTES) return;
           const relay = JSON.stringify({ t: 'presence', session, user, state: parsed.state });
-          // Not to a remote control: it shows the slide, not where people point.
-          for (const other of this.others(ws).filter((each) => !this.attachment(each).remote)) {
+          // Not to a remote control: it shows the slide, not where people point. A
+          // slides link gets the presenter's, for the laser.
+          const fromPresenter = this.presenterSockets().includes(ws);
+          const receivers = this.others(ws).filter((each) => {
+            const { remote, watchOnly } = this.attachment(each);
+            return !remote || (watchOnly === true && fromPresenter);
+          });
+          for (const other of receivers) {
             try {
               other.send(relay);
             } catch {

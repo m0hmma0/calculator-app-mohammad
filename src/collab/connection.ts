@@ -124,6 +124,12 @@ export class RoomConnection {
     if (this.ready && this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message));
   }
 
+  /**
+   * A remote control or slides link has joined this presenter's room: presence goes
+   * even with nobody else on the board, as a slides link shows the laser from it.
+   */
+  watched = false;
+
   /** Whether anyone else is connected to the room. */
   get alone(): boolean {
     return this.others.size === 0;
@@ -135,7 +141,7 @@ export class RoomConnection {
    * someone joins.
    */
   sendPresence(state: PresenceState): void {
-    if (this.alone) return;
+    if (this.alone && !this.watched) return;
     this.send({ t: 'presence', state });
   }
 

@@ -85,3 +85,20 @@
 .fullScreen:hover {
   background: rgb(16 18 23 / 0.95);
 }
+
+/* A slides link's screen that was not allowed to play sound unasked. */
+.sound {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 10px 18px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 999px;
+  background: rgb(16 18 23 / 0.85);
+  color: #fff;
+  font: 600 15px/1 var(--font-ui, system-ui, sans-serif);
+  cursor: pointer;
+  pointer-events: auto;
+}

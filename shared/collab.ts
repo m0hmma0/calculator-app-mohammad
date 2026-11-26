@@ -167,7 +167,17 @@ export type ClientMessage =
   /** The presenter tells the remotes where the talk is. */
   | { t: 'remote-state'; state: RemoteState }
   /** A remote's button: passed to the presenter's page. */
-  | { t: 'remote'; action: RemoteAction };
+  | { t: 'remote'; action: RemoteAction }
+  /** The presenter's video or sound file, played, paused or moved: for slides links. */
+  | { t: 'remote-media'; media: RemoteMedia };
+
+/** A video or sound file on a slide, as the presenter's copy is now. */
+export interface RemoteMedia {
+  id: string;
+  playing: boolean;
+  time: number;
+  rate: number;
+}
 
 /** What a remote control can ask the presenter's page to do. */
 export type RemoteAction = 'next' | 'previous' | 'first' | 'last';
@@ -208,6 +218,8 @@ export type ServerMessage =
   | { t: 'remote'; action: RemoteAction | 'hello' }
   /** To a remote: where the talk is. */
   | { t: 'remote-state'; state: RemoteState }
+  /** To a slides link: the presenter's file, to play, pause or move to match. */
+  | { t: 'remote-media'; media: RemoteMedia }
   | {
       t: 'history';
       first: number;

@@ -581,3 +581,50 @@ test('a slides link in another tab shows the slide alone and follows the present
   await page.getByTestId('present-stop').click();
   await expect(screen.getByTestId('audience-link-status')).toHaveText(/has ended/);
 });
+
+test('a slides link in another tab plays and pauses with the presenter, and shows the laser', async ({
+  page,
+}) => {
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-import').click();
+  await page
+    .getByTestId('import-file')
+    .setInputFiles({ name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav(6) });
+  await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
+  await page.mouse.click(1100, 690);
+  await drag(page, 'KeyF', [10, 10], [1150, 700]);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('present-start').click();
+  await page.getByTestId('watch-link-open').click();
+  const link = await page.getByTestId('watch-link-link').inputValue();
+  await page.getByTestId('watch-link-done').click();
+
+  const screen = await page.context().newPage();
+  await screen.goto(link);
+  await expect(screen.getByTestId('audience')).not.toHaveAttribute('data-frame', '');
+  const there = screen.locator('audio[data-element-id]');
+  await expect(there).toHaveCount(1);
+  const playing = () => there.evaluate((node: HTMLMediaElement) => !node.paused);
+  await page.bringToFront();
+  await page.keyboard.press('Space');
+  await expect.poll(playing).toBe(true);
+  await page.keyboard.press('Space');
+  await expect.poll(playing).toBe(false);
+
+  await page.getByTestId('tool-laser').click();
+  await page.mouse.move(300, 300);
+  await page.mouse.down();
+  await page.mouse.move(700, 320, { steps: 10 });
+  await expect
+    .poll(() =>
+      screen.evaluate(() => {
+        const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-board-over]')!;
+        const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+        let painted = 0;
+        for (let index = 3; index < data.length; index += 4) if (data[index]! > 40) painted += 1;
+        return painted;
+      }),
+    )
+    .toBeGreaterThan(100);
+  await page.mouse.up();
+});

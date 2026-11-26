@@ -4,7 +4,9 @@ import type { RoomConnection } from '@/collab/connection';
 import { boardDoc, currentBoardId } from '@/state/boardStore';
 import type { RemoteAction, RemoteState, ServerMessage } from '@shared/collab';
 import { REMOTE_ACTIONS } from '@shared/collab';
+import type { SentTrail } from './audience';
 import { stepPresentation, usePresentation } from './presentation';
+import { playingMedia, watchLaser, watchMedia, type MediaState } from './showFeed';
 
 /**
  * The remote control (Phase 17c, asked for on 20 November): a link the presenter opens
@@ -23,7 +25,12 @@ import { stepPresentation, usePresentation } from './presentation';
 export type FromRemote = { t: 'hello' } | { t: 'remote'; action: RemoteAction };
 /** And from the presenter to the remote. */
 export type ToRemote =
-  { t: 'doc'; update: Uint8Array } | { t: 'state'; state: RemoteState } | { t: 'end' };
+  | { t: 'doc'; update: Uint8Array }
+  | { t: 'state'; state: RemoteState }
+  | { t: 'end' }
+  /** To a slides link: the presenter's video or sound file, and the laser. */
+  | { t: 'media'; media: MediaState }
+  | { t: 'laser'; trails: SentTrail[] };
 
 export const remoteChannelName = (key: string) => `sabboura-remote-${key}`;
 
@@ -101,6 +108,7 @@ function channelFor(linkKey: string, controls: boolean): () => void {
     if (message?.t === 'hello') {
       post({ t: 'doc', update: Y.encodeStateAsUpdate(doc) });
       post({ t: 'state', state: state() });
+      if (!controls) for (const media of playingMedia()) post({ t: 'media', media });
     } else if (controls && message?.t === 'remote' && REMOTE_ACTIONS.includes(message.action)) {
       act(message.action);
     }
@@ -110,8 +118,13 @@ function channelFor(linkKey: string, controls: boolean): () => void {
       post({ t: 'state', state: state() });
     }
   });
+  // A slides link plays the presenter's files along, and shows the laser.
+  const stopMedia = controls ? () => {} : watchMedia((media) => post({ t: 'media', media }));
+  const stopLaser = controls ? () => {} : watchLaser((trails) => post({ t: 'laser', trails }));
   return () => {
     stopState();
+    stopMedia();
+    stopLaser();
     doc.off('update', onUpdate);
     post({ t: 'end' });
     channel.close();
@@ -133,6 +146,7 @@ function openLinks(): void {
   if (room) {
     const connection = room;
     connection.send({ t: 'remote-open', key: remoteKey, watch: slidesKey });
+    stops.push(watchMedia((media) => connection.send({ t: 'remote-media', media })));
     const sendState = () => connection.send({ t: 'remote-state', state: state() });
     stops.push(
       usePresentation.subscribe((now, before) => {
@@ -154,6 +168,7 @@ function openLinks(): void {
 export function closeRemote(): void {
   if (!key) return;
   room?.send({ t: 'remote-close' });
+  if (room) room.watched = false;
   for (const stop of stops) stop();
   stops = [];
   key = null;
@@ -169,8 +184,13 @@ export function closeRemote(): void {
 export function handleRemoteMessage(message: ServerMessage): void {
   if (!key || !room) return;
   if (message.t === 'remote') {
-    if (message.action === 'hello') room.send({ t: 'remote-state', state: state() });
-    else if (REMOTE_ACTIONS.includes(message.action)) act(message.action);
+    if (message.action === 'hello') {
+      room.send({ t: 'remote-state', state: state() });
+      // Presence (and so the laser) goes to it even with nobody else on the board, and
+      // what is playing now starts there too.
+      room.watched = true;
+      for (const media of playingMedia()) room.send({ t: 'remote-media', media });
+    } else if (REMOTE_ACTIONS.includes(message.action)) act(message.action);
   } else if (message.t === 'ready') {
     room.send({ t: 'remote-open', key, watch: watchKey ?? undefined });
     room.send({ t: 'remote-state', state: state() });

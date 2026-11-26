@@ -401,8 +401,13 @@ presenter's page was reconnecting; only a key from a presentation that ended (th
 keeps the last 12 in `endedKeys`) is refused for good (`ended`, 4410). Opening either
 dialog sends `remote-open` again. On the signed-out board the dialogs say the link works
 only in this browser's other tabs (`*-local`), never another device or a private
-window. Not carried to it yet: the laser, and video/sound
-play/pause (the audience window gets those from presenter view's channel only).
+window. It plays the presenter's video and sound files along (`watchMedia` in
+`src/workshop/showFeed.ts`: play, pause, seek and the time each second, sent as
+`remote-media` through the room to slides links only, or `media` on the channel) and
+shows the laser (with a room, the room passes the presenter's presence to slides links,
+and the presenter sends presence while `room.watched`, set when a link says hello;
+without one, `watchLaser` frames on the channel). A screen not allowed to play sound
+unasked plays muted and shows "Tap for sound" (`audience-sound`).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

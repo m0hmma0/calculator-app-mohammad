@@ -53,6 +53,8 @@ export function AudienceView({
   const trails = useRef<Trail[]>([]);
   const [heard, setHeard] = useState(false);
   /** A slides link: where it stands, for the words shown while there is no slide. */
+  /** A slides link's screen could not play sound unasked: one tap lets it. */
+  const [soundBlocked, setSoundBlocked] = useState(false);
   const [linkStatus, setLinkStatus] = useState<'connecting' | 'waiting' | 'live' | 'ended'>(
     'connecting',
   );
@@ -151,6 +153,24 @@ export function AudienceView({
       setLinkStatus('live');
       redraw();
     };
+    // The presenter's laser, drawn until it fades; their files, played along. A screen
+    // that may not play sound unasked plays muted and offers "Tap for sound".
+    let laserFrame = 0;
+    const pumpLaser = () => {
+      laserFrame = 0;
+      redraw();
+      const now = performance.now();
+      const alive = trails.current.some((trail) =>
+        isTrailAlive(trail.points, { now, lifetimeMs: trail.lifetimeMs }),
+      );
+      if (alive) laserFrame = requestAnimationFrame(pumpLaser);
+    };
+    const laser = (next: Trail[]) => {
+      trails.current = next;
+      if (laserFrame === 0) laserFrame = requestAnimationFrame(pumpLaser);
+    };
+    const media = (state: { id: string; playing: boolean; time: number; rate: number }) =>
+      followMedia({ t: 'media', ...state }, () => setSoundBlocked(true));
     if (link.boardId) {
       const room = new RoomConnection(
         board,
@@ -160,7 +180,27 @@ export function AudienceView({
             if (status === 'refused') setLinkStatus('ended');
           },
           message: (message) => {
-            if (message.t === 'remote-state') show(message.state.frame);
+            if (message.t === 'remote-media') media(message.media);
+            else if (message.t === 'presence') {
+              // The presenter's presence: the laser, aged on this screen's clock.
+              const now = performance.now();
+              const sent = message.state.laser;
+              laser(
+                sent
+                  ? [
+                      {
+                        lifetimeMs: sent.lifetimeMs,
+                        points: sent.points.map((point) => ({
+                          x: point.x,
+                          y: point.y,
+                          at: now - point.age,
+                          mark: point.m,
+                        })),
+                      },
+                    ]
+                  : [],
+              );
+            } else if (message.t === 'remote-state') show(message.state.frame);
             else if (message.t === 'error' && message.code === 'waiting') setLinkStatus('waiting');
             else if (
               message.t === 'error' &&
@@ -175,14 +215,32 @@ export function AudienceView({
         link.key,
       );
       room.start();
-      return () => room.stop();
+      return () => {
+        if (laserFrame !== 0) cancelAnimationFrame(laserFrame);
+        room.stop();
+      };
     }
     const channel = new BroadcastChannel(remoteChannelName(link.key));
     channel.onmessage = (event: MessageEvent<ToRemote>) => {
       const message = event.data;
       if (message.t === 'doc') Y.applyUpdate(board.doc, message.update, REMOTE_ORIGIN);
       else if (message.t === 'state') show(message.state.frame);
-      else if (message.t === 'end') setLinkStatus('ended');
+      else if (message.t === 'media') media(message.media);
+      else if (message.t === 'laser') {
+        const now = performance.now();
+        laser(
+          message.trails.map((trail) => ({
+            lifetimeMs: trail.lifetimeMs,
+            color: trail.color,
+            points: trail.points.map((point) => ({
+              x: point.x,
+              y: point.y,
+              at: now - point.age,
+              mark: point.mark,
+            })),
+          })),
+        );
+      } else if (message.t === 'end') setLinkStatus('ended');
     };
     channel.postMessage({ t: 'hello' } satisfies FromRemote);
     const quiet = setTimeout(
@@ -191,6 +249,7 @@ export function AudienceView({
     );
     return () => {
       clearTimeout(quiet);
+      if (laserFrame !== 0) cancelAnimationFrame(laserFrame);
       channel.close();
     };
   }, [link, redraw]);
@@ -381,6 +440,22 @@ export function AudienceView({
             />
           </svg>
           Full screen
+        </button>
+      ) : null}
+      {link && soundBlocked ? (
+        <button
+          type="button"
+          className={styles.sound}
+          data-testid="audience-sound"
+          onClick={() => {
+            for (const media of document.querySelectorAll<HTMLMediaElement>('video, audio')) {
+              media.muted = false;
+            }
+            setSoundBlocked(false);
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          🔈 Tap for sound
         </button>
       ) : null}
       {link && linkStatus !== 'live' ? (

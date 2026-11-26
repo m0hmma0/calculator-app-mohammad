@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createBoard, newAccount, signIn } from './accounts';
+import { toneWav } from './mediaFixtures';
 
 /**
  * Phase 17c on a board with a room: the presenter's remote control link opens
@@ -174,6 +175,64 @@ test('a slides link shows the slides on another device, and cannot move them', a
   // The presentation ends: so does the link.
   await page.getByTestId('present-stop').click();
   await expect(screen.getByTestId('audience-link-status')).toHaveText(/has ended/);
+
+  await presenterContext.close();
+  await screenContext.close();
+});
+
+// Asked for on 26 November: a slides link plays the presenter's sound along, paused and
+// played by them, and shows their laser.
+test('a slides link plays and pauses with the presenter, and shows the laser', async ({
+  browser,
+}) => {
+  const owner = newAccount('watch-media');
+  const presenterContext = await browser.newContext();
+  const page = await presenterContext.newPage();
+  await signIn(page, owner);
+  await createBoard(page);
+  await page.getByTestId('insert-menu').click();
+  await page.getByTestId('insert-import').click();
+  await page
+    .getByTestId('import-file')
+    .setInputFiles({ name: 'Tone.wav', mimeType: 'audio/wav', buffer: toneWav(6) });
+  await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
+  await page.mouse.click(1100, 690);
+  await drag(page, 'KeyF', [10, 10], [1150, 700]);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('present-start').click();
+  await page.getByTestId('watch-link-open').click();
+  const link = await page.getByTestId('watch-link-link').inputValue();
+  await page.getByTestId('watch-link-done').click();
+
+  const screenContext = await browser.newContext();
+  const screen = await screenContext.newPage();
+  await screen.goto(link);
+  await expect(screen.getByTestId('audience')).not.toHaveAttribute('data-frame', '');
+  const there = screen.locator('audio[data-element-id]');
+  await expect(there).toHaveCount(1);
+  const playing = () => there.evaluate((node: HTMLMediaElement) => !node.paused);
+
+  // Space plays the slide's sound here; it plays there too, and pauses with it.
+  await page.keyboard.press('Space');
+  await expect.poll(playing).toBe(true);
+  await page.keyboard.press('Space');
+  await expect.poll(playing).toBe(false);
+
+  // The laser drawn here shows there.
+  await page.getByTestId('tool-laser').click();
+  await page.mouse.move(300, 300);
+  await page.mouse.down();
+  await page.mouse.move(700, 320, { steps: 10 });
+  const laserThere = () =>
+    screen.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-board-over]')!;
+      const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+      let painted = 0;
+      for (let index = 3; index < data.length; index += 4) if (data[index]! > 40) painted += 1;
+      return painted;
+    });
+  await expect.poll(laserThere).toBeGreaterThan(100);
+  await page.mouse.up();
 
   await presenterContext.close();
   await screenContext.close();
