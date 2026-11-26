@@ -209,8 +209,12 @@
 }
 
 .search:focus {
-  outline: none;
   border-color: var(--accent);
+}
+
+/* The keyboard's focus shows as a ring here too, as everywhere (Phase 17d). */
+.search:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .secondary {

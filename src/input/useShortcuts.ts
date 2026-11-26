@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { enterOnBoard } from './keyboardBoard';
 import { closeHistory, useHistory } from '@/collab/history';
 import { usePresence } from '@/collab/presence';
 import { celebrate, type EffectKind } from '@/fun/effects';
@@ -72,6 +73,8 @@ function run(id: string): boolean {
   }
 
   switch (id) {
+    case 'place-or-type':
+      return enterOnBoard();
     case 'undo':
       store.undo();
       return true;

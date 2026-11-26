@@ -49,5 +49,8 @@
 .select:focus-visible {
   border-color: var(--accent);
   color: var(--accent-ink);
+}
+
+.select:hover:not(:focus-visible) {
   outline: none;
 }

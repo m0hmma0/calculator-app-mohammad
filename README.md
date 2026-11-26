@@ -117,6 +117,8 @@ things down, and copy, cut and paste stay the browser's.
 | ---------------------------- | ---------------------------------------------------- |
 | `V` / `H`                    | Select tool / hand tool                              |
 | `P` `I` `E` `K`              | Pen, highlighter, eraser, laser                      |
+| `Tab` (on the board)         | The next item, in reading order; past the last, on   |
+| `Enter`                      | Place the tool's shape, or type into the selection   |
 | `R` `O` `L` `A` `T` `N` `F`  | Rectangle, ellipse, line, arrow, text, sticky, frame |
 | Number pad `1`–`0`, `/`, `*` | Celebrations, at any time                            |
 | `+` / `−`                    | Zoom in / out                                        |

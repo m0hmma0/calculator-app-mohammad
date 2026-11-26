@@ -75,6 +75,12 @@ export const ACTIONS: readonly ShortcutAction[] = [
   action('redo', 'Redo', 'Editing', ['Mod+Shift+KeyZ', 'Mod+KeyY']),
   action('duplicate', 'Duplicate', 'Editing', ['Mod+KeyD']),
   action('delete', 'Delete the selection', 'Editing', ['Delete', 'Backspace']),
+  action(
+    'place-or-type',
+    'Put the tool’s shape in the middle, or type into the selection',
+    'Editing',
+    ['Enter'],
+  ),
   action('select-all', 'Select all', 'Editing', ['Mod+KeyA']),
   action('group', 'Group', 'Editing', ['Mod+KeyG']),
   action('ungroup', 'Ungroup', 'Editing', ['Mod+Shift+KeyG']),

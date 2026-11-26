@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { describeSelection, tabThrough, takeRefocusBoard } from '@/input/keyboardBoard';
 import { shortcutLabel } from '@/input/shortcuts';
 import { useSettings } from '@/settings/settings';
 import { drawGrid } from '@/canvas/grid';
@@ -327,7 +328,18 @@ export function CanvasStage() {
       data-cursor="default"
       data-testid="stage"
       style={{ '--stamp-cursor': stampCursor(stamp) } as CSSProperties}
+      // The board takes the focus like any control (Phase 17d): Tab then walks through
+      // what is on it, Enter places or types, and past the last item Tab moves on.
+      tabIndex={0}
+      role="application"
+      aria-label="Whiteboard: Tab moves between items, Enter places the tool's shape or types into the selection"
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || event.key !== 'Tab') return;
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        if (tabThrough(event.shiftKey)) event.preventDefault();
+      }}
     >
+      <BoardAnnouncer />
       <canvas
         ref={canvasRef}
         className={styles.canvas}
@@ -410,5 +422,29 @@ function EmptyHint() {
       {key('tool.select') ? <>{key('tool.select')} selects, </> : null}
       <span className={styles.key}>Space</span> pans.
     </p>
+  );
+}
+
+/**
+ * What is selected, said aloud to a screen reader as it changes; and the focus back on
+ * the board when typing that began from the keyboard ends, so Tab carries on from it.
+ */
+function BoardAnnouncer() {
+  const elements = useBoardStore((state) => state.elements);
+  const selection = useBoardStore((state) => state.selection);
+  const editingId = useBoardStore((state) => state.editingId);
+  const wasEditing = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (wasEditing.current && !editingId && takeRefocusBoard()) {
+      document.querySelector<HTMLElement>('[data-testid="stage"]')?.focus({ preventScroll: true });
+    }
+    wasEditing.current = editingId;
+  }, [editingId]);
+
+  return (
+    <span className={styles.announce} aria-live="polite" data-testid="board-announce">
+      {describeSelection(elements, selection)}
+    </span>
   );
 }

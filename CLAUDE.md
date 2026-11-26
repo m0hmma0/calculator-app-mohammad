@@ -31,7 +31,7 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a**, **17b** and **17c** (built), then keyboard use (the old 17, now **17d**). Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a**, **17b** and **17c** (built), then keyboard use (the old 17, now **17d**, built 26 November). Next is **18** (hardening). Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -358,6 +358,24 @@ slide for presenter view's next slide and the remote. The audience window has a
 full-screen button (`audience-fullscreen`), only before full screen and while the
 pointer moves. Not done: one row for the slide controls in the 112 px pane (the pane is
 too narrow; on phones they are one row since 17b).
+
+Phase 17d (26 November): the board without a mouse. The stage is focusable
+(`tabIndex=0`, `role="application"`, a ring inside its edge). With the focus on it,
+Tab and Shift+Tab select the next or previous item in reading order (`readingOrder` in
+`src/input/keyboardBoard.ts`: top-level, not hidden; across a row, then down) and bring
+it into view; past either end Tab clears the selection and goes on to the next
+control, so nothing traps the focus. Enter is a shortcut (`place-or-type` in ACTIONS):
+with a shape, frame, note or text tool it puts one in the middle of the view (notes and
+text open for typing), and with one item selected it types into it as a double-click
+would; it does nothing while the focus is on a control (`boardHasKeys`). Typing begun
+from the keyboard gives the focus back to the board when it ends (`takeRefocusBoard`).
+`BoardAnnouncer` says the selection aloud ("Rectangle: Start, 1 of 2"; test id
+`board-announce`). Off the board: the dashboard's search box had its ring switched off,
+and the share dialog did not take the focus; the dialog now does, and gives it back to
+the button that opened it. `focus.spec` tabs round the dashboard, Settings and the
+share dialog and checks every stop has a ring (outline or box-shadow). The command
+palette's field and cursor chat keep `outline: none` (the caret, and an accent border,
+show their focus).
 
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   EXPIRY_CHOICES,
   ROLE_LABEL,
@@ -68,6 +68,19 @@ export function ShareDialog({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // The focus goes into the dialog when it opens, and back to whatever opened it
+  // when it closes, so the keyboard is never left on the page behind (Phase 17d).
+  const dialogRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (opener && opener !== document.body && opener.isConnected) {
+        opener.focus({ preventScroll: true });
+      }
+    };
+  }, []);
+
   const run = async (action: () => Promise<ShareState>) => {
     setError(null);
     try {
@@ -103,6 +116,8 @@ export function ShareDialog({
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
