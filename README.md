@@ -3,8 +3,13 @@
 A collaborative infinite whiteboard for the browser — real-time editing, folders and
 sharing, images, freehand ink, text, shapes and a laser pointer.
 
-Runs entirely on free tiers: Cloudflare Pages, D1, Durable Objects and R2, with Firebase
-for Google sign-in.
+Runs entirely on free tiers: a Cloudflare Worker with D1, Durable Objects and R2, with
+Firebase for Google sign-in. Live at <https://sabboura.read4more.com>.
+
+**Working on it with a coding agent?** Start with [`AGENTS.md`](AGENTS.md) (Claude Code
+reads it through `CLAUDE.md`): where things stand, who owns what, how the user wants
+work done, and every trap found so far. Each phase's checklist is in
+[`docs/plan.html`](docs/plan.html).
 
 ## Status
 

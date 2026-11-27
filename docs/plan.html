@@ -1,0 +1,934 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Sabboura Build Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@85..100,400..700&family=JetBrains+Mono:wght@400;500;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+:root{
+  --ground:#F1F2F7; --dot:#C9CDDC;
+  --surface:#FFFFFF; --surface-2:#E9EBF2;
+  --line:#D6D9E4; --line-strong:#B4BACB;
+  --ink:#15171F; --ink-2:#3E4354; --muted:#6E7488;
+  --accent:#3B45D8; --accent-soft:#E3E5FB; --accent-ink:#2A32A8;
+  --laser:#D8375C; --laser-soft:#FADFE6;
+  --ok:#166F4C; --ok-soft:#DDF1E7;
+  --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D0F15; --dot:#242938;
+    --surface:#151822; --surface-2:#1D2130;
+    --line:#272C3B; --line-strong:#3C4258;
+    --ink:#E6E8F0; --ink-2:#B7BCCC; --muted:#8A90A6;
+    --accent:#8A94FF; --accent-soft:#1E2340; --accent-ink:#AEB5FF;
+    --laser:#FF7093; --laser-soft:#301A22;
+    --ok:#4ED2A0; --ok-soft:#122A22;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D0F15; --dot:#242938;
+  --surface:#151822; --surface-2:#1D2130;
+  --line:#272C3B; --line-strong:#3C4258;
+  --ink:#E6E8F0; --ink-2:#B7BCCC; --muted:#8A90A6;
+  --accent:#8A94FF; --accent-soft:#1E2340; --accent-ink:#AEB5FF;
+  --laser:#FF7093; --laser-soft:#301A22;
+  --ok:#4ED2A0; --ok-soft:#122A22;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background-color:var(--ground);
+  background-image:radial-gradient(var(--dot) 1px, transparent 1.1px);
+  background-size:26px 26px; background-position:-13px -13px;
+  color:var(--ink);
+  font-family:"Public Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16.5px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-ink); text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px}
+
+.wrap{max-width:1180px; margin:0 auto; padding:0 24px 96px}
+.layout{display:grid; grid-template-columns:200px minmax(0,1fr); gap:56px; align-items:start}
+@media (max-width:980px){ .layout{grid-template-columns:minmax(0,1fr); gap:0} .rail{display:none} }
+
+.masthead{padding:64px 0 34px; border-bottom:1px solid var(--line)}
+.eyebrow{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:0 0 14px}
+h1{font-family:Archivo,"Public Sans",sans-serif; font-variation-settings:"wdth" 90; font-weight:700; font-size:clamp(38px,6vw,62px); line-height:1.02; letter-spacing:-.02em; margin:0 0 18px; text-wrap:balance}
+h1 .sub{display:block; color:var(--muted); font-weight:500; font-size:clamp(18px,2.4vw,25px); letter-spacing:-.01em; margin-top:12px}
+.lede{max-width:64ch; font-size:18.5px; color:var(--ink-2); margin:0}
+.metabar{display:flex; flex-wrap:wrap; gap:10px; margin-top:26px}
+.meta{font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.05em; border:1px solid var(--line); background:var(--surface); color:var(--ink-2); padding:5px 10px; border-radius:999px}
+.meta.hot{border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink)}
+
+.rail{position:sticky; top:0; padding-top:64px; font-size:13.5px}
+.rail p{font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:0 0 12px}
+.rail ol{list-style:none; margin:0 0 22px; padding:0; display:flex; flex-direction:column; gap:2px}
+.rail a{display:block; padding:5px 10px; color:var(--ink-2); text-decoration:none; border-left:2px solid var(--line); border-radius:0 6px 6px 0}
+.rail a:hover{color:var(--ink); background:var(--surface); border-left-color:var(--accent)}
+.rail a .n{font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--muted); margin-right:7px}
+
+main{padding-top:56px; max-width:80ch}
+section{padding-block:14px 44px; scroll-margin-top:24px}
+h2{font-family:Archivo,sans-serif; font-variation-settings:"wdth" 88; font-weight:700; font-size:29px; letter-spacing:-.015em; line-height:1.15; margin:34px 0 6px; text-wrap:balance}
+h3{font-family:Archivo,sans-serif; font-variation-settings:"wdth" 92; font-weight:600; font-size:19px; letter-spacing:-.005em; margin:32px 0 8px}
+h4{font-family:Archivo,sans-serif; font-weight:600; font-size:15.5px; margin:22px 0 6px}
+section > p, li > p{max-width:66ch}
+p{margin:0 0 14px}
+ul,ol{padding-left:20px; margin:0 0 16px}
+li{margin-bottom:7px; max-width:66ch}
+strong{font-weight:600; color:var(--ink)}
+hr{border:0; border-top:1px solid var(--line); margin:40px 0}
+.sectionmark{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink); margin:0}
+
+.note{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; padding:18px 20px; margin:22px 0}
+.note.warn{border-left-color:var(--laser)}
+.note.ok{border-left-color:var(--ok)}
+.note h4{margin:0 0 6px}
+.note p:last-child,.note ul:last-child{margin-bottom:0}
+
+.scroller{overflow-x:auto; margin:20px 0; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px}
+th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+thead th{font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); font-weight:500; background:var(--surface-2); border-bottom:1px solid var(--line-strong)}
+tbody tr:last-child td{border-bottom:0}
+td.y{color:var(--ok); font-weight:600}
+td.n{color:var(--muted)}
+.matrix td:not(:first-child),.matrix th:not(:first-child){text-align:center}
+td .ph{font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:700; color:var(--accent-ink); background:var(--accent-soft); border-radius:5px; padding:2px 7px; white-space:nowrap}
+
+pre{font-family:"JetBrains Mono",monospace; font-size:12.5px; line-height:1.6; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; overflow-x:auto; margin:20px 0; color:var(--ink-2)}
+code{font-family:"JetBrains Mono",monospace; font-size:.88em; background:var(--surface-2); padding:1px 5px; border-radius:4px; color:var(--ink)}
+pre code{background:none; padding:0; font-size:inherit; color:inherit}
+
+kbd{font-family:"JetBrains Mono",monospace; font-size:11.5px; font-weight:500; background:var(--surface); border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:5px; padding:2px 6px; color:var(--ink); white-space:nowrap; display:inline-block}
+kbd + kbd{margin-left:3px}
+
+/* ---- phases ---- */
+.phases{list-style:none; padding:0; margin:26px 0 0; counter-reset:ph -1}
+.phases > li{counter-increment:ph; position:relative; padding:0 0 30px 60px; margin:0; border-left:1px solid var(--line); max-width:none}
+.phases > li:last-child{border-left-color:transparent}
+.phases > li::before{
+  content:"P" attr(data-n); position:absolute; left:-19px; top:-2px; min-width:38px; padding:0 5px; height:26px;
+  display:grid; place-items:center; font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:700;
+  background:var(--accent-soft); color:var(--accent-ink); border:1px solid var(--accent); border-radius:6px;
+}
+.phase-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:12px; margin-bottom:6px}
+.phase-head h3{margin:0}
+.effort{display:inline-flex; gap:3px; align-items:center}
+.effort i{width:9px; height:9px; border-radius:2px; background:var(--accent); display:block}
+.effort i.off{background:var(--line-strong); opacity:.55}
+.effort span{font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.1em; color:var(--muted); margin-left:5px; text-transform:uppercase}
+.phases p{max-width:66ch}
+.phases > li > ul{margin-bottom:18px}
+
+.check{background:var(--ok-soft); border:1px solid var(--line); border-radius:var(--radius); padding:14px 18px 4px; margin:0}
+.check > p{
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ok); margin:0 0 10px; font-weight:500;
+}
+.check ol{padding-left:18px; margin:0 0 12px; font-size:14.5px}
+.check li{margin-bottom:6px; color:var(--ink-2); max-width:64ch}
+.check li strong{color:var(--ink)}
+.check .gate{
+  font-size:13.5px; color:var(--ink-2); border-top:1px solid var(--line); margin:0 -18px; padding:10px 18px 12px;
+}
+.check .gate b{font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ok); font-weight:500}
+
+.risks{list-style:none; padding:0; margin:20px 0}
+.risks li{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; max-width:none; display:grid; grid-template-columns:6px 1fr; gap:14px}
+.risks li::before{content:""; background:var(--laser); border-radius:3px; display:block}
+.risks li.med::before{background:var(--accent)}
+.risks li.low::before{background:var(--line-strong)}
+.risks b{display:block; font-family:Archivo,sans-serif; font-weight:600; font-size:15.5px; margin-bottom:3px}
+.risks p{margin:0; font-size:14.5px; color:var(--ink-2); max-width:none}
+
+footer{border-top:1px solid var(--line); margin-top:20px; padding-top:22px; color:var(--muted); font-size:14px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Revision 3 · web only · stack locked · phases 0–16 and 17a–17d built</p>
+  <h1>Sabboura
+    <span class="sub">A collaborative infinite whiteboard. Nineteen phases, each one something you can open and check yourself.</span>
+  </h1>
+  <p class="lede">A browser app on Cloudflare and Firebase. Every phase, 0–18, is built and deployed. Two things are left, both needing you: your custom domain, and a week of real use to confirm the costs stay free. Phases 10–16 come from your list of requests after Phase 9, and 14.1 and 14.2 from your list after Phase 14; the original Phases 10 and 11 — accessibility, then hardening — are now 17 and 18 and come last, so that they cover the finished layout and roles. Phase 15 now covers only undo that survives closing a board, and Phase 17 only keyboard use and visible focus; the rest of both is parked, marked so in the table below. Below is the stack, the architecture, and every phase with a concrete list of things to click to confirm it works.</p>
+  <div class="metabar">
+    <span class="meta hot">React + Vite + TypeScript</span>
+    <span class="meta hot">Cloudflare Pages · D1 · Durable Objects · R2</span>
+    <span class="meta hot">Firebase Auth</span>
+    <span class="meta">Everything on free tiers</span>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="rail" aria-label="Sections">
+    <p>Contents</p>
+    <ol>
+      <li><a href="#stack">The stack</a></li>
+      <li><a href="#arch">Architecture</a></li>
+      <li><a href="#model">Model &amp; undo</a></li>
+      <li><a href="#perms">Permissions</a></li>
+      <li><a href="#howcheck">How checking works</a></li>
+    </ol>
+    <p>Phases</p>
+    <ol>
+      <li><a href="#p0"><span class="n">P0</span>Teardown</a></li>
+      <li><a href="#p1"><span class="n">P1</span>Canvas</a></li>
+      <li><a href="#p2"><span class="n">P2</span>Shapes</a></li>
+      <li><a href="#p3"><span class="n">P3</span>Ink, text, images</a></li>
+      <li><a href="#p4"><span class="n">P4</span>Undo &amp; saving</a></li>
+      <li><a href="#p5"><span class="n">P5</span>Accounts</a></li>
+      <li><a href="#p6"><span class="n">P6</span>Image storage</a></li>
+      <li><a href="#p7"><span class="n">P7</span>Real time</a></li>
+      <li><a href="#p8"><span class="n">P8</span>Sharing</a></li>
+      <li><a href="#p9"><span class="n">P9</span>Workshop tools</a></li>
+      <li><a href="#p10"><span class="n">P10</span>Fixes &amp; text box</a></li>
+      <li><a href="#p11"><span class="n">P11</span>Control pane &amp; roles</a></li>
+      <li><a href="#p12"><span class="n">P12</span>Settings</a></li>
+      <li><a href="#p13"><span class="n">P13</span>Presenting &amp; media</a></li>
+      <li><a href="#p14"><span class="n">P14</span>Classroom</a></li>
+      <li><a href="#p14-1"><span class="n">P14.1</span>Fixes</a></li>
+      <li><a href="#p14-2"><span class="n">P14.2</span>Pictures &amp; locks</a></li>
+      <li><a href="#p15"><span class="n">P15</span>Undo across sessions</a></li>
+      <li><a href="#p16"><span class="n">P16</span>Dashboard</a></li>
+      <li><a href="#p17a"><span class="n">P17a</span>Presenting buttons</a></li>
+      <li><a href="#p17b"><span class="n">P17b</span>Presenting on a phone</a></li>
+      <li><a href="#p17c"><span class="n">P17c</span>Presenter view &amp; remote</a></li>
+      <li><a href="#p17"><span class="n">P17d</span>Keyboard &amp; focus</a></li>
+      <li><a href="#p18"><span class="n">P18</span>Hardening</a></li>
+    </ol>
+    <p>Reference</p>
+    <ol>
+      <li><a href="#setup">What you set up</a></li>
+      <li><a href="#index">Feature index</a></li>
+      <li><a href="#risks">Risks</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <section id="stack">
+    <p class="sectionmark">Locked</p>
+    <h2>The stack</h2>
+    <div class="scroller">
+    <table>
+      <thead><tr><th>Layer</th><th>Choice</th><th>Free headroom</th></tr></thead>
+      <tbody>
+        <tr><td><b>App</b></td><td>React 19 + Vite + TypeScript</td><td>—</td></tr>
+        <tr><td><b>Canvas</b></td><td>Layered HTML5 Canvas 2D</td><td>—</td></tr>
+        <tr><td><b>Hosting</b></td><td>Cloudflare Pages / Workers static assets</td><td>Unmetered bandwidth, 500 builds/mo</td></tr>
+        <tr><td><b>Sign-in</b></td><td>Firebase Auth (Google)</td><td>50,000 monthly users</td></tr>
+        <tr><td><b>Metadata</b></td><td>Cloudflare D1</td><td>5 GB, 100k writes/day</td></tr>
+        <tr><td><b>Board content + sync</b></td><td>Durable Objects + SQLite + Yjs</td><td>5 GB, ~2M messages/day</td></tr>
+        <tr><td><b>Images</b></td><td>Cloudflare R2</td><td>10 GB, free egress</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>What dropping React Native bought you</h3>
+    <ul>
+      <li><strong>No 3 MB WASM download.</strong> Skia was needed to draw on native; the browser already has Canvas 2D, which is faster to start and simpler to debug.</li>
+      <li><strong>Text stops being the hardest problem.</strong> On React Native the caret drifted from the rendered glyphs. In a browser, text editing is a <code>contenteditable</code> div positioned over the canvas — the browser handles the caret, selection, IME and Arabic shaping natively.</li>
+      <li><strong>Clipboard paste and desktop file-drop are first-class</strong> instead of platform-split workarounds.</li>
+      <li><strong>Real CSS cursors</strong> for the hover states you asked for, instead of a touch-target fallback.</li>
+    </ul>
+    <p>The app still works on a phone or tablet browser — it's responsive and touch-aware — it just isn't installed from a store.</p>
+  </section>
+
+  <hr>
+
+  <section id="arch">
+    <p class="sectionmark">Architecture</p>
+    <h2>One deploy, four bindings</h2>
+    <p>A single Cloudflare Worker serves the app, the API and the sync server, with the database, object storage and board rooms bound directly to it. No CORS, no second vendor to authenticate against, one <code>wrangler deploy</code>.</p>
+
+    <pre><code>Browser
+  │  static assets (free, unmetered)
+  │  REST calls        ──►  Worker  ──►  D1        folders, boards, sharing
+  │  image reads       ──►  Worker  ──►  R2        cached at the edge
+  └─ WebSocket         ──►  Worker  ──►  Durable Object "board:abc123"
+                                          ├─ Yjs document in memory
+                                          ├─ SQLite: update log + snapshots
+                                          └─ every open socket for this board
+
+Firebase Auth ──► ID token ──► verified inside the Worker on every request</code></pre>
+
+    <h3>Repository layout</h3>
+    <pre><code>src/            React app
+  canvas/       renderer, viewport, hit-testing, transform handles
+  tools/        one module per tool (select, hand, pen, text, laser…)
+  model/        element schema, Yjs bindings, commands, undo
+  geometry/     pure math — bounds, snapping, fractional index
+  ui/           toolbars, inspector, dialogs, dashboard
+worker/         Worker entry, REST API, BoardRoom Durable Object
+shared/         types used by both sides
+tests/          unit (Vitest) + end-to-end (Playwright)</code></pre>
+  </section>
+
+  <hr>
+
+  <section id="model">
+    <p class="sectionmark">Model</p>
+    <h2>What a board is, and why undo stays yours</h2>
+    <pre><code>Y.Doc (one per board, lives in its Durable Object)
+├─ meta      title, background, grid settings
+├─ elements  Y.Map&lt;id, Y.Map&gt;   ← field-level merge, not whole-object overwrite
+│    ├─ id, type, x, y, w, h, rotation, opacity
+│    ├─ z          fractional index — "a0V" sorts between "a0" and "a1"
+│    ├─ locked, hidden, parentId (frame or group)
+│    └─ style      fill, stroke, dash, radius, shadow, font…
+└─ awareness (never saved)
+     cursor · selection · viewport · laser trail · "is typing"</code></pre>
+    <p>Each element is its own <code>Y.Map</code>, so if you change a shape's colour while someone else drags it, both changes survive. Z-order uses fractional indexing, so reordering rewrites one row instead of renumbering the board.</p>
+    <p>Every local change is tagged with an origin unique to your tab, and the undo manager is scoped to that origin — so <kbd>Ctrl</kbd><kbd>Z</kbd> walks back through your edits only.</p>
+    <div class="note warn">
+      <h4>Decide this in Phase 4</h4>
+      <p>You move a shape. A colleague moves it again. You press undo. Should it snap back to <em>your</em> old position, discarding their move (the default), or should it refuse and tell you the shape has changed? One line of policy, very different feel. I'll build the default and leave the switch exposed.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="perms">
+    <p class="sectionmark">Permissions</p>
+    <h2>Roles and link audiences</h2>
+    <div class="scroller">
+    <table class="matrix">
+      <thead><tr><th>Capability</th><th>Viewer</th><th>Commenter</th><th>Editor</th><th>Owner</th></tr></thead>
+      <tbody>
+        <tr><td>Open, pan, zoom</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Live cursor, laser pointer</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Comment, mention, resolve</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Create and edit elements</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Export and copy</td><td class="n">toggle</td><td class="n">toggle</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Restore a version</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="y">✓</td></tr>
+        <tr><td>Share, move, delete, transfer</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>A share link carries a role <em>and</em> an audience — anyone with the link · signed-in users only · anyone at a domain · named people only — and grants attach to a folder or a single board, with board-level grants overriding what they inherit. Your case (public read, two named editors) is one link at <em>viewer</em> plus two rows at <em>editor</em>.</p>
+    <div class="note">
+      <h4>Enforced in the Durable Object, not the UI</h4>
+      <p>A viewer's WebSocket is accepted in read-only mode: they receive edits and broadcast a cursor, but the room rejects any document update they send. Hiding the toolbar is cosmetic — the room is the actual gate.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="howcheck">
+    <p class="sectionmark">Working agreement</p>
+    <h2>How you'll check each phase</h2>
+    <p>You say "do phase 3", I build it, and you get something to open. How you open it depends on the phase:</p>
+    <ul>
+      <li><strong>Phases 0–4 need nothing from you.</strong> They're pure browser code, so I'll bundle each into a single self-contained page and publish it as an artifact you can open on any device and click through against the checklist.</li>
+      <li><strong>Phases 5 onwards touch the backend</strong>, so they need your Cloudflare and Firebase accounts. You'll get a real URL on your own Cloudflare deploy. See <a href="#setup">what you set up</a> — about twenty minutes, once, before Phase 5.</li>
+    </ul>
+    <p>Every phase below ends with a numbered checklist. Each item is a thing you do and a thing you should see. If any item fails, that phase isn't done — tell me the number and I'll fix it before we move on.</p>
+    <p>Each phase also ends with a <b>gate</b>: the one thing that, if it doesn't hold, means we shouldn't build on top of it yet.</p>
+  </section>
+
+  <hr>
+
+  <section id="phases">
+    <p class="sectionmark">The build</p>
+    <h2>Nineteen phases</h2>
+
+    <ol class="phases">
+
+    <!-- P0 -->
+    <li id="p0" data-n="0">
+      <div class="phase-head"><h3>Teardown and skeleton</h3>
+      <span class="effort"><i></i><i class="off"></i><i class="off"></i><i class="off"></i><span>small</span></span></div>
+      <p>Delete the calculator. Stand up Vite + React + TypeScript, ESLint and Prettier, Vitest and Playwright, the folder layout above, a <code>wrangler.toml</code>, and GitHub Actions running lint, typecheck and tests on every push.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Open the repo on the branch — <strong>no calculator files remain</strong>, and the README describes a whiteboard.</li>
+          <li>The GitHub Actions run on the latest commit is <strong>green</strong>.</li>
+          <li>Open the preview I send — you get an app shell with a header and an empty canvas area, <strong>no errors in the browser console</strong>.</li>
+          <li>The page is <strong>readable in both light and dark mode</strong> (flip your system theme).</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — CI green and the shell loads clean. Everything else builds on this.</p>
+      </div>
+    </li>
+
+    <!-- P1 -->
+    <li id="p1" data-n="1">
+      <div class="phase-head"><h3>The infinite canvas</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>The viewport and renderer — the foundation everything else sits on. Layered canvases (static content, the thing you're currently dragging, and the overlay), retina-correct rendering, off-screen culling, the dot grid, and every way of navigating: wheel, trackpad, pinch, <kbd>Space</kbd>-drag, zoom to fit, zoom to selection, 100%, and the minimap.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Scroll to pan. Hold <kbd>⌘</kbd>/<kbd>Ctrl</kbd> and scroll to zoom — it zooms <strong>toward your cursor</strong>, not the centre.</li>
+          <li>Hold <kbd>Space</kbd> and drag — the cursor becomes a grabbing hand and the board moves.</li>
+          <li>Zoom right in — the dot grid <strong>stays crisp, never blurry</strong> (that's the retina handling).</li>
+          <li>Click "5,000 test shapes" in the dev menu, then pan around. It should stay <strong>visibly smooth</strong>; the FPS readout should hold near 60.</li>
+          <li>Press <kbd>⇧</kbd><kbd>1</kbd> — everything fits on screen. <kbd>⇧</kbd><kbd>0</kbd> — back to 100%, and the readout says 100%.</li>
+          <li>The minimap in the corner shows a rectangle that <strong>tracks where you are</strong>; click elsewhere on it to jump.</li>
+          <li>Open it on your phone's browser — <strong>two-finger pan and pinch-zoom</strong> work.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 4. If 5,000 shapes stutter, the renderer needs fixing before we add real elements to it.</p>
+      </div>
+    </li>
+
+    <!-- P2 -->
+    <li id="p2" data-n="2">
+      <div class="phase-head"><h3>Shapes, selection and transform</h3>
+      <span class="effort"><i></i><i></i><i></i><i></i><span>x-large</span></span></div>
+      <p>The editing core: rectangle, ellipse, triangle, diamond, star and polygon; straight lines and arrows. Tools <kbd>V</kbd> <kbd>H</kbd> <kbd>R</kbd> <kbd>O</kbd> <kbd>L</kbd> <kbd>A</kbd> with a toolbar. Click, shift-click and marquee selection. Eight transform handles with rotation. Hover cursors. Snapping and smart guides, align and distribute. Group, lock, hide, reorder, duplicate, nudge. An inspector panel for fill, stroke, dash, opacity, corner radius and shadow.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Press <kbd>R</kbd>, drag a rectangle. Press <kbd>V</kbd>, click it — <strong>eight handles and four rotation zones</strong> appear.</li>
+          <li>Drag a corner — it resizes <strong>from the opposite corner</strong>. Hold <kbd>Alt</kbd> — it resizes <strong>from the centre</strong>.</li>
+          <li>Hold <kbd>⇧</kbd> while drawing a rectangle — you get a <strong>perfect square</strong>. Same with ellipse → circle.</li>
+          <li>Move the mouse slowly across a shape's edge and corners — the <strong>cursor changes shape</strong> at each one (↔, ↕, ⤡, ⤢, a rotate glyph just outside the corner, a move cursor over the body).</li>
+          <li>Drag one shape near another — <strong>pink alignment guides snap</strong> to its edges and centre, and show equal-spacing marks when three line up. Hold <kbd>⌘</kbd> to ignore snapping.</li>
+          <li>Drag a box around several shapes — all get selected with <strong>one shared bounding box</strong>. Drag it; they move together. Resize it; they scale together.</li>
+          <li><kbd>⇧</kbd>-click one of them — it <strong>drops out</strong> of the selection.</li>
+          <li><kbd>Alt</kbd>-drag a shape — it <strong>leaves a copy behind</strong>. <kbd>⌘</kbd><kbd>D</kbd> duplicates with a small offset.</li>
+          <li>Select a shape, press <kbd>⇧</kbd><kbd>⌘</kbd><kbd>L</kbd> — it <strong>locks</strong>: clicking it does nothing, the cursor shows "not allowed", and the layers panel shows a padlock. Press again to unlock.</li>
+          <li>Select two shapes, <kbd>⌘</kbd><kbd>G</kbd> — <strong>they group</strong> and move as one. <kbd>⇧</kbd><kbd>⌘</kbd><kbd>G</kbd> ungroups.</li>
+          <li>Overlap three shapes, use <kbd>[</kbd> and <kbd>]</kbd> — <strong>the stacking order changes one step at a time</strong>.</li>
+          <li>Select several, click <em>distribute horizontally</em> — <strong>the gaps become equal</strong>.</li>
+          <li>Change fill, stroke width, dash and corner radius in the inspector — <strong>each updates live</strong>.</li>
+          <li>Rotate a shape — it <strong>snaps to 15° steps</strong> and shows the angle while you drag.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2, 4 and 5. Transform, cursors and snapping are the feel of the whole app; everything after this assumes they're right.</p>
+      </div>
+    </li>
+
+    <!-- P3 -->
+    <li id="p3" data-n="3">
+      <div class="phase-head"><h3>Ink, text and images</h3>
+      <span class="effort"><i></i><i></i><i></i><i></i><span>x-large</span></span></div>
+      <p>Freehand drawing with pressure, both erasers, the laser pointer, full text with formatting, sticky notes, images from clipboard and desktop, connectors that follow shapes, and frames. Images are local-only in this phase — nothing is uploaded until Phase 6.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Press <kbd>P</kbd> and scribble — the stroke is <strong>smooth and tapered</strong>, not a jagged polyline. With a stylus or trackpad pressure, it varies in width.</li>
+          <li>Start a stroke, then <strong>hold <kbd>⇧</kbd> mid-stroke</strong> — it snaps live to a straight line from where you started. Release <kbd>⇧</kbd> and it goes back to freehand in the same stroke.</li>
+          <li>Press <kbd>E</kbd> and scrub across a stroke — in <em>object</em> mode the whole stroke vanishes; in <em>stroke</em> mode it's <strong>cut where you scrubbed</strong>, leaving two pieces.</li>
+          <li>Press <kbd>K</kbd> and move the mouse — a <strong>glowing trail follows and fades in about a second</strong>. Now hold the button and draw: the trail <strong>lingers ~5 seconds</strong> then dissolves. Reload the page — <strong>no trace of it is saved</strong>.</li>
+          <li>Press <kbd>T</kbd>, click, type. Change font, size, weight, alignment, line height and colour — <strong>all apply live</strong>. Make a bulleted list.</li>
+          <li>Type Arabic into a text box — it <strong>renders right-to-left with correct letter joining</strong>, and the caret moves the right way.</li>
+          <li>Press <kbd>N</kbd> for a sticky note and type past its edge — <strong>the text shrinks to fit</strong> rather than overflowing.</li>
+          <li>Copy an image anywhere on your computer and press <kbd>⌘</kbd><kbd>V</kbd> — <strong>it lands on the board</strong> at your cursor.</li>
+          <li>Drag an image file from your desktop onto the board — <strong>it drops where you released it</strong>, at sensible size.</li>
+          <li>Drag an image's corner — <strong>the aspect ratio is locked</strong> and it stays undistorted. Now hold <kbd>⇧</kbd> while dragging — <strong>it stretches freely.</strong> This is your rule, the reverse of Figma.</li>
+          <li>Press <kbd>A</kbd> and drag from one shape to another — the arrow <strong>attaches</strong>. Move either shape; <strong>the arrow re-routes and stays attached</strong>.</li>
+          <li>Press <kbd>F</kbd> and draw a frame around some shapes — moving the frame <strong>moves its contents with it</strong>.</li>
+          <li>Press <kbd>?</kbd> — the <strong>shortcut cheat sheet</strong> opens and matches what you just did.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2, 4, 6 and 10. Those are the four behaviours you specified most precisely.</p>
+      </div>
+    </li>
+
+    <!-- P4 -->
+    <li id="p4" data-n="4">
+      <div class="phase-head"><h3>Undo, saving and export</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>Everything moves onto the Yjs document — the model that will later sync. Per-user undo and redo, saving to the browser so nothing is lost on reload, crash recovery, copy and paste including between tabs, export to PNG, SVG and PDF, the <kbd>⌘</kbd><kbd>K</kbd> command palette, right-click menus and board templates.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Draw several things, then press <kbd>⌘</kbd><kbd>Z</kbd> repeatedly — <strong>it walks back one action at a time</strong>, in the right order. <kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd> walks forward again.</li>
+          <li>Undo a <em>move</em>, not just a create — the shape <strong>returns to its exact previous position</strong>.</li>
+          <li>Draw something, then <strong>reload the page</strong> — everything is still there, at the same zoom and position.</li>
+          <li>Draw something, then <strong>kill the tab mid-stroke</strong> and reopen — the board is intact.</li>
+          <li>Open the same board in <strong>two tabs</strong>, copy a shape in one, paste in the other — it arrives with its styling.</li>
+          <li>Go offline (airplane mode or DevTools), keep drawing — <strong>everything still works</strong>, and a "working offline" indicator appears.</li>
+          <li>Export to PNG — the file has <strong>the right content, transparent background, and no toolbar in it</strong>. Export a selection only — you get just that.</li>
+          <li>Export to SVG and open it in a browser — <strong>shapes and text are real vectors</strong>, not a bitmap.</li>
+          <li>Press <kbd>⌘</kbd><kbd>K</kbd>, type "rect" — <strong>the command palette finds and runs the tool</strong>.</li>
+          <li>Right-click a shape — a <strong>context menu</strong> with copy, duplicate, lock, delete and ordering.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 3 and 6. If saving or offline is unreliable, real-time sync will amplify it into lost work.</p>
+      </div>
+    </li>
+
+    <!-- P5 -->
+    <li id="p5" data-n="5">
+      <div class="phase-head"><h3>Accounts, folders and boards</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>The first backend phase. Google sign-in through Firebase, verified inside the Worker; the D1 schema; nested folders; board create, rename, move, duplicate and delete; the dashboard with recents, starred and search; board thumbnails; and trash with 30-day restore. <em>Needs your accounts set up first.</em></p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Open your real URL. Click <strong>Sign in with Google</strong> — you land on a dashboard with your name and photo.</li>
+          <li>Create a folder, create a folder <em>inside it</em>, create a board inside that — <strong>the breadcrumb reflects the nesting</strong>.</li>
+          <li>Draw on the board, go back to the dashboard — <strong>the board's thumbnail shows what you drew</strong>.</li>
+          <li>Sign in <strong>on your phone</strong> with the same account — the same folders and boards are there, and the board opens with your drawing.</li>
+          <li>Rename a board, move it to another folder, duplicate it — <strong>all three stick after a reload</strong>.</li>
+          <li>Search for part of a board's title — <strong>it's found</strong>. Star a board — it appears under Starred.</li>
+          <li>Delete a board — it goes to <strong>Trash, not oblivion</strong>. Restore it; it returns to its original folder.</li>
+          <li>Open a private browser window and paste your board's URL — <strong>you're asked to sign in, not shown the board</strong>.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 4 and 8. Cross-device sign-in and a locked door for strangers.</p>
+      </div>
+    </li>
+
+    <!-- P6 -->
+    <li id="p6" data-n="6">
+      <div class="phase-head"><h3>Image storage on R2</h3>
+      <span class="effort"><i></i><i></i><i class="off"></i><i class="off"></i><span>medium</span></span></div>
+      <p>Images stop being local. Upload through the Worker to R2, automatic downsampling, blurred placeholders so shapes appear instantly, deduplication by content hash so pasting the same screenshot twice stores one copy, edge-cached delivery, and a per-board storage meter.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Paste a large screenshot — <strong>a blurred placeholder appears immediately</strong>, then sharpens as it uploads, with a progress indicator.</li>
+          <li>Reload the page — the image is still there. Open the board <strong>on your phone</strong> — it's there too.</li>
+          <li>Paste the <strong>same image twice</strong>, then check your R2 dashboard — <strong>only one object was stored</strong>.</li>
+          <li>Open DevTools → Network, reload the board twice — the second load serves images <strong>from cache</strong>, not from R2.</li>
+          <li>Drop a 20 MB photo — it's <strong>downsampled</strong> before upload (check the stored size in R2), but still looks sharp when you zoom in.</li>
+          <li>Board settings shows a <strong>storage used</strong> figure that matches roughly what you've added.</li>
+          <li>Delete an image from the board, empty the trash — <strong>the R2 object is cleaned up</strong>.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 3. Deduplication is what keeps you inside 10 GB while pasting freely.</p>
+      </div>
+    </li>
+
+    <!-- P7 -->
+    <li id="p7" data-n="7">
+      <div class="phase-head"><h3>Real-time collaboration</h3>
+      <span class="effort"><i></i><i></i><i></i><i></i><span>x-large</span></span></div>
+      <p>The Durable Object per board goes live: Yjs over WebSockets with hibernation, an auth handshake, live cursors with names and colours, selection halos in each person's colour, an avatar stack, follow mode, presenter spotlight, cursor chat, the laser pointer shared with everyone, connection status, reconnection with backoff, and version history built from the update log and snapshots.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Open the same board in <strong>two browser windows</strong> side by side. Draw in one — it appears in the other <strong>within a blink</strong>.</li>
+          <li>Move your mouse in one window — a <strong>labelled cursor moves in the other</strong>, in that person's colour.</li>
+          <li>Select a shape in one — the other window shows it <strong>outlined in your colour</strong> with your name.</li>
+          <li>Both windows drag <strong>the same shape at once</strong> — one wins cleanly, nothing duplicates, nothing freezes.</li>
+          <li>Both type in <strong>the same text box</strong> at once — the characters interleave; nothing is lost.</li>
+          <li>Press <kbd>⌘</kbd><kbd>Z</kbd> in window A after B made edits — <strong>only A's own change is undone</strong>. B's work is untouched. <em>This is the one you specifically asked for.</em></li>
+          <li>Turn off wifi in window A, keep drawing, turn it back on — a "reconnecting" indicator shows, then <strong>A's offline work merges in</strong> and both windows agree.</li>
+          <li>Use the laser pointer in A — <strong>B sees the trail</strong>, and it fades on both.</li>
+          <li>Click B's avatar in A — <strong>A's viewport follows B around</strong> as they pan. Click again to stop.</li>
+          <li>Open version history, drag the scrubber — <strong>the board rewinds visually</strong>. Restore a point; both windows jump to it, and the recent work is still in history rather than destroyed.</li>
+          <li>Name a checkpoint, make more changes, return to it — <strong>it's listed by name and restores correctly</strong>.</li>
+          <li>Leave a board open and untouched for 10 minutes, then draw — <strong>it reconnects silently</strong> (that's hibernation working).</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 4, 6 and 7. Concurrent edit, private undo, offline merge. This is the heart of the app.</p>
+      </div>
+    </li>
+
+    <!-- P8 -->
+    <li id="p8" data-n="8">
+      <div class="phase-head"><h3>Sharing, permissions and comments</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>The share dialog with roles and the four audience settings, link expiry and revocation, folder-level grants with inheritance, guest viewers who pick a display name, the export toggle for viewers, comment threads with mentions and resolve, share notifications, ownership transfer, an audit log, and a public publish/embed link.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Share a board as <em>anyone with the link, viewer</em>. Open it in a <strong>private window</strong> — you can see and pan it, and you're <strong>asked for a display name</strong> as a guest.</li>
+          <li>In that guest window, try to draw — <strong>the tools are unavailable</strong>. Then open DevTools and try sending an edit over the socket anyway — <strong>the server rejects it</strong>. (I'll give you the one-line snippet; this is the test that matters.)</li>
+          <li>Add a named person as <em>editor</em> while the link stays <em>viewer</em> — <strong>they can edit, the public link still can't</strong>.</li>
+          <li>Switch the link to <em>signed-in users only</em> — the private window <strong>now demands sign-in</strong>.</li>
+          <li>Share a <strong>whole folder</strong> as editor — every board inside <strong>opens editable</strong>, including one created afterwards.</li>
+          <li>Override one board inside that folder to <em>viewer</em> — <strong>just that board is read-only</strong> for them.</li>
+          <li>Set a link to expire, then move your clock forward (or set a one-minute expiry) — <strong>it stops working</strong>.</li>
+          <li>Revoke a link while someone has the board open — <strong>they're dropped within seconds</strong>, not on next reload.</li>
+          <li>As a commenter, leave a comment and @mention someone — <strong>they get notified</strong>; resolving hides the thread.</li>
+          <li>Turn off "allow export for viewers" — the viewer's export menu <strong>disappears and the API refuses</strong>.</li>
+          <li>Transfer ownership to another account — <strong>they can now manage sharing and you can't</strong>.</li>
+          <li>Open the audit log — <strong>every share change you just made is listed</strong> with who and when.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 2. If the server can be talked into accepting a viewer's edit, nothing else here counts.</p>
+      </div>
+    </li>
+
+    <!-- P9 -->
+    <li id="p9" data-n="9">
+      <div class="phase-head"><h3>Workshop tools and rich content</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>Presentation mode walking frame to frame, countdown timer, dot voting, stamps and reactions, link embeds with preview cards, video embeds, tables, code blocks, LaTeX, multiple pages per board, a reusable sticker and component library, and importing SVG, PDF pages and <code>.excalidraw</code> files.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Draw three frames, enter presentation mode — <strong>arrow keys walk between them, each filling the screen</strong>, and everyone following sees the same frame.</li>
+          <li>Start a 5-minute timer — <strong>everyone on the board sees it counting down</strong> and it ends together.</li>
+          <li>Start a vote, click dots on stickies from two windows — <strong>the counts are shared and live</strong>.</li>
+          <li>Paste a YouTube link — it becomes a <strong>playable embed</strong>. Paste an article link — a <strong>preview card with title and image</strong>.</li>
+          <li>Insert a table, type in cells, add a row — it <strong>behaves like a table</strong>, not a picture of one.</li>
+          <li>Insert a code block, paste code — <strong>syntax highlighting</strong>, and it stays selectable.</li>
+          <li><s>Add a second page to a board and switch between pages — each keeps its own content and viewport.</s> Pages were removed on 20 November, at your request (Phase 17a).</li>
+          <li>Save a styled group to the library, then drop it onto <strong>a different board</strong> — it arrives intact.</li>
+          <li>Import an SVG — it comes in as <strong>editable shapes</strong>, not one flat image. Import a PDF — <strong>each page becomes an image</strong>.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 1. Presentation mode is what makes the frames and the laser pointer pay off together.</p>
+      </div>
+    </li>
+
+    <!-- P10 -->
+    <li id="p10" data-n="10">
+      <div class="phase-head"><h3>Quick fixes and the text box</h3>
+      <span class="effort"><i></i><i class="off"></i><i class="off"></i><i class="off"></i><span>small</span></span></div>
+      <p>From your list after Phase 9: nothing laid over the board while typing, the floating formatting bar folded into the side panel, the wheel over a text box, picture sizes by shape, tools that put the selection down, ghost copies of people, the right-click menu, and deleting a video that was played.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Type in a text box over a shape — <strong>nothing under the box fades</strong>.</li>
+          <li>No bar floats above the box: <strong>bold, italic, underline, colour, highlight and link are in the side panel</strong>, which opens and closes as before. <kbd>Ctrl</kbd><kbd>K</kbd> opens it at the address field.</li>
+          <li>Turn the mouse wheel over the box while typing — <strong>the board moves</strong>.</li>
+          <li>Paste a square photo, a screenshot and a banner — <strong>half, a sixth and a ninth of the screen height at 58% zoom</strong>, each keeping its shape.</li>
+          <li>Select a shape and press <kbd>P</kbd> — <strong>nothing stays selected</strong>.</li>
+          <li>On a laptop, turn the wifi off for a minute and back on — <strong>the others see you once, not twice</strong>.</li>
+          <li>Right-click near the bottom-right corner — <strong>the whole menu is on screen</strong>, with Paste, Lock, Unlock, Group, Ungroup and Side panel; no Select all, no ordering.</li>
+          <li>Play a YouTube video, press the strip along its top, press <kbd>Delete</kbd> — <strong>the video goes</strong>, without a reload.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2 and 6.</p>
+      </div>
+    </li>
+
+    <!-- P11 -->
+    <li id="p11" data-n="11">
+      <div class="phase-head"><h3>One control pane, and who sees what</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>Every control in one pane: on the right on a wide screen, along the top on a tall one, nothing reserved at the bottom. The tool options beside it, a full-screen button, boards that always open showing everything, and controls trimmed to what each role may do.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>On a wide screen, <strong>tools, Insert, Tools, undo/redo, zoom, pages and the side-panel button are in one pane on the right</strong>; nothing sits at the bottom.</li>
+          <li>Turn a tablet upright — <strong>the controls move to the top</strong>.</li>
+          <li>On a phone, <strong>two rows at most</strong>, rearranged before anything shrinks.</li>
+          <li>Pick the pen, highlighter or eraser — <strong>their options sit beside the pane</strong> on a wide screen, top centre on a tall one.</li>
+          <li>The <strong>full-screen button</strong> is where zoom to fit was.</li>
+          <li>Open any board, from the dashboard or a shared link — <strong>it opens showing everything on it</strong>.</li>
+          <li>As a viewer: <strong>Hand, Laser and zoom only</strong>. As a commenter: the same, plus <strong>Comment</strong> in the right-click menu. As an editor: <strong>everything but Present and the minimap</strong>.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 1 and 7.</p>
+      </div>
+    </li>
+
+    <!-- P12 -->
+    <li id="p12" data-n="12">
+      <div class="phase-head"><h3>Settings and shortcuts</h3>
+      <span class="effort"><i></i><i></i><i class="off"></i><i class="off"></i><span>medium</span></span></div>
+      <p>A settings page saved to your account: the default text box size and text size (which others typing on your board start at too), every keyboard shortcut listed and changeable, and celebrations on the number-pad keys at any time.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Open Settings — <strong>your choices follow you</strong> to another device.</li>
+          <li>Set the default text box and text size — <strong>a click with the text tool uses them</strong>.</li>
+          <li>Someone else typing on your board <strong>starts at your text size</strong>.</li>
+          <li>Change a shortcut — <strong>it works at once</strong>; a clash is flagged; reset brings the defaults back.</li>
+          <li>Number-pad keys <strong>start celebrations at any time</strong>, not only while presenting.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2 and 4.</p>
+      </div>
+    </li>
+
+    <!-- P13 -->
+    <li id="p13" data-n="13">
+      <div class="phase-head"><h3>Presenting, frames, celebrations and media</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>Presenting shows only the frame, without its border or title. Slide controls on the right or at the bottom, with the drawing tools still to hand. Numbered frames in an order you choose, PDF pages (from Canva, say) as frames, livelier celebrations, and audio and video by upload or link.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Present — <strong>only what is inside the current frame shows</strong>, with no border or title.</li>
+          <li>The slide controls are <strong>on the right on a wide screen, at the bottom on a tall one</strong>; pen, highlighter, Insert and undo/redo stay available.</li>
+          <li>Frames are <strong>numbered</strong>; change a frame's number from its drop-down and <strong>the presentation follows it</strong>.</li>
+          <li>Import a PDF exported from Canva — <strong>each page is its own numbered frame</strong>.</li>
+          <li>Play confetti twice — <strong>different each time</strong>; press again while it plays — <strong>it builds up</strong> instead of restarting.</li>
+          <li>New celebrations, chosen from a shortlist, <strong>play for everyone</strong>. Built: fireworks, balloons, hearts, a fanfare and a sad trombone — on the number pad 8, 9, 0, / and *; say if you would rather have others.</li>
+          <li>Upload a video and an audio file, and paste a link to each — <strong>all four play on the board</strong>.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 1 and 3.</p>
+      </div>
+    </li>
+
+    <!-- P14 -->
+    <li id="p14" data-n="14">
+      <div class="phase-head"><h3>Classroom: placeholders, the Answer role and owner locks</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>Placeholders with hint text that anyone can type into with one click, a new sharing role — Answer — that can type only in placeholders, enforced by the room, locks that guard against accidents but leave the owner free, and unlocking many items at once.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Insert a placeholder with your hint text — <strong>one click or tap types into it</strong>, whatever tool is held; the hint goes, and comes back if the box is emptied. Built: Insert → Placeholder, then click on the board for one line or drag out the size, as with text; or the side panel's Placeholder switch on any text box. With the select tool, inside a placeholder types; its edge, where the pointer shows the move arrows, selects, moves and resizes it.</li>
+          <li>Share a board as <strong>Answer</strong> — that person can type in placeholders and <strong>nothing else</strong>. Built: “Can answer” in the share dialog, for people and links; it sits between commenter and editor, so they may also comment.</li>
+          <li>Send an edit from an Answer account outside a placeholder straight to the room — <strong>it is refused</strong>.</li>
+          <li>Lock items as the owner — <strong>others cannot move them by accident; you edit them freely</strong>; others can still unlock on purpose. Built: only the owner locks; anyone who may edit can unlock, from the side panel or the right-click menu.</li>
+          <li>Drag a box over several locked items — <strong>they select, and unlock together</strong>.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 3. As with viewers in Phase 8, the room is the rule; the buttons are a courtesy.</p>
+      </div>
+    </li>
+
+    <!-- P14.1 -->
+    <li id="p14-1" data-n="14.1">
+      <div class="phase-head"><h3>Fixes: text boxes, the eraser, the side panel</h3>
+      <span class="effort"><i></i><i></i><i class="off"></i><i class="off"></i><span>medium</span></span></div>
+      <p>Your list of changes from after Phase 14, the quick ones first: text boxes that are only as tall as their text, an eraser that stays erased, a side panel that sits above everything and appears only when you want it, duplicates placed underneath, strikethrough, three more shortcuts, and boards shared for answering from the start.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Click to add a text box and type a line — <strong>it keeps its width, and its height trims to the text</strong>, with no empty space below.</li>
+          <li>In a one-line text box or placeholder, type a word and delete it — <strong>it stays one line</strong>.</li>
+          <li>Erase part of a pen stroke, then draw again — <strong>the erased part stays gone</strong>.</li>
+          <li>Nothing on the board — videos, link cards, frame numbers — <strong>ever covers the side panel</strong>.</li>
+          <li>With the side panel switched on, select something or pick up the pen or highlighter — <strong>the panel appears</strong>, with no "Nothing selected" message; switched off, <strong>it never appears</strong>.</li>
+          <li>Duplicate an item — <strong>the copy lands directly below it, lined up</strong>, not on top of it.</li>
+          <li>Select words in a text box and choose <strong>strikethrough</strong>.</li>
+          <li>Keyboard shortcuts for <strong>the placeholder tool, presenting and stamps</strong> — shown in the cheat sheet, changeable in Settings. Built: Q for the placeholder tool, Ctrl/⌘ Enter to present, S for the stamp tool (S again for the next stamp), and each stamp can be given its own key in Settings; strikethrough is Ctrl/⌘ Shift X while typing.</li>
+          <li>Create a board and open Share — <strong>the link is already on: anyone with it can answer</strong>; turning it off still works.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2 and 3.</p>
+      </div>
+    </li>
+
+    <!-- P14.2 -->
+    <li id="p14-2" data-n="14.2">
+      <div class="phase-head"><h3>Pictures, locks and panning</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>The larger changes from the same list: pasting a picture to fit what is selected, cropping, the two kinds of lock — the lock as it was before Phase 14, plus "lock for others" — and the board moving along when you drag something to its edge.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Select a text box, placeholder or picture and paste a picture — <strong>it comes in at the same width, lined up directly under it</strong>, its proportions kept. With nothing selected, pasting works as it does now. Built: the pasted picture is then selected, so a second paste goes under it; the gap is the same as a duplicate's.</li>
+          <li>Double-click a picture — <strong>drag its edges to crop it</strong>; double-click again later to change the crop. The full picture is never lost. Built: Enter, Escape, a click away or another double-click ends cropping.</li>
+          <li>Lock an item — <strong>nobody can move or change it, the owner included</strong>, until it is unlocked.</li>
+          <li>Right-click → <strong>Lock for others</strong> — everyone else is stopped; you are not. Built: Lock for others is the owner's; anyone who edits can Lock.</li>
+          <li>One <strong>Unlock</strong> undoes either kind of lock.</li>
+          <li>Drag an item towards the edge of the board — <strong>the board moves along with it</strong>, so it can be taken anywhere.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 3 and 4.</p>
+      </div>
+    </li>
+
+    <!-- P15 -->
+    <li id="p15" data-n="15">
+      <div class="phase-head"><h3>Undo across sessions</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>Undo history that outlives the open tab: your last 100 steps survive closing the board and opening it again. Undoing someone else's changes is parked.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Make changes, close the board, open it again — <strong>undo walks back your last steps from before</strong>, up to 100. Built: kept in this browser, per board and per account (not on another device); steps from the visit in progress are undone first, then the earlier ones, and redo brings them back. Anything someone else has changed since is left as they left it.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 1.</p>
+      </div>
+    </li>
+
+    <!-- P16 -->
+    <li id="p16" data-n="16">
+      <div class="phase-head"><h3>Dashboard organisation</h3>
+      <span class="effort"><i></i><i></i><i class="off"></i><i class="off"></i><span>medium</span></span></div>
+      <p>Tiles or a compact list in several columns, folders in the order you drag them, pinned folders, an archive for folders and boards, and sorting a folder's boards by date added or name.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Switch between <strong>tiles and the list</strong> — the choice is remembered. Built: remembered on your account, so on every device too; the list reads down each column, then the next.</li>
+          <li>Drag a folder to a new place — <strong>the order sticks</strong>, after a reload and on another device.</li>
+          <li>Pin a folder — <strong>it stays at the top</strong>.</li>
+          <li>Archive a folder or a board — <strong>gone from the main view, found in Archive, restorable</strong>; nothing deleted. Built: a folder goes with everything in it and comes back the same way; archived boards still open by their link.</li>
+          <li>Sort a folder's boards <strong>by date added or by name</strong>. Built: last opened, newest first, oldest first, or name ("Lesson 2" before "Lesson 10"); the choice is remembered and applies to every folder.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — item 4.</p>
+      </div>
+    </li>
+
+    <!-- P17a -->
+    <li id="p17a" data-n="17a">
+      <div class="phase-head"><h3>The presenting buttons, and no more pages</h3>
+      <span class="effort"><i></i><i class="off"></i><i class="off"></i><i class="off"></i><span>small</span></span></div>
+      <p>Your list of mobile and presenting changes from 20 November, in three parts; this is the first, for every screen size. Pages go, Present frames takes their place on the controls, Insert loses its two presenting entries, and Present becomes Follow me.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Open a board — <strong>no page tabs and no add-page button</strong>, on a phone or a laptop.</li>
+          <li>Where the pages were, <strong>Present frames</strong> — grey until the board has a frame; with a frame selected it reads <strong>Present from frame N</strong>. Built: the owner's, as presenting always was; it steps aside while presenting.</li>
+          <li>Open Insert — <strong>no Present frames, no Presenter view</strong>. Presenter view opens from the slide controls once you present.</li>
+          <li>On a board with someone else on it, the button that makes everyone follow you reads <strong>Follow me</strong>, and <strong>Stop follow me</strong> while it is on.</li>
+          <li>Open a board that had more than one page — <strong>page 1 is what you see; the other pages are gone</strong>. Built: removed by the first person who can edit to open it; version history still has them.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2 and 5.</p>
+      </div>
+    </li>
+
+    <!-- P17b -->
+    <li id="p17b" data-n="17b">
+      <div class="phase-head"><h3>Presenting on a phone, the hand and the laser</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>The tools in one row while presenting, transitions that play on a phone, a hand that stays inside the slide, a laser that lets go quickly, frame sizes that fill a screen, and bigger slide buttons on a phone. The browser's own "drag from the top to exit full screen" notice cannot be shortened by a web page; nothing of the app's own is added to it.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>On a phone, present — <strong>the tools take one row</strong>, before and after full screen. Built: a large phone on its side was wide enough for the side pane, where the tools stack two by two; a phone held sideways now keeps the bar along the top. While presenting the bar's buttons shrink to fit one row, and if they still cannot, the row scrolls sideways.</li>
+          <li>Present with a transition on a frame, on the phone — <strong>it plays</strong>. Built: in a phone emulation it did play, but with the processor slowed to a phone's speed it drew only 5–24 frames (glitch and shatter looked like a jump). Transitions are now drawn at a lower resolution, and shatter prepares its pieces ahead: 14–45 frames at the same speed. If it still does not play on your phone, check that the phone's "Remove animations" (or a battery saver) is off: with it on, Sabboura plays a short fade instead, on purpose.</li>
+          <li>Presenting, drag with the hand — <strong>at the slide's size a swipe goes to the next or previous slide</strong>; zoomed in, <strong>it moves around inside the slide and never past its edges</strong>.</li>
+          <li>Draw with the laser and stop — <strong>it fades within about a second and a half</strong>; a second press <strong>starts a new mark</strong>, not joined to the last; changing slide <strong>clears every mark</strong>, on every screen.</li>
+          <li>Select a frame — the side panel offers <strong>This screen, Phone landscape, Phone portrait and Laptop</strong> sizes; presenting it fills that screen.</li>
+          <li>On a phone, <strong>the previous and next buttons are big</strong>, and "Presenter view" sits on one line.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 3 and 4.</p>
+      </div>
+    </li>
+
+    <!-- P17c -->
+    <li id="p17c" data-n="17c">
+      <div class="phase-head"><h3>Presenter view and a remote control</h3>
+      <span class="effort"><i></i><i></i><i></i><i class="off"></i><span>large</span></span></div>
+      <p>A remote control link, presenter view that works on a phone, its controls tidied behind switches, a divider you can drag, notes that remember where you were, and a full-screen button in the audience window.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>In presenter view, open <strong>Remote control</strong> and open its link on a phone or in another tab — <strong>presenter view appears there</strong>, and next and previous there move the presentation. Agreed: the link alone, no sign-in; it works only while that presentation runs. On the signed-out board, only in another tab of the same browser. Built: the link shows as a QR code to scan with the phone's camera, and to copy; a swipe across the slide on the phone moves it too; the remote is nobody in the board's list of people.</li>
+          <li>Presenter view on a phone, <strong>upright and on its side</strong> — the slide, controls and notes are all usable.</li>
+          <li>One <strong>Record</strong> switch shows or hides everything about recording; <strong>Stamps</strong> and <strong>Celebrations</strong> switches do the same for theirs.</li>
+          <li>Drag <strong>the divider</strong> between the slide and the controls — it stays where you leave it.</li>
+          <li>The top toolbar is <strong>one row</strong>; previous, next, End presenter view and Exit are <strong>one row</strong>. Built: one row on a phone and a tablet; in the narrow pane down the right of a laptop they stay stacked, as there is no room for one row there.</li>
+          <li>Scroll a slide's notes, go next and back — <strong>the notes are where you left them</strong>; the mouse wheel over the notes <strong>scrolls them</strong>.</li>
+          <li>In the audience window, the <strong>full-screen button</strong> leaves nothing but the slide.</li>
+          <li>(Added 26 November.) Present, and on someone else's screen following you press <strong>Watch full screen</strong> — <strong>only the slide shows</strong>, no toolbar or panels; Escape, or the end of the presentation, brings their controls back.</li>
+          <li>(Added 26 November.) While presenting, <strong>Share slides</strong> gives a link and QR code; opened on another screen it shows <strong>the slides alone, following you</strong>, and nothing there can move them. It stops working when you stop presenting. Built: it plays your videos and sounds along, playing, pausing and moving when you do, and shows your laser; a screen that is not allowed to play sound until touched shows “Tap for sound”.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 1 and 2.</p>
+      </div>
+    </li>
+
+    <!-- P17d (was P17, before that P10) -->
+    <li id="p17" data-n="17d">
+      <div class="phase-head"><h3>Keyboard use and visible focus</h3>
+      <span class="effort"><i></i><i></i><i class="off"></i><i class="off"></i><span>medium</span></span></div>
+      <p>The board usable without a mouse: shapes created, reached and edited from the keyboard, and the focus ring confirmed beyond the board. Already done, so not repeated here: the arrows move what is selected and Delete removes it (since Phase 2), and every control on the board shows a focus ring with nothing trapping Tab (checked on 2 November: 62 controls, side panel included). Arabic and right-to-left, dark mode, high contrast, reduced motion, onboarding and empty states are parked.</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Put the mouse away. Using <strong>only the keyboard</strong>: create a shape, Tab to it, and type into it. Built: Tab until the board shows a blue ring; a tool's key (R, O, N, T, F…) then Enter puts one in the middle of the view; Tab and Shift+Tab move from item to item (top to bottom, left to right) and the view follows; Enter types into the selected item, Escape stops typing, arrows move it and Delete removes it. After the last item, Tab moves on to the next button.</li>
+          <li>Tab around the dashboard, Settings and the share dialog — <strong>every focused control has a visible ring</strong>, and focus never gets trapped. Built: the dashboard's search box was missing its ring, and the share dialog did not take the focus when it opened; both fixed, and Escape now returns the focus to the Share button.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 1 and 2.</p>
+      </div>
+    </li>
+
+    <!-- P18 (was P11) -->
+    <li id="p18" data-n="18">
+      <div class="phase-head"><h3>Hardening and launch</h3>
+      <span class="effort"><i></i><i></i><i class="off"></i><i class="off"></i><span>medium</span></span></div>
+      <p>Load testing against the target, error reporting, rate limits and quotas, a security review of the permission model, and a custom domain. Already done, so no longer listed: the full end-to-end suite in CI, covering sign-in, sharing and two people editing (running on every push since Phase 7); 5,000 shapes panning smoothly (Phase 2); the README's instructions to run and deploy it; production deploys; and the cut in costly writes and messages (31 October).</p>
+      <div class="check">
+        <p>How you check it</p>
+        <ol>
+          <li>Open a stored board with <strong>5,000 real elements</strong> including 50 images — it opens in a few seconds, on a device that has never seen it. Built: a board's first load is now sent compressed (0.27 MB for 5,000 shapes instead of 4 MB). A new browser opens 5,000 shapes and 50 photographs in about 1 second here, and in about 3.5 seconds when made to act like a slower phone on 4G. The photographs fill in after the shapes are on screen. To try it: open the command palette (Ctrl+K), choose the Renderer panel, press 5,000, paste some pictures, then open the board on another device.</li>
+          <li>Get <strong>five or more windows</strong> into one board editing at once — no lag spikes, no divergence; all five show identical content at the end. Built: a test with five people drawing at once measured about 50 ms for a change to reach the other four (worst 130 ms), and all five ended up identical. It found a real fault: two people drawing in the same instant could give their shapes the same name, and one shape replaced the other. Fixed.</li>
+          <li>Trigger a deliberate error — it appears in the <strong>error dashboard</strong> with a stack trace. Built: the dashboard is Cloudflare's own. Go to Workers &amp; Pages → sabboura → Logs and search for “browser-error”. To try it: open the Renderer panel and press <em>Test error</em>, or <em>Test crash</em> to also see the new “Something went wrong — Reload” screen, which replaces a blank page.</li>
+          <li>Hammer the API in a loop — you get <strong>rate-limited with a clear message</strong>, not a crash. Built: past 1,200 requests a minute from one address (60 for link previews, new boards and invitations), the answer is “Too many requests. Wait a minute, then try again.” A window that floods its board's live connection is disconnected and reconnects after 15 seconds without losing anything. The security review also closed one gap: a sign-in email must now be verified. Security headers were added too.</li>
+          <li>Check your Cloudflare and Firebase dashboards after a week of use — <strong>usage is inside the free tiers</strong> and your spend cap has never been approached. The cuts are made; this only confirms they hold.</li>
+          <li>Your custom domain serves the app over <strong>HTTPS</strong>. Built: the app is at <strong>sabboura.read4more.com</strong>, with the old workers.dev address still working. read4more.com itself is untouched. For Google sign-in there, add <em>sabboura.read4more.com</em> to Firebase → Authentication → Settings → Authorised domains.</li>
+        </ol>
+        <p class="gate"><b>Gate</b> — items 2 and 5. It holds up with real people on it, and it costs nothing.</p>
+      </div>
+    </li>
+
+    </ol>
+  </section>
+
+  <hr>
+
+  <section id="setup">
+    <p class="sectionmark">Your part</p>
+    <h2>What you set up, and when</h2>
+    <p>Nothing at all until Phase 5. Before that phase, roughly twenty minutes:</p>
+    <ol>
+      <li><strong>Cloudflare account</strong> — free. Add a payment method with a <strong>$0 spend cap</strong> (needed for R2; nothing will be charged inside the free tier).</li>
+      <li><strong>Firebase project</strong> — free, no card. Enable Google as a sign-in provider and add your domain to the authorised list.</li>
+      <li><strong>A Cloudflare API token in the environment's secrets</strong> so I can deploy — never pasted into chat — or run <code>npx wrangler deploy</code> yourself from the repo. Your choice; without a token I'll hand you the exact commands each phase.</li>
+    </ol>
+    <p>I'll write the setup steps out as a checklist when we get to Phase 5, with screenshots of where each setting lives.</p>
+    <div class="note">
+      <h4>The branch, again</h4>
+      <p>You asked for <code>main</code>. This session can only push to <code>claude/collaborative-whiteboard-app-hqkq5u</code>, so I'll build there and open a pull request into <code>main</code> — same result, one click from you. I'll push a commit at the end of every phase, so you can also review the diff phase by phase.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="index">
+    <p class="sectionmark">Coverage</p>
+    <h2>Feature index</h2>
+    <p>Everything you asked for, plus every suggestion from the first draft except the AI features you cut — and which phase delivers each.</p>
+    <div class="scroller">
+    <table>
+      <thead><tr><th>Feature</th><th>Phase</th><th>Feature</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td>Infinite canvas, pan &amp; zoom</td><td><span class="ph">P1</span></td><td>Minimap, zoom to fit/selection</td><td><span class="ph">P1</span></td></tr>
+        <tr><td>Dot grid, snap to grid, rulers</td><td><span class="ph">P1</span></td><td>Select tool <kbd>V</kbd>, hand tool <kbd>H</kbd></td><td><span class="ph">P2</span></td></tr>
+        <tr><td>Marquee &amp; multi-select, move together</td><td><span class="ph">P2</span></td><td>Basic shapes + styling</td><td><span class="ph">P2</span></td></tr>
+        <tr><td>Corner handles, resize, rotate</td><td><span class="ph">P2</span></td><td>Aspect locked, <kbd>⇧</kbd> to free</td><td><span class="ph">P2–3</span></td></tr>
+        <tr><td>Hover cursor changes</td><td><span class="ph">P2</span></td><td>Smart guides, align, distribute</td><td><span class="ph">P2</span></td></tr>
+        <tr><td>Lock / unlock, hide, layers panel</td><td><span class="ph">P2</span></td><td>Group, z-order, duplicate, nudge</td><td><span class="ph">P2</span></td></tr>
+        <tr><td>Freehand with pressure</td><td><span class="ph">P3</span></td><td><kbd>⇧</kbd> straightens a stroke</td><td><span class="ph">P3</span></td></tr>
+        <tr><td>Straight lines, arrows, 15° snap</td><td><span class="ph">P3</span></td><td>Connectors that follow shapes</td><td><span class="ph">P3</span></td></tr>
+        <tr><td>Eraser: object and stroke</td><td><span class="ph">P3</span></td><td>Shape recognition from sketch</td><td><span class="ph">P3</span></td></tr>
+        <tr><td>Laser pointer with fading trail</td><td><span class="ph">P3</span></td><td>Text + full formatting, fonts, sizes</td><td><span class="ph">P3</span></td></tr>
+        <tr><td>Sticky notes, auto-fit text</td><td><span class="ph">P3</span></td><td>Paste image from clipboard</td><td><span class="ph">P3</span></td></tr>
+        <tr><td>Drag image from desktop</td><td><span class="ph">P3</span></td><td>Frames and sections</td><td><span class="ph">P3</span></td></tr>
+        <tr><td>Eyedropper, copy/paste style</td><td><span class="ph">P3</span></td><td>Per-user undo and redo</td><td><span class="ph">P4</span></td></tr>
+        <tr><td>Offline editing, autosave, recovery</td><td><span class="ph">P4</span></td><td>Export PNG / SVG / PDF</td><td><span class="ph">P4</span></td></tr>
+        <tr><td>Command palette, context menus</td><td><span class="ph">P4</span></td><td>Shortcut cheat sheet, remapping</td><td><span class="ph">P4</span></td></tr>
+        <tr><td>Board templates</td><td><span class="ph">P4</span></td><td>Google sign-in</td><td><span class="ph">P5</span></td></tr>
+        <tr><td>Nested folders, boards</td><td><span class="ph">P5</span></td><td>Dashboard, recents, starred, search</td><td><span class="ph">P5</span></td></tr>
+        <tr><td>Board thumbnails</td><td><span class="ph">P5</span></td><td>Trash with 30-day restore</td><td><span class="ph">P5</span></td></tr>
+        <tr><td>Image upload, dedupe, placeholders</td><td><span class="ph">P6</span></td><td>Storage quota meter</td><td><span class="ph">P6</span></td></tr>
+        <tr><td>Real-time editing</td><td><span class="ph">P7</span></td><td>Live cursors, names, selection halos</td><td><span class="ph">P7</span></td></tr>
+        <tr><td>Avatar stack, follow, spotlight</td><td><span class="ph">P7</span></td><td>Cursor chat</td><td><span class="ph">P7</span></td></tr>
+        <tr><td>Connection status, reconnect</td><td><span class="ph">P7</span></td><td>Long edit history, scrubber</td><td><span class="ph">P7</span></td></tr>
+        <tr><td>Named checkpoints, restore</td><td><span class="ph">P7</span></td><td>Share folder or single board</td><td><span class="ph">P8</span></td></tr>
+        <tr><td>Viewer / commenter / editor roles</td><td><span class="ph">P8</span></td><td>Link audiences, expiry, revoke</td><td><span class="ph">P8</span></td></tr>
+        <tr><td>Guest viewers with a name</td><td><span class="ph">P8</span></td><td>Comments, mentions, resolve</td><td><span class="ph">P8</span></td></tr>
+        <tr><td>Notifications, transfer, audit log</td><td><span class="ph">P8</span></td><td>Publish link and embed</td><td><span class="ph">P8</span></td></tr>
+        <tr><td>Presentation mode</td><td><span class="ph">P9</span></td><td>Timer, voting, stamps, reactions</td><td><span class="ph">P9</span></td></tr>
+        <tr><td>Embeds, tables, code, LaTeX</td><td><span class="ph">P9</span></td><td>Multiple pages, component library</td><td><span class="ph">P9</span></td></tr>
+        <tr><td>Import SVG, PDF, .excalidraw</td><td><span class="ph">P9</span></td><td>Text box controls in the side panel</td><td><span class="ph">P10</span></td></tr>
+        <tr><td>Picture sizes by shape</td><td><span class="ph">P10</span></td><td>Right-click menu, ghost avatars</td><td><span class="ph">P10</span></td></tr>
+        <tr><td>One control pane, phone layout</td><td><span class="ph">P11</span></td><td>Controls by role</td><td><span class="ph">P11</span></td></tr>
+        <tr><td>Settings, default text sizes</td><td><span class="ph">P12</span></td><td>Editable shortcuts</td><td><span class="ph">P12</span></td></tr>
+        <tr><td>Frame-only presenting, numbered frames</td><td><span class="ph">P13</span></td><td>Celebrations, audio and video</td><td><span class="ph">P13</span></td></tr>
+        <tr><td>Placeholders and the Answer role</td><td><span class="ph">P14</span></td><td>Owner locks, unlock many at once</td><td><span class="ph">P14</span></td></tr>
+        <tr><td>Text box heights, the eraser, the side panel</td><td><span class="ph">P14.1</span></td><td>Shortcuts, strikethrough, shared for answering</td><td><span class="ph">P14.1</span></td></tr>
+        <tr><td>Paste to fit, cropping, panning while dragging</td><td><span class="ph">P14.2</span></td><td>Lock, and lock for others</td><td><span class="ph">P14.2</span></td></tr>
+        <tr><td>Undo kept across sessions</td><td><span class="ph">P15</span></td><td>Owner undoes a collaborator</td><td><span class="ph">parked</span></td></tr>
+        <tr><td>List view, pin and reorder folders</td><td><span class="ph">P16</span></td><td>Archive, sort boards</td><td><span class="ph">P16</span></td></tr>
+        <tr><td>Keyboard use of the canvas</td><td><span class="ph">P17</span></td><td>Visible focus</td><td><span class="ph">P17</span></td></tr>
+        <tr><td>Arabic UI and RTL layout</td><td><span class="ph">parked</span></td><td>Screen reader, accessibility audit</td><td><span class="ph">parked</span></td></tr>
+        <tr><td>Dark mode, high contrast, reduced motion</td><td><span class="ph">parked</span></td><td>Onboarding, empty &amp; error states</td><td><span class="ph">parked</span></td></tr>
+        <tr><td>Performance pass, rate limits</td><td><span class="ph">P18</span></td><td>Custom domain, launch</td><td><span class="ph">P18</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="risks">
+    <p class="sectionmark">Risks</p>
+    <h2>What could still go wrong</h2>
+    <ul class="risks">
+      <li><b>The free tier's real ceiling is 100,000 writes a day</b><p>Shared between D1 and each board's SQLite. Batching saves to about one per second of active drawing gives ~27 hours of editing per day across everyone. Comfortable for you; a hard limit if this became a team product. Mitigation: adaptive batching that widens under load, and a usage meter so you see it coming.</p></li>
+      <li><b>Board history grows forever</b><p>An append-only log is what gives you "undo anything from months ago", but a two-year-old board would replay hundreds of thousands of updates on open. Mitigation: snapshot compaction from Phase 7 — load the newest snapshot and only replay what came after.</p></li>
+      <li class="med"><b>Arabic text on a canvas</b><p>The browser shapes Arabic correctly in the editing overlay, but the canvas draws its own text and needs the same font metrics or the caret drifts. Handled in Phase 3 rather than retrofitted — flag it fast if item 6 of that checklist looks off.</p></li>
+      <li class="med"><b>Firebase is a second vendor for one feature</b><p>It buys you a lot (token refresh, session handling, popup flows), but it's another dashboard and another outage surface. If you'd rather be pure Cloudflare, Google sign-in can be done directly in the Worker — a day's work, and a day of security-sensitive code you'd own. Say the word before Phase 5.</p></li>
+      <li class="med"><b>The undo-over-someone-else's-edit policy</b><p>Genuinely ambiguous, and it produces bug reports nobody can reproduce if it isn't decided. Decide it at Phase 4; I'll write tests either way.</p></li>
+      <li class="low"><b>Cloudflare's build system is plainer than Vercel's</b><p>One build at a time, 500 a month. Not a problem at this pace, but pushing twice quickly means the second build queues.</p></li>
+      <li class="med"><b>Undo across sessions (P15)</b><p>Today's undo lives in the open tab. Keeping it after the board closes means storing each person's recent steps and being able to replay them against a board others have changed since. It is the least certain phase left, so it starts with a small trial.</p></li>
+      <li class="low"><b>Scope</b><p>Twenty-one phases, counting 14.1 and 14.2, is a lot. The order is chosen so that each one leaves you a whiteboard worth using — keyboard use and hardening come last so they cover what you will actually use.</p></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Every phase, 0–18, is built and deployed. What's left is your domain (Phase 18, item 6), your week of free-tier figures (item 5), and checking the built phases against their lists. Anything parked is there whenever you want it.</p>
+  </footer>
+
+  </main>
+</div>
+</div>
+
+</body></html>

@@ -7,3 +7,6 @@ playwright-report
 test-results
 package-lock.json
 .wrangler
+
+# A copy of the plan page published on claude.ai; kept byte-for-byte.
+docs/plan.html
