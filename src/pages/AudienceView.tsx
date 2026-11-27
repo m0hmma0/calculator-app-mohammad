@@ -570,7 +570,11 @@ function followMedia(
   const drift = Math.abs(media.currentTime - message.time);
   if (drift > (message.playing ? 0.4 : 0.05)) media.currentTime = message.time;
   if (message.playing && media.paused) {
-    media.play().catch(() => {
+    media.play().catch((error: unknown) => {
+      // Paused again before it started (the presenter's quick play and pause): the
+      // pause stands. Playing muted here is only for being refused sound unasked;
+      // taking this for that left the slides playing while the presenter's had stopped.
+      if (!(error instanceof DOMException) || error.name !== 'NotAllowedError') return;
       // Not allowed to play with sound unasked: play silently here, heard there.
       media.muted = true;
       void media.play().catch(() => {});

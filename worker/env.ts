@@ -18,6 +18,8 @@ export interface Env {
   LIMIT_API?: RateLimit;
   LIMIT_HEAVY?: RateLimit;
   LIMIT_ERRORS?: RateLimit;
+  /** The address pages are served at; a visit to a workers.dev address is sent here. */
+  CANONICAL_HOST?: string;
   /** Test backend only: count just the requests that carry an `x-rate-key`. */
   RATE_LIMIT_TEST?: string;
 }

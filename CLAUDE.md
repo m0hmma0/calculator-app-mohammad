@@ -509,7 +509,11 @@ bundle falls back to local-only mode. The container's proxy blocks `*.workers.de
 the live site cannot be fetched from here; `npx wrangler deployments list` confirms a
 deploy. Google sign-in needs `sabboura.mh-hamad.workers.dev` and `sabboura.read4more.com` in
 Firebase's authorised domains. The custom domain is `routes` in wrangler.toml
-(`custom_domain = true`; read4more.com is a zone on the same Cloudflare account).
+(`custom_domain = true`; read4more.com is a zone on the same Cloudflare account). Page
+visits to a `*.workers.dev` address get a 301 to `CANONICAL_HOST` (`worker/redirect.ts`;
+`/api/` is left alone so open tabs keep working); for that, pages reach the Worker
+first (`run_worker_first` in wrangler.toml, all but `/assets/*` and the favicon). Local
+wrangler dev rewrites the Host header, so the rule is unit-tested, not seen in e2e.
 
 Never ask for a token, key or password in chat; direct the user to environment
 secrets instead.

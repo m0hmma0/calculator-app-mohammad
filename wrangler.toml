@@ -13,6 +13,9 @@ routes = [{ pattern = "sabboura.read4more.com", custom_domain = true }]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+# Pages (not the built files under /assets) reach the Worker first, so a visit to the
+# old workers.dev address can be sent on to the custom domain. Files stay free.
+run_worker_first = ["/*", "!/assets/*", "!/favicon.svg"]
 
 # Rate limits (Phase 18), per caller address per minute; see worker/limits.ts.
 # Everything else under /api/, room connections included.
@@ -41,6 +44,8 @@ enabled = true
 # it only says which issuer is trusted, and every token is still verified against
 # Google's published keys.
 FIREBASE_PROJECT_ID = "r4m-whiteboard"
+# Pages opened at a *.workers.dev address are sent here, path and link intact.
+CANONICAL_HOST = "sabboura.read4more.com"
 
 [[d1_databases]]
 binding = "DB"

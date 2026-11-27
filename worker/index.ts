@@ -49,6 +49,7 @@ import { upsertUser } from './db';
 import type { Env } from './env';
 import { fail, json } from './http';
 import { overLimit } from './limits';
+import { redirectToCanonical } from './redirect';
 
 export type { Env };
 export { BoardRoom } from './room';
@@ -272,6 +273,9 @@ export default {
         return fail('Something went wrong on the server', 500);
       }
     }
+
+    const moved = redirectToCanonical(request, env.CANONICAL_HOST);
+    if (moved) return moved;
 
     // Everything else is a static asset, with unknown paths falling back to
     // index.html so client-side routes like /b/:boardId survive a cold load.
