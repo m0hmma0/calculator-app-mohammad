@@ -333,6 +333,27 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
   const topZ = (): string | null => get().elements.at(-1)?.z ?? null;
 
+  const insertNewElements = (elements: BoardElement[]): void => {
+    const frames = new Set(
+      elements
+        .filter((element) => element.type === 'frame' && !element.parentId)
+        .map((element) => element.id),
+    );
+    if (frames.size === 0) {
+      insertElements(board, elements);
+      return;
+    }
+
+    const frameKeys = reorder([...get().elements, ...elements], frames, 'back');
+    insertElements(
+      board,
+      elements.map((element) => {
+        const z = frameKeys.get(element.id);
+        return z === undefined ? element : { ...element, z };
+      }),
+    );
+  };
+
   return {
     viewport: typeof localStorage === 'undefined' ? DEFAULT_VIEWPORT : loadViewport(),
     stageSize: { width: 1, height: 1 },
@@ -500,13 +521,13 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
 
     addElement: (element) => {
-      insertElements(board, [element]);
+      insertNewElements([element]);
       bump({ selection: [element.id] });
     },
 
     addElements: (elements) => {
       if (elements.length === 0) return;
-      insertElements(board, elements);
+      insertNewElements(elements);
       bump({
         selection: elements.filter((element) => !element.parentId).map((element) => element.id),
       });
@@ -551,7 +572,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
         parentId: null,
       }));
 
-      insertElements(board, copies);
+      insertNewElements(copies);
       bump({ selection: copies.map((copy) => copy.id) });
     },
 

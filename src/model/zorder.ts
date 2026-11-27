@@ -46,6 +46,9 @@ export function reorder(
   if (selected.length === 0) return result;
 
   if (command === 'front' || command === 'back') {
+    const edge =
+      command === 'front' ? ordered.slice(-selected.length) : ordered.slice(0, selected.length);
+    if (edge.every((element) => moving.has(element.id))) return result;
     const anchor = command === 'front' ? (rest.at(-1)?.z ?? null) : null;
     const other = command === 'front' ? null : (rest[0]?.z ?? null);
     const keys = keysBetween(anchor, other, selected.length);

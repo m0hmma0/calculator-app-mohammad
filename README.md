@@ -409,6 +409,9 @@ Writing and drawing:
   (`pictureBox` in `src/media/images.ts`). Pasted with something selected, a picture
   takes its width and goes under it; a double click crops it.
 - **Picking up another tool** puts the selection down.
+- **Stacking layers** in the side panel: **back** and **front** move the selection one
+  step. **Send to back** and **Bring to front** move it all the way in one click. New
+  frames start at the back, even when added to a board that already has content.
 - **The right-click menu** has copy, paste (which reads the clipboard, and may ask
   first), duplicate, delete, lock, lock for others (the owner's), unlock, group,
   ungroup and the side panel, and

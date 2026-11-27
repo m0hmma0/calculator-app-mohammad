@@ -752,6 +752,22 @@ export function Inspector() {
               </button>
             </div>
             <div className={styles.buttons}>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => reorderSelection('back')}
+              >
+                Send to back
+              </button>
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => reorderSelection('front')}
+              >
+                Bring to front
+              </button>
+            </div>
+            <div className={styles.buttons}>
               {/* Locks for everyone; "lock for others" is in the right-click menu. */}
               <button
                 type="button"

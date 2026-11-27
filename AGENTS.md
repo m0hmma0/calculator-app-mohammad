@@ -98,6 +98,11 @@ Everything belongs to the user; agents only hold a deploy key.
 Short histories of the parts most worth knowing before touching them. The phase list
 itself is in README.md.
 
+Layer stacking: the side panel's **Send to back** and **Bring to front** use the
+existing fractional-key reorder commands. Each is a single undoable action and keeps
+the selected elements in their relative order. New top-level frames start behind
+existing content, including frames added through import, paste or duplication.
+
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; removed on 20
 November — see below), presentation (`src/workshop/presentation.ts`, followers fit the
 presenter's frame via presence `present`), a timer and dot votes in the document's

@@ -363,6 +363,31 @@ test.describe('arranging', () => {
     expect(after).toHaveLength(3);
   });
 
+  test('the side panel moves layers to either end, and new frames start at the back', async ({
+    page,
+  }) => {
+    await draw(page, 'KeyR', { x: 340, y: 280 }, { x: 460, y: 380 });
+    await draw(page, 'KeyO', { x: 370, y: 300 }, { x: 490, y: 400 });
+    await draw(page, 'KeyF', { x: 300, y: 240 }, { x: 530, y: 440 });
+
+    const layers = page.getByTestId('layers').locator('li');
+    await expect(layers).toHaveText(['ellipse', 'rect', 'frame']);
+
+    const inspector = page.getByTestId('inspector');
+    await inspector.getByRole('button', { name: 'Bring to front' }).click();
+    await expect(layers).toHaveText(['frame', 'ellipse', 'rect']);
+    await inspector.getByRole('button', { name: 'Send to back' }).click();
+    await expect(layers).toHaveText(['ellipse', 'rect', 'frame']);
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(layers).toHaveText(['frame', 'ellipse', 'rect']);
+
+    // Duplicating a frame that was moved to the front still starts the copy at the back.
+    await layers.first().getByRole('button').click();
+    await page.keyboard.press('ControlOrMeta+KeyD');
+    await expect(layers).toHaveText(['frame', 'ellipse', 'rect', 'frame']);
+    await expect(layers.last().getByRole('button')).toHaveAttribute('aria-selected', 'true');
+  });
+
   // Checklist item 12.
   test('arranging puts overlapping shapes in a row, then in a column', async ({ page }) => {
     // Three 60×80 rectangles, one on top of another.

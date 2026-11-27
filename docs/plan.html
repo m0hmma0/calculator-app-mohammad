@@ -395,6 +395,7 @@ tests/          unit (Vitest) + end-to-end (Playwright)</code></pre>
           <li>Select a shape, press <kbd>⇧</kbd><kbd>⌘</kbd><kbd>L</kbd> — it <strong>locks</strong>: clicking it does nothing, the cursor shows "not allowed", and the layers panel shows a padlock. Press again to unlock.</li>
           <li>Select two shapes, <kbd>⌘</kbd><kbd>G</kbd> — <strong>they group</strong> and move as one. <kbd>⇧</kbd><kbd>⌘</kbd><kbd>G</kbd> ungroups.</li>
           <li>Overlap three shapes, use <kbd>[</kbd> and <kbd>]</kbd> — <strong>the stacking order changes one step at a time</strong>.</li>
+          <li>With three overlapping items, use <strong>Send to back</strong> and <strong>Bring to front</strong> in the side panel to move one all the way with one click. Add a frame after the shapes and check that it starts behind them.</li>
           <li>Select several, click <em>distribute horizontally</em> — <strong>the gaps become equal</strong>.</li>
           <li>Change fill, stroke width, dash and corner radius in the inspector — <strong>each updates live</strong>.</li>
           <li>Rotate a shape — it <strong>snaps to 15° steps</strong> and shows the angle while you drag.</li>
