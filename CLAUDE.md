@@ -15,7 +15,8 @@ control pane, and who sees what)**, **Phase 12 (settings and shortcuts)**, **Pha
 role and locks)**, **14.1 (fixes)**, **14.2 (pictures, locks, panning)** and **Phase 15
 (undo after closing a board)** and **Phase 16 (dashboard organisation)** are built,
 tested and deployed at
-<https://sabboura.mh-hamad.workers.dev> (migrations 0001–0008 applied remotely) but not
+<https://sabboura.read4more.com> (since 27 November; <https://sabboura.mh-hamad.workers.dev>
+still works) (migrations 0001–0008 applied remotely) but not
 yet checked by the user.
 
 The plan was renumbered after Phase 9: the user's list of requests became Phases
@@ -506,8 +507,9 @@ Firebase web config (see `.env.example`; values are public: project `r4m-whitebo
 `.env` is gitignored, so a fresh container must recreate it before building, or the
 bundle falls back to local-only mode. The container's proxy blocks `*.workers.dev`, so
 the live site cannot be fetched from here; `npx wrangler deployments list` confirms a
-deploy. Google sign-in needs `sabboura.mh-hamad.workers.dev` in Firebase's authorised
-domains.
+deploy. Google sign-in needs `sabboura.mh-hamad.workers.dev` and `sabboura.read4more.com` in
+Firebase's authorised domains. The custom domain is `routes` in wrangler.toml
+(`custom_domain = true`; read4more.com is a zone on the same Cloudflare account).
 
 Never ask for a token, key or password in chat; direct the user to environment
 secrets instead.
