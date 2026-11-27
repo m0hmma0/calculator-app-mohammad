@@ -6,7 +6,7 @@ import { pasteFromClipboard } from '@/input/useClipboard';
 import { selectCanComment, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
 import { useSettings } from '@/settings/settings';
-import { boardDoc, useBoardStore } from '@/state/boardStore';
+import { boardDoc, selectFitWidthFrame, useBoardStore } from '@/state/boardStore';
 import { togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { isHtmlCode } from '@/webpage/pageStore';
 import styles from './ContextMenu.module.css';
@@ -117,6 +117,12 @@ export function ContextMenu() {
           hint: key('duplicate'),
           disabled: !hasSelection,
           run: () => store().duplicateSelection(),
+        },
+        {
+          id: 'fit-width',
+          label: 'Fit width',
+          disabled: !selectFitWidthFrame(store()),
+          run: () => store().fitSelectionWidth(),
         },
         {
           id: 'delete',

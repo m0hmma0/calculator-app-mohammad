@@ -388,6 +388,28 @@ test.describe('arranging', () => {
     await expect(layers.last().getByRole('button')).toHaveAttribute('aria-selected', 'true');
   });
 
+  test('Fit width uses the containing frame from the side panel and right-click menu', async ({
+    page,
+  }) => {
+    const fit = page.getByTestId('inspector').getByRole('button', { name: 'Fit width' });
+    await draw(page, 'KeyR', { x: 100, y: 150 }, { x: 220, y: 210 });
+    await expect(fit).toBeDisabled();
+    await draw(page, 'KeyF', { x: 300, y: 240 }, { x: 700, y: 540 });
+    await draw(page, 'KeyR', { x: 430, y: 330 }, { x: 550, y: 390 });
+    const before = await geo(page);
+
+    await fit.click();
+    const after = await geo(page);
+    expect(after).toMatchObject({ w: 400, h: 200 });
+    expect(after.x).toBe(before.x - 130);
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    expect(await geo(page)).toEqual(before);
+
+    await page.mouse.click(480, 350, { button: 'right' });
+    await page.getByRole('menuitem', { name: 'Fit width' }).click();
+    expect(await geo(page)).toEqual(after);
+  });
+
   // Checklist item 12.
   test('arranging puts overlapping shapes in a row, then in a column', async ({ page }) => {
     // Three 60×80 rectangles, one on top of another.

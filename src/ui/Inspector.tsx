@@ -16,7 +16,7 @@ import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { hintPatch } from '@/input/insertions';
-import { hasToolOptions, useBoardStore } from '@/state/boardStore';
+import { hasToolOptions, selectFitWidthFrame, useBoardStore } from '@/state/boardStore';
 import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { linkLabel, normaliseLink } from '@/text/marks';
 import { LinkField, LinkIcon } from './LinkField';
@@ -87,6 +87,8 @@ export function Inspector() {
   const setSelectionOpacity = useBoardStore((state) => state.setSelectionOpacity);
   const alignSelection = useBoardStore((state) => state.alignSelection);
   const arrangeSelection = useBoardStore((state) => state.arrangeSelection);
+  const fitWidthFrame = useBoardStore(selectFitWidthFrame);
+  const fitSelectionWidth = useBoardStore((state) => state.fitSelectionWidth);
   const showGeometry = useUiPrefs((state) => state.geometry);
   const reorderSelection = useBoardStore((state) => state.reorderSelection);
   const toggleLockSelection = useBoardStore((state) => state.toggleLockSelection);
@@ -733,6 +735,16 @@ export function Inspector() {
                 onClick={() => arrangeSelection('column')}
               >
                 in a column ↕
+              </button>
+            </div>
+            <div className={styles.buttons}>
+              <button
+                type="button"
+                className={styles.button}
+                disabled={!fitWidthFrame}
+                onClick={fitSelectionWidth}
+              >
+                Fit width
               </button>
             </div>
             <div className={styles.buttons}>

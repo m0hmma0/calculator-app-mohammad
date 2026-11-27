@@ -103,6 +103,14 @@ existing fractional-key reorder commands. Each is a single undoable action and k
 the selected elements in their relative order. New top-level frames start behind
 existing content, including frames added through import, paste or duplication.
 
+Fit width: the side panel and context menu call `fitSelectionWidth` for one unlocked
+element. `src/model/fitWidth.ts` finds the smallest visible frame around the element's
+centre and fits its horizontal span in the frame's coordinate space. Scaling uses one
+undo step, preserves rotation and proportions, and keeps the original vertical centre
+as far as the frame allows. A box that follows its text becomes fixed-height when
+resized so that it keeps its proportions. Frames, groups and bound connectors are
+ineligible.
+
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; removed on 20
 November — see below), presentation (`src/workshop/presentation.ts`, followers fit the
 presenter's frame via presence `present`), a timer and dot votes in the document's

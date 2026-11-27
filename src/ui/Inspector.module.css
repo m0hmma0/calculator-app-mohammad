@@ -126,10 +126,15 @@
   white-space: nowrap;
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent-ink);
   background: var(--accent-soft);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .button[aria-pressed='true'] {

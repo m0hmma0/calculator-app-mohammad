@@ -37,6 +37,7 @@ import {
   type Viewport,
 } from '@/canvas/viewport';
 import { elementAABB, selectionAABB } from '@/model/bounds';
+import { fitWidthPatch, frameForFitWidth } from '@/model/fitWidth';
 import {
   createElement,
   createElementId,
@@ -220,6 +221,7 @@ interface BoardState {
   setSelectionLocked: (locked: boolean, mode?: 'all' | 'others') => void;
   toggleHiddenSelection: () => void;
   reorderSelection: (command: ReorderCommand) => void;
+  fitSelectionWidth: () => void;
   alignSelection: (edge: 'left' | 'hcentre' | 'right' | 'top' | 'vcentre' | 'bottom') => void;
   distributeSelection: (axis: 'x' | 'y') => void;
   /**
@@ -320,6 +322,12 @@ let board: BoardDoc = createBoard({
 });
 
 export const boardDoc = (): BoardDoc => board;
+
+export function selectFitWidthFrame({ elements, selection }: BoardState): BoardElement | null {
+  if (selection.length !== 1 || board.readOnly) return null;
+  const element = elements.find((item) => item.id === selection[0]);
+  return element && !lockedForMe(element) ? frameForFitWidth(element, elements) : null;
+}
 
 export const useBoardStore = create<BoardState>((set, get) => {
   const bump = (patch: Partial<BoardState>) =>
@@ -691,6 +699,23 @@ export const useBoardStore = create<BoardState>((set, get) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const [id, z] of keys) patches.set(id, { z });
       get().applyDiscrete(patches);
+    },
+
+    fitSelectionWidth: () => {
+      const state = get();
+      const frame = selectFitWidthFrame(state);
+      const element = state.elements.find((item) => item.id === state.selection[0]);
+      if (!frame || !element) return;
+      const patch = fitWidthPatch(element, frame);
+      if (
+        Math.abs(patch.x - element.x) < 1e-6 &&
+        Math.abs(patch.y - element.y) < 1e-6 &&
+        Math.abs(patch.w - element.w) < 1e-6 &&
+        Math.abs(patch.h - element.h) < 1e-6
+      ) {
+        return;
+      }
+      state.applyDiscrete(new Map([[element.id, patch]]));
     },
 
     alignSelection: (edge) => {

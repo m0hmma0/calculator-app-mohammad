@@ -412,6 +412,10 @@ Writing and drawing:
 - **Stacking layers** in the side panel: **back** and **front** move the selection one
   step. **Send to back** and **Bring to front** move it all the way in one click. New
   frames start at the back, even when added to a board that already has content.
+- **Fit width** in the side panel and the right-click menu resizes one unlocked item
+  to fill its frame from side to side, keeping its proportions. When frames overlap,
+  it uses the smallest visible one around the item's centre. Tall items can extend
+  past the frame vertically at full width.
 - **The right-click menu** has copy, paste (which reads the clipboard, and may ask
   first), duplicate, delete, lock, lock for others (the owner's), unlock, group,
   ungroup and the side panel, and
