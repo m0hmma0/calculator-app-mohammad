@@ -4,6 +4,7 @@ import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
 import { asUrl, placeLink } from '@/media/embeds';
 import { copiesOf } from '@/model/copies';
+import { withGroupMembers } from '@/model/frameGroups';
 import type { BoardElement } from '@/model/element';
 import { imageBlobsFrom } from '@/media/images';
 import { createElement } from '@/model/element';
@@ -117,10 +118,7 @@ export function useClipboard(hostRef: RefObject<HTMLElement | null>): void {
 
     const selectedElements = (): BoardElement[] => {
       const { elements, selection } = useBoardStore.getState();
-      const ids = new Set(selection);
-      return elements.filter(
-        (element) => ids.has(element.id) || (element.parentId && ids.has(element.parentId)),
-      );
+      return withGroupMembers(elements, selection);
     };
 
     const writeClipboard = (event: ClipboardEvent) => {

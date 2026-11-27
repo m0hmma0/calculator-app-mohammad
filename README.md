@@ -416,6 +416,13 @@ Writing and drawing:
   to fill its frame from side to side, keeping its proportions. When frames overlap,
   it uses the smallest visible one around the item's centre. Tall items can extend
   past the frame vertically at full width.
+- **Frame grouping.** Drag an item over a frame and drop it to group them. The frame
+  with the most overlap wins. The group stays together across visits, and frames
+  stay separate from each other. Select the frame and choose **Ungroup** in the side
+  panel or right-click menu to work with its items separately again.
+- **Row and column spacing.** Select multiple items and choose **in a row** or
+  **in a column** in the side panel. Use **−** and **+** beside **Spacing** to change
+  the gap evenly while keeping the current alignment and order.
 - **The right-click menu** has copy, paste (which reads the clipboard, and may ask
   first), duplicate, delete, lock, lock for others (the owner's), unlock, group,
   ungroup and the side panel, and

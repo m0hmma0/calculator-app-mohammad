@@ -90,6 +90,29 @@ async function geometry(page: Page, id: string) {
   };
 }
 
+test('frame grouping synchronizes across editors', async ({ browser }) => {
+  const { a, b, close } = await twoWindows(browser, 'frame-group');
+  try {
+    await drawRect(a, [320, 240], [560, 460], 'KeyF');
+    await drawRect(a, [140, 280], [220, 340]);
+    await expect(layers(b)).toHaveText(['rect', 'frame']);
+    await layers(b).first().getByRole('button').click();
+
+    await a.keyboard.down('Control');
+    await a.mouse.move(180, 310);
+    await a.mouse.down();
+    await a.mouse.move(400, 310, { steps: 8 });
+    await a.mouse.up();
+    await a.keyboard.up('Control');
+    await expect(layers(b)).toHaveText(['frame']);
+    await expect(b.getByTestId('ungroup')).toBeEnabled();
+    await b.getByTestId('ungroup').click();
+    await expect(layers(a)).toHaveText(['rect', 'frame']);
+  } finally {
+    await close();
+  }
+});
+
 async function layerIds(page: Page) {
   return page
     .getByTestId('layers')

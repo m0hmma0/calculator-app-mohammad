@@ -16,7 +16,14 @@ import { degreesOf } from '@/model/transform';
 import type { DashStyle } from '@/model/element';
 import { useHistory } from '@/collab/history';
 import { hintPatch } from '@/input/insertions';
-import { hasToolOptions, selectFitWidthFrame, useBoardStore } from '@/state/boardStore';
+import {
+  canUngroup,
+  hasToolOptions,
+  selectArrangement,
+  selectFitWidthFrame,
+  useBoardStore,
+} from '@/state/boardStore';
+import { layoutBox } from '@/model/frameGroups';
 import { toggleGeometry, togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { linkLabel, normaliseLink } from '@/text/marks';
 import { LinkField, LinkIcon } from './LinkField';
@@ -87,6 +94,7 @@ export function Inspector() {
   const setSelectionOpacity = useBoardStore((state) => state.setSelectionOpacity);
   const alignSelection = useBoardStore((state) => state.alignSelection);
   const arrangeSelection = useBoardStore((state) => state.arrangeSelection);
+  const changeArrangementGap = useBoardStore((state) => state.changeArrangementGap);
   const fitWidthFrame = useBoardStore(selectFitWidthFrame);
   const fitSelectionWidth = useBoardStore((state) => state.fitSelectionWidth);
   const showGeometry = useUiPrefs((state) => state.geometry);
@@ -104,7 +112,10 @@ export function Inspector() {
   const first = selected[0];
   const anyLocked = selected.some((element) => element.locked);
   const topLevel = elements.filter((element) => element.parentId === null);
-  const box = selected.length > 0 ? selectionAABB(selected) : null;
+  const box =
+    selected.length > 0
+      ? selectionAABB(selected.map((element) => layoutBox(element, elements)))
+      : null;
 
   // A stress board has thousands of elements; rendering a button for every one of
   // them costs more than the canvas does. Show the top of the stack and a count.
@@ -141,6 +152,7 @@ export function Inspector() {
   if (historyOpen || !editable || !open) return null;
   const toolOptions = hasToolOptions(tool);
   if (!first && !toolOptions && !showLayers) return null;
+  const arrangement = selectArrangement({ elements, selection });
 
   return (
     <aside className={styles.panel} data-hud data-present-hide data-testid="inspector">
@@ -737,6 +749,31 @@ export function Inspector() {
                 in a column ↕
               </button>
             </div>
+            {arrangement ? (
+              <div className={styles.row} role="group" aria-label="Spacing between items">
+                <span>Spacing</span>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-label="Decrease spacing"
+                  disabled={arrangement.gap === 0}
+                  onClick={() => changeArrangementGap(-1)}
+                >
+                  −
+                </button>
+                <output className={styles.value} aria-label="Current spacing">
+                  {Math.round(arrangement.gap)}
+                </output>
+                <button
+                  type="button"
+                  className={styles.button}
+                  aria-label="Increase spacing"
+                  onClick={() => changeArrangementGap(1)}
+                >
+                  +
+                </button>
+              </div>
+            ) : null}
             <div className={styles.buttons}>
               <button
                 type="button"
@@ -811,6 +848,9 @@ export function Inspector() {
                 type="button"
                 className={styles.button}
                 data-testid="group"
+                disabled={
+                  selected.length < 2 || selected.filter((item) => item.type === 'frame').length > 1
+                }
                 onClick={groupSelection}
               >
                 group
@@ -819,6 +859,7 @@ export function Inspector() {
                 type="button"
                 className={styles.button}
                 data-testid="ungroup"
+                disabled={!selected.some((element) => canUngroup(element, elements))}
                 onClick={ungroupSelection}
               >
                 ungroup

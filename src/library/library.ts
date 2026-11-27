@@ -5,6 +5,7 @@ import { currentIdToken } from '@/auth/session';
 import { screenToBoard } from '@/canvas/viewport';
 import type { Point } from '@/geometry';
 import { copiesOf } from '@/model/copies';
+import { withGroupMembers } from '@/model/frameGroups';
 import type { BoardElement } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
 
@@ -60,19 +61,7 @@ export async function loadLibrary(): Promise<void> {
 /** The selection with everything inside it — a group's children, and theirs. */
 function selectionWithChildren(): BoardElement[] {
   const { elements, selection } = useBoardStore.getState();
-  const chosen = new Set(selection);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const element of elements) {
-      if (element.parentId && chosen.has(element.parentId) && !chosen.has(element.id)) {
-        chosen.add(element.id);
-        grew = true;
-      }
-    }
-  }
-  // In stacking order, so the copies stack the same way.
-  return elements.filter((element) => chosen.has(element.id));
+  return withGroupMembers(elements, selection);
 }
 
 export async function saveSelection(name: string): Promise<boolean> {

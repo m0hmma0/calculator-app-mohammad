@@ -158,6 +158,8 @@ export interface BoardElement {
   /** Fractional index — sorts as a plain string, and two people can reorder at once. */
   z: string;
   parentId: ElementId | null;
+  /** Explicitly ungrouped from a frame. Skip the legacy carry-by-position behavior. */
+  frameDetached?: boolean;
   /** Which page of the board it is on. Absent means the first page. */
   page?: string;
   /**

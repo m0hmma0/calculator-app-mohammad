@@ -423,10 +423,89 @@ test.describe('arranging', () => {
     // Side by side, 24 apart, tops lined up.
     await page.getByTestId('arrange-row').click();
     expect(await geo(page)).toMatchObject({ x: piled.x, y: piled.y, w: 60 * 3 + 24 * 2, h: 80 });
+    const spacing = page.getByLabel('Current spacing');
+    await expect(spacing).toHaveText('24');
+    await page.getByRole('button', { name: 'Increase spacing' }).click();
+    await expect(spacing).toHaveText('32');
+    expect(await geo(page)).toMatchObject({ x: piled.x, y: piled.y, w: 60 * 3 + 32 * 2, h: 80 });
 
     // One under another, lefts lined up.
     await page.getByTestId('arrange-column').click();
     expect(await geo(page)).toMatchObject({ x: piled.x, y: piled.y, w: 60, h: 80 * 3 + 24 * 2 });
+    await page.getByRole('button', { name: 'Decrease spacing' }).click();
+    await expect(spacing).toHaveText('16');
+    expect(await geo(page)).toMatchObject({ x: piled.x, y: piled.y, w: 60, h: 80 * 3 + 16 * 2 });
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(spacing).toHaveText('24');
+  });
+
+  test('an overlapping drop joins a frame until manually ungrouped, even after reload', async ({
+    page,
+  }) => {
+    await draw(page, 'KeyF', { x: 300, y: 190 }, { x: 500, y: 390 });
+    await draw(page, 'KeyF', { x: 540, y: 190 }, { x: 740, y: 390 });
+    await draw(page, 'KeyR', { x: 150, y: 250 }, { x: 230, y: 310 });
+    const original = await geo(page);
+    await page.keyboard.down('Control');
+    await page.mouse.move(190, 280);
+    await page.mouse.down();
+    await page.mouse.move(320, 280, { steps: 8 });
+    // Releasing after the undo manager's capture window still creates one step.
+    await page.waitForTimeout(450);
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+
+    const layers = page.getByTestId('layers').locator('li');
+    await expect(layers).toHaveText(['frame', 'frame']);
+    await expect(page.getByTestId('ungroup')).toBeEnabled();
+    const joined = await geo(page);
+    expect(joined.w).toBeGreaterThan(200);
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(layers).toHaveText(['rect', 'frame', 'frame']);
+    await layers.first().getByRole('button').click();
+    expect(await geo(page)).toEqual(original);
+    await page.keyboard.press('ControlOrMeta+Shift+KeyZ');
+    await expect(layers).toHaveText(['frame', 'frame']);
+    await expect(page.getByTestId('ungroup')).toBeEnabled();
+
+    // Picking up the part of the item outside its frame still moves the whole group.
+    await dragFrom(page, { x: 290, y: 280 }, { x: 290, y: 330 }, ['Control']);
+    expect(await geo(page)).toMatchObject({ x: joined.x, y: joined.y + 50, w: joined.w });
+    await page.reload();
+    await expect(layers).toHaveText(['frame', 'frame']);
+    await layers.first().getByRole('button').click();
+    await page.getByTestId('ungroup').click();
+    await expect(layers).toHaveText(['rect', 'frame', 'frame']);
+    const detached = await geo(page);
+    expect(detached).toMatchObject({ x: original.x + 130, y: original.y + 50, w: original.w });
+
+    await layers.nth(1).getByRole('button').click();
+    await page.keyboard.press('ArrowLeft');
+    await layers.first().getByRole('button').click();
+    expect(await geo(page)).toEqual(detached);
+  });
+
+  test('dragging a frame over another leaves both frames separate', async ({ page }) => {
+    await draw(page, 'KeyF', { x: 270, y: 240 }, { x: 470, y: 440 });
+    await draw(page, 'KeyF', { x: 510, y: 250 }, { x: 680, y: 420 });
+    await dragFrom(page, { x: 590, y: 320 }, { x: 400, y: 320 }, ['Control']);
+    await expect(page.getByTestId('layers').locator('li')).toHaveText(['frame', 'frame']);
+    await expect(page.getByTestId('ungroup')).toBeDisabled();
+  });
+
+  test('a frame leaves detached content behind even while it remains inside', async ({ page }) => {
+    await draw(page, 'KeyF', { x: 320, y: 240 }, { x: 560, y: 460 });
+    await draw(page, 'KeyR', { x: 140, y: 280 }, { x: 220, y: 340 });
+    await dragFrom(page, { x: 180, y: 310 }, { x: 400, y: 310 }, ['Control']);
+    await page.mouse.click(400, 310, { button: 'right' });
+    await page.getByRole('menuitem', { name: 'Ungroup' }).click();
+    const detached = await geo(page);
+
+    await dragFrom(page, { x: 530, y: 420 }, { x: 680, y: 420 }, ['Control']);
+    const layers = page.getByTestId('layers').locator('li');
+    await expect(layers).toHaveText(['rect', 'frame']);
+    await layers.first().getByRole('button').click();
+    expect(await geo(page)).toEqual(detached);
   });
 });
 

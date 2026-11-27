@@ -26,6 +26,7 @@ import { stampCursor } from '@/input/insertions';
 import { useUiPrefs } from '@/state/uiPrefs';
 import { laserAlive, laserSnapshot, onLaserChange } from '@/laser/laserTrail';
 import { selectionFrame } from '@/model/handles';
+import { transformSelection } from '@/model/frameGroups';
 import { useBoardStore, type RenderStatsSnapshot } from '@/state/boardStore';
 import { lockedForMe, selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { CommentPins } from './CommentPins';
@@ -176,14 +177,15 @@ export function CanvasStage() {
       frame,
       {
         selected,
-        frame: selectionFrame(selected),
+        frame: selectionFrame(selected, elements),
         marquee: store.marquee,
         guides: store.guides,
         spacing: store.spacing,
         rotationReadout: store.rotationReadout,
         // Locked for this person: no handles. Locked for others only (the owner's
         // view): handles, and a padlock to say so.
-        lockedSelection: selected.some(lockedForMe),
+        lockedSelection:
+          selected.some(lockedForMe) || transformSelection(selected, elements).some(lockedForMe),
         lockedForOthers: selected.some((element) => element.locked && !lockedForMe(element)),
         cropping: preview
           ? null

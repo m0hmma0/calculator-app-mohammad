@@ -9,15 +9,7 @@ import { startPlayer } from '@/state/embedStore';
 import { useHistory } from '@/collab/history';
 import { screenToBoard, type Viewport } from '@/canvas/viewport';
 import { HANDLE_SIZE, ROTATE_ZONE } from '@/canvas/renderOverlay';
-import {
-  clamp,
-  distance,
-  rectContainsPoint,
-  rectFromPoints,
-  unionRects,
-  type Point,
-  type Rect,
-} from '@/geometry';
+import { clamp, distance, rectFromPoints, unionRects, type Point, type Rect } from '@/geometry';
 import { elementAABB, rotateAround, worldToLocal } from '@/model/bounds';
 import { recrop } from '@/model/crop';
 import {
@@ -42,6 +34,12 @@ import {
   type HandleId,
 } from '@/model/transform';
 import { keyBetween } from '@/model/zorder';
+import {
+  frameContainsCentre,
+  groupRoot,
+  transformSelection,
+  withGroupMembers,
+} from '@/model/frameGroups';
 import { snapMove, EMPTY_SNAP } from '@/snapping/snap';
 import { addLaserPoint, startLaserMark } from '@/laser/laserTrail';
 import {
@@ -85,6 +83,7 @@ type Drag =
       pointerId: number;
       origin: Point;
       start: Map<ElementId, Point>;
+      roots: readonly ElementId[];
       moved: boolean;
     }
   | {
@@ -143,35 +142,37 @@ const spreadOf = (points: Point[]): number => {
 
 /**
  * Everything a drag should actually move: the selection, the contents of any selected
- * group, and whatever sits inside a selected frame. Frame membership is judged by
- * containment at the moment the drag starts rather than by reparenting, so dropping
- * a shape onto a frame does not silently rewrite its ownership.
+ * group, and loose contents a legacy frame still carries by position. A loose
+ * item explicitly ungrouped from a frame stays independent until dropped again.
  */
 function transformTargets(): BoardElement[] {
   const { elements, selection } = useBoardStore.getState();
-  const ids = new Set(selection);
-
-  const frames = elements.filter((element) => element.type === 'frame' && ids.has(element.id));
-  const captured = new Set<ElementId>();
-  for (const frame of frames) {
-    const box = elementAABB(frame);
-    for (const element of elements) {
-      if (element.id === frame.id || element.type === 'frame') continue;
-      const candidate = elementAABB(element);
-      const centre = { x: candidate.x + candidate.w / 2, y: candidate.y + candidate.h / 2 };
-      if (rectContainsPoint(box, centre)) captured.add(element.id);
+  const roots = new Set(selection);
+  for (const frame of elements) {
+    if (frame.type !== 'frame' || !roots.has(frame.id) || frame.hidden || lockedForMe(frame))
+      continue;
+    for (const item of elements) {
+      if (
+        item.type !== 'frame' &&
+        !item.parentId &&
+        !item.frameDetached &&
+        !item.hidden &&
+        frameContainsCentre(frame, item)
+      )
+        roots.add(item.id);
     }
   }
-
-  return elements.filter(
-    (element) =>
-      !element.hidden &&
-      !lockedForMe(element) &&
-      element.type !== 'group' &&
-      (ids.has(element.id) ||
-        captured.has(element.id) ||
-        (element.parentId !== null && ids.has(element.parentId))),
-  );
+  const moving = new Map<ElementId, BoardElement>();
+  for (const item of elements) {
+    if (!roots.has(item.id) || item.hidden) continue;
+    const group =
+      item.type === 'frame' || item.type === 'group'
+        ? withGroupMembers(elements, [item.id])
+        : [item];
+    if (group.some(lockedForMe)) continue;
+    for (const member of group) if (member.type !== 'group') moving.set(member.id, member);
+  }
+  return [...moving.values()];
 }
 
 /** Which handle, if any, the pointer is over — and whether it is the rotation ring. */
@@ -291,8 +292,10 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         start.set(element.id, { x: element.x, y: element.y });
       if (start.size === 0) return false;
 
+      useBoardStore.getState().commitUndoStep();
       host.setPointerCapture(event.pointerId);
-      drag = { kind: 'move', pointerId: event.pointerId, origin, start, moved: false };
+      const roots = useBoardStore.getState().selection;
+      drag = { kind: 'move', pointerId: event.pointerId, origin, start, roots, moved: false };
       return true;
     };
 
@@ -307,10 +310,12 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       drag.moved = true;
 
       const start = drag.start;
-      const moved = transformTargets().map((element) => {
-        const origin = start.get(element.id);
-        return origin ? { ...element, x: origin.x + dx, y: origin.y + dy } : element;
-      });
+      const moved = store.elements
+        .filter((element) => start.has(element.id))
+        .map((element) => {
+          const origin = start.get(element.id)!;
+          return { ...element, x: origin.x + dx, y: origin.y + dy };
+        });
 
       const bounds = unionRects(moved.map(elementAABB));
       let snap = EMPTY_SNAP;
@@ -437,13 +442,18 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
           radius,
           { includeLocked: true },
         );
-        if (target) store.removeElements([target.parentId ?? target.id]);
+        if (target) store.removeElements([groupRoot(target, store.elements).id]);
         return;
       }
 
       // Stroke mode cuts ink where the eraser passes and keeps what survives.
       for (const element of erasable) {
-        if (lockedForMe(element) || element.hidden) continue;
+        if (
+          lockedForMe(element) ||
+          lockedForMe(groupRoot(element, store.elements)) ||
+          element.hidden
+        )
+          continue;
 
         if (element.type !== 'path') {
           if (hitTestElement(element, point, radius)) store.removeElements([element.id]);
@@ -623,8 +633,9 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const point = board(event);
       const zoom = store.viewport.zoom;
       const selected = store.elements.filter((element) => store.selection.includes(element.id));
-      const frame = selectionFrame(selected);
-      const anyLocked = selected.some(lockedForMe);
+      const subjects = transformSelection(selected, store.elements);
+      const frame = selectionFrame(subjects);
+      const anyLocked = selected.some(lockedForMe) || subjects.some(lockedForMe);
 
       // 1. Transform handles win over everything beneath them.
       if (frame && !anyLocked) {
@@ -655,7 +666,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
             pointerId: event.pointerId,
             handle: hit.handle,
             frame,
-            start: selected.map((element) => ({ ...element })),
+            start: subjects.map((element) => ({ ...element })),
           };
           return;
         }
@@ -668,7 +679,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         includeLocked: true,
         zoom,
       });
-      const targetId = target?.parentId ?? target?.id ?? null;
+      const targetId = target ? groupRoot(target, store.elements).id : null;
 
       // A link in the words: Ctrl/⌘-click follows it, as in a word processor (a plain
       // click still selects, so linked text can be moved). For someone who can only
@@ -791,9 +802,10 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       const point = board(lastClient);
       const zoom = store.viewport.zoom;
       const selected = store.elements.filter((element) => store.selection.includes(element.id));
-      const frame = selectionFrame(selected);
+      const subjects = transformSelection(selected, store.elements);
+      const frame = selectionFrame(subjects);
 
-      if (frame && !selected.some(lockedForMe)) {
+      if (frame && !selected.some(lockedForMe) && !subjects.some(lockedForMe)) {
         const hit = hitHandle(frame, point, zoom);
         if (hit?.rotate) return setCursor('rotate');
         if (hit) return setCursor(cursorForHandle(hit.handle, frame.rotation));
@@ -814,7 +826,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return setCursor('text');
       }
       // Locked: the plain pointer, not a stop sign (asked for on 27 November).
-      if (lockedForMe(target)) return setCursor('default');
+      if (lockedForMe(target) || lockedForMe(groupRoot(target, store.elements)))
+        return setCursor('default');
       return setCursor('move');
     };
 
@@ -967,7 +980,13 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
             };
             const nextBox = resizeBox(synthetic, handle, point, options);
             for (const element of drag.start) {
-              patches.set(element.id, scaleBoxInto(elementAABB(element), frame.box, nextBox));
+              const box = scaleBoxInto(element, frame.box, nextBox);
+              const scaleX = frame.box.w ? nextBox.w / frame.box.w : 1;
+              const scaleY = frame.box.h ? nextBox.h / frame.box.h : 1;
+              const points = element.points?.map((value, index) =>
+                index % 3 === 0 ? value * scaleX : index % 3 === 1 ? value * scaleY : value,
+              );
+              patches.set(element.id, { ...box, ...(points ? { points } : {}) });
             }
           }
           store.patchElements(patches);
@@ -1002,7 +1021,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
 
     /* -------------------------- pointer up --------------------------- */
 
-    const finishDrag = () => {
+    const finishDrag = (drop = false) => {
       const store = useBoardStore.getState();
       // Letting go of the laser ends its mark: the pointer moving on is a new one.
       if (drag.kind === 'laser') startLaserMark();
@@ -1114,7 +1133,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         const marquee = store.marquee;
         if (marquee) {
           const hits = elementsInMarquee(store.elements, marquee).map(
-            (element) => element.parentId ?? element.id,
+            (element) => groupRoot(element, store.elements).id,
           );
           const unique = [...new Set(hits)];
           store.selectOnly(drag.additive ? [...new Set([...store.selection, ...unique])] : unique);
@@ -1127,7 +1146,12 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         // Presenting, the slide at its own size: a swipe across goes to the next slide.
         swipeSlides(drag.last.x - drag.origin.x, drag.last.y - drag.origin.y);
       }
-      if (drag.kind === 'move') store.setSnapFeedback([], []);
+      if (drag.kind === 'move') {
+        if (drop && drag.moved) {
+          store.groupDroppedItems(drag.roots, new Set(drag.start.keys()));
+        }
+        store.setSnapFeedback([], []);
+      }
       if (drag.kind === 'rotate') store.setRotationReadout(null);
 
       // A whole gesture is one undo step; the next one starts fresh.
@@ -1146,7 +1170,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
         return;
       }
       if (host.hasPointerCapture(event.pointerId)) host.releasePointerCapture(event.pointerId);
-      finishDrag();
+      finishDrag(event.type === 'pointerup');
     };
 
     const onBlur = () => {
@@ -1191,7 +1215,7 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       // Right-clicking something that is not selected selects it first, so the menu
       // always acts on what was clicked.
       if (target) {
-        const id = target.parentId ?? target.id;
+        const id = groupRoot(target, store.elements).id;
         if (!store.selection.includes(id)) store.selectOnly([id]);
       } else {
         store.clearSelection();

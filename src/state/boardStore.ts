@@ -37,6 +37,15 @@ import {
   type Viewport,
 } from '@/canvas/viewport';
 import { elementAABB, selectionAABB } from '@/model/bounds';
+import {
+  arrangementOf,
+  ARRANGE_GAP_STEP,
+  DEFAULT_ARRANGE_GAP,
+  orderedForArrangement,
+  type ArrangeDirection,
+} from '@/model/arrangement';
+import { groupRoot, layoutBox, overlappingFrame, withGroupMembers } from '@/model/frameGroups';
+import { copiesOf } from '@/model/copies';
 import { fitWidthPatch, frameForFitWidth } from '@/model/fitWidth';
 import {
   createElement,
@@ -214,6 +223,7 @@ interface BoardState {
   setRotationReadout: (degrees: number | null) => void;
 
   groupSelection: () => void;
+  groupDroppedItems: (ids: readonly ElementId[], moving: ReadonlySet<ElementId>) => void;
   ungroupSelection: () => void;
   toggleLockSelection: () => void;
   /** Locks, or unlocks, everything selected — whatever each was before. */
@@ -228,7 +238,8 @@ interface BoardState {
    * Lays the selection out side by side (`row`) or one under another (`column`),
    * a fixed gap apart, lined up along the top or the left — however they overlapped.
    */
-  arrangeSelection: (direction: 'row' | 'column') => void;
+  arrangeSelection: (direction: ArrangeDirection, gap?: number) => void;
+  changeArrangementGap: (step: -1 | 1) => void;
   styleSelection: (patch: Partial<ElementStyle>) => void;
   setSelectionOpacity: (opacity: number) => void;
 
@@ -329,6 +340,22 @@ export function selectFitWidthFrame({ elements, selection }: BoardState): BoardE
   return element && !lockedForMe(element) ? frameForFitWidth(element, elements) : null;
 }
 
+export function selectArrangement(state: Pick<BoardState, 'elements' | 'selection'>) {
+  if (state.selection.length < 2 || board.readOnly) return null;
+  const selection = new Set(state.selection);
+  if (withGroupMembers(state.elements, selection).some(lockedForMe)) return null;
+  const items = state.elements.filter((element) => selection.has(element.id) && !element.hidden);
+  return arrangementOf(items.map((element) => layoutBox(element, state.elements)));
+}
+
+export function canUngroup(element: BoardElement, elements: readonly BoardElement[]): boolean {
+  return (
+    !lockedForMe(element) &&
+    (element.type === 'group' ||
+      (element.type === 'frame' && elements.some((item) => item.parentId === element.id)))
+  );
+}
+
 export const useBoardStore = create<BoardState>((set, get) => {
   const bump = (patch: Partial<BoardState>) =>
     set((state) => ({ ...patch, renderVersion: state.renderVersion + 1 }));
@@ -340,6 +367,24 @@ export const useBoardStore = create<BoardState>((set, get) => {
   };
 
   const topZ = (): string | null => get().elements.at(-1)?.z ?? null;
+
+  const translate = (
+    patches: Map<ElementId, Partial<BoardElement>>,
+    root: BoardElement,
+    dx: number,
+    dy: number,
+  ) => {
+    if (root.hidden || (dx === 0 && dy === 0)) return;
+    const members =
+      root.type === 'group' || root.type === 'frame'
+        ? withGroupMembers(get().elements, [root.id])
+        : [root];
+    if (members.some(lockedForMe)) return;
+    for (const element of members) {
+      if (element.type !== 'group')
+        patches.set(element.id, { x: element.x + dx, y: element.y + dy });
+    }
+  };
 
   const insertNewElements = (elements: BoardElement[]): void => {
     const frames = new Set(
@@ -547,54 +592,36 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
     deleteSelection: () => {
       // A locked thing is not deleted by accident: unlocked first, on purpose.
-      const ids = new Set(
-        selectedElements()
-          .filter((element) => !lockedForMe(element))
-          .map((element) => element.id),
-      );
-      if (ids.size === 0) return;
-      // Deleting a group takes its children with it.
-      const doomed = get()
-        .elements.filter(
-          (element) => ids.has(element.id) || (element.parentId && ids.has(element.parentId)),
-        )
-        .map((element) => element.id);
+      const { elements, selection } = get();
+      const doomed = new Set<ElementId>();
+      for (const id of selection) {
+        const members = withGroupMembers(elements, [id]);
+        if (!members.some(lockedForMe)) for (const element of members) doomed.add(element.id);
+      }
+      if (doomed.size === 0) return;
 
-      deleteElements(board, doomed);
-      bump({ selection: get().selection.filter((id) => !ids.has(id)) });
+      deleteElements(board, [...doomed]);
+      bump({ selection: selection.filter((id) => !doomed.has(id)) });
     },
 
     duplicateSelection: (placement = 'below') => {
-      const chosen = selectedElements();
+      const { elements, selection } = get();
+      const chosen = withGroupMembers(elements, selection);
       if (chosen.length === 0) return;
 
       // Below the whole selection, a little apart, left edges lined up: never on top of it.
       const dy = placement === 'below' ? (selectionAABB(chosen)?.h ?? 0) + DUPLICATE_GAP : 0;
-      const keys = keysBetween(topZ(), null, chosen.length);
-      const copies = chosen.map((element, index) => ({
-        ...element,
-        id: createElementId(element.type),
-        x: element.x,
-        y: element.y + dy,
-        z: keys[index]!,
-        parentId: null,
-      }));
+      const x = Math.min(...chosen.map((element) => element.x));
+      const y = Math.min(...chosen.map((element) => element.y));
+      const copies = copiesOf(chosen, { x, y: y + dy }, topZ(), { keepExternalBindings: true });
 
       insertNewElements(copies);
-      bump({ selection: copies.map((copy) => copy.id) });
+      bump({ selection: copies.filter((copy) => !copy.parentId).map((copy) => copy.id) });
     },
 
     nudgeSelection: (dx, dy) => {
       const patches = new Map<ElementId, Partial<BoardElement>>();
-      for (const element of selectedElements()) {
-        if (element.hidden || lockedForMe(element)) continue;
-        patches.set(element.id, { x: element.x + dx, y: element.y + dy });
-        for (const child of get().elements) {
-          if (child.parentId === element.id) {
-            patches.set(child.id, { x: child.x + dx, y: child.y + dy });
-          }
-        }
-      }
+      for (const element of selectedElements()) translate(patches, element, dx, dy);
       get().applyDiscrete(patches);
     },
 
@@ -630,8 +657,27 @@ export const useBoardStore = create<BoardState>((set, get) => {
     setRotationReadout: (rotationReadout) => bump({ rotationReadout }),
 
     groupSelection: () => {
-      const chosen = selectedElements().filter((element) => element.type !== 'group');
+      const chosen = selectedElements().filter((element) => !element.parentId);
       if (chosen.length < 2) return;
+      const members = withGroupMembers(get().elements, get().selection);
+      if (
+        members.filter((element) => element.type === 'frame').length > 1 ||
+        members.some(lockedForMe)
+      )
+        return;
+      const frame = chosen.find((element) => element.type === 'frame');
+      if (frame) {
+        get().applyDiscrete(
+          new Map(
+            chosen
+              .filter((item) => item !== frame)
+              .map((item) => [item.id, { parentId: frame.id, frameDetached: false }]),
+          ),
+        );
+        bump({ selection: [frame.id] });
+        return;
+      }
+      if (chosen.some((element) => element.type === 'group')) return;
 
       const bounds = selectionAABB(chosen);
       if (!bounds) return;
@@ -649,20 +695,69 @@ export const useBoardStore = create<BoardState>((set, get) => {
       bump({ selection: [group.id] });
     },
 
-    ungroupSelection: () => {
-      const groups = selectedElements().filter((element) => element.type === 'group');
-      if (groups.length === 0) return;
-      const groupIds = new Set(groups.map((group) => group.id));
+    groupDroppedItems: (ids, moving) => {
+      if (board.readOnly) return;
+      const { elements, selection } = get();
+      const frames = elements.filter(
+        (element) =>
+          element.type === 'frame' &&
+          !element.hidden &&
+          !element.parentId &&
+          !lockedForMe(element) &&
+          !moving.has(element.id),
+      );
+      if (frames.length === 0) return;
+      const dragged = new Set(ids);
+      const parents = new Map<ElementId, ElementId>();
+      for (const item of elements) {
+        if (!dragged.has(item.id) || item.type === 'frame' || item.hidden || item.parentId)
+          continue;
+        const members = item.type === 'group' ? withGroupMembers(elements, [item.id]) : [item];
+        if (
+          !members.some((element) => moving.has(element.id)) ||
+          members.some((element) => element.type === 'frame' || lockedForMe(element))
+        )
+          continue;
+        const frame = overlappingFrame(item, frames);
+        if (frame) parents.set(item.id, frame.id);
+      }
+      if (parents.size === 0) return;
+      // Use the drag's local transaction origin. The pointer handler closes its undo step.
+      // A pause before releasing the pointer may exceed Yjs's normal capture window.
+      if (board.undoManager.lastChange > 0) board.undoManager.lastChange = Date.now();
+      applyPatches(
+        board,
+        new Map([...parents].map(([id, parentId]) => [id, { parentId, frameDetached: false }])),
+      );
+      bump({ selection: [...new Set(selection.map((id) => parents.get(id) ?? id))] });
+    },
 
-      const freed = get()
-        .elements.filter((element) => element.parentId && groupIds.has(element.parentId))
-        .map((element) => element.id);
+    ungroupSelection: () => {
+      const { elements } = get();
+      const groups = selectedElements().filter((element) => canUngroup(element, elements));
+      if (groups.length === 0) return;
+      const byId = new Map(groups.map((group) => [group.id, group]));
+
+      const freed = get().elements.filter(
+        (element) => element.parentId && byId.has(element.parentId),
+      );
 
       transactLocal(board, () => {
-        for (const id of freed) board.elements.get(id)?.set('parentId', null);
-        for (const id of groupIds) board.elements.delete(id);
+        for (const element of freed) {
+          const group = byId.get(element.parentId!)!;
+          const map = board.elements.get(element.id);
+          if (map)
+            patchYElement(map, {
+              parentId: group.parentId,
+              ...(group.type === 'frame' || group.frameDetached ? { frameDetached: true } : {}),
+            });
+        }
+        for (const group of groups) {
+          if (group.type === 'group') board.elements.delete(group.id);
+        }
       });
-      bump({ selection: freed });
+      get().commitUndoStep();
+      if (freed.length) bump({ selection: freed.map((element) => element.id) });
     },
 
     toggleLockSelection: () => {
@@ -695,7 +790,8 @@ export const useBoardStore = create<BoardState>((set, get) => {
 
     reorderSelection: (command) => {
       const { elements, selection } = get();
-      const keys = reorder(elements, new Set(selection), command);
+      const members = withGroupMembers(elements, selection);
+      const keys = reorder(elements, new Set(members.map((item) => item.id)), command);
       const patches = new Map<ElementId, Partial<BoardElement>>();
       for (const [id, z] of keys) patches.set(id, { z });
       get().applyDiscrete(patches);
@@ -719,34 +815,34 @@ export const useBoardStore = create<BoardState>((set, get) => {
     },
 
     alignSelection: (edge) => {
+      const { elements } = get();
       const chosen = selectedElements();
       if (chosen.length < 2) return;
-      const bounds = selectionAABB(chosen);
+      const items = chosen.map((element) => layoutBox(element, elements));
+      const bounds = selectionAABB(items);
       if (!bounds) return;
 
       const patches = new Map<ElementId, Partial<BoardElement>>();
-      for (const element of chosen) {
+      for (const element of items) {
         const box = elementAABB(element);
-        const offsetX = element.x - box.x;
-        const offsetY = element.y - box.y;
         switch (edge) {
           case 'left':
-            patches.set(element.id, { x: bounds.x + offsetX });
+            translate(patches, element, bounds.x - box.x, 0);
             break;
           case 'right':
-            patches.set(element.id, { x: bounds.x + bounds.w - box.w + offsetX });
+            translate(patches, element, bounds.x + bounds.w - box.w - box.x, 0);
             break;
           case 'hcentre':
-            patches.set(element.id, { x: bounds.x + (bounds.w - box.w) / 2 + offsetX });
+            translate(patches, element, bounds.x + (bounds.w - box.w) / 2 - box.x, 0);
             break;
           case 'top':
-            patches.set(element.id, { y: bounds.y + offsetY });
+            translate(patches, element, 0, bounds.y - box.y);
             break;
           case 'bottom':
-            patches.set(element.id, { y: bounds.y + bounds.h - box.h + offsetY });
+            translate(patches, element, 0, bounds.y + bounds.h - box.h - box.y);
             break;
           case 'vcentre':
-            patches.set(element.id, { y: bounds.y + (bounds.h - box.h) / 2 + offsetY });
+            translate(patches, element, 0, bounds.y + (bounds.h - box.h) / 2 - box.y);
             break;
         }
       }
@@ -754,11 +850,12 @@ export const useBoardStore = create<BoardState>((set, get) => {
     },
 
     distributeSelection: (axis) => {
+      const { elements } = get();
       const chosen = selectedElements();
       if (chosen.length < 3) return;
 
       const boxes = chosen
-        .map((element) => ({ element, box: elementAABB(element) }))
+        .map((element) => ({ element, box: elementAABB(layoutBox(element, elements)) }))
         .sort((a, b) => (axis === 'x' ? a.box.x - b.box.x : a.box.y - b.box.y));
 
       const first = boxes[0]!;
@@ -777,41 +874,45 @@ export const useBoardStore = create<BoardState>((set, get) => {
       let cursor = axis === 'x' ? first.box.x : first.box.y;
 
       for (const { element, box } of boxes) {
-        const offset = axis === 'x' ? element.x - box.x : element.y - box.y;
-        patches.set(element.id, axis === 'x' ? { x: cursor + offset } : { y: cursor + offset });
+        if (axis === 'x') translate(patches, element, cursor - box.x, 0);
+        else translate(patches, element, 0, cursor - box.y);
         cursor += (axis === 'x' ? box.w : box.h) + gap;
       }
       get().applyDiscrete(patches);
     },
 
-    arrangeSelection: (direction) => {
+    arrangeSelection: (direction, gap = DEFAULT_ARRANGE_GAP) => {
       const { elements } = get();
-      const chosen = selectedElements();
-      if (chosen.length < 2) return;
+      const chosen = selectedElements().filter((element) => !element.hidden);
+      if (
+        chosen.length < 2 ||
+        withGroupMembers(
+          elements,
+          chosen.map((item) => item.id),
+        ).some(lockedForMe)
+      )
+        return;
       const row = direction === 'row';
-      const GAP = 24;
-
-      // A group moves by moving everything inside it.
-      const insideOf = (id: ElementId): BoardElement[] => {
-        const children = elements.filter((element) => element.parentId === id);
-        return children.flatMap((child) => (child.type === 'group' ? insideOf(child.id) : [child]));
-      };
-      const items = chosen
-        .map((element) => ({ element, box: elementAABB(element) }))
-        .sort((a, b) => (row ? a.box.x - b.box.x : a.box.y - b.box.y));
-      const startX = Math.min(...items.map((item) => item.box.x));
-      const startY = Math.min(...items.map((item) => item.box.y));
-
+      const items = orderedForArrangement(
+        chosen.map((element) => layoutBox(element, elements)),
+        direction,
+      );
+      const cross = Math.min(...items.map((item) => item.cross));
       const patches = new Map<ElementId, Partial<BoardElement>>();
-      let cursor = row ? startX : startY;
-      for (const { element, box } of items) {
-        const dx = (row ? cursor : startX) - box.x;
-        const dy = (row ? startY : cursor) - box.y;
-        const moving = element.type === 'group' ? insideOf(element.id) : [element];
-        for (const each of moving) patches.set(each.id, { x: each.x + dx, y: each.y + dy });
-        cursor += (row ? box.w : box.h) + GAP;
+      let cursor = items[0]!.start;
+      for (const item of items) {
+        const along = cursor - item.start;
+        const across = cross - item.cross;
+        translate(patches, item.element, row ? along : across, row ? across : along);
+        cursor += item.size + gap;
       }
       get().applyDiscrete(patches);
+    },
+
+    changeArrangementGap: (step) => {
+      const current = selectArrangement(get());
+      if (!current) return;
+      get().arrangeSelection(current.direction, Math.max(0, current.gap + step * ARRANGE_GAP_STEP));
     },
 
     styleSelection: (patch) => {
@@ -861,18 +962,22 @@ export const useBoardStore = create<BoardState>((set, get) => {
       })),
 
     removeElements: (ids) => {
-      if (ids.length === 0) return;
-      const doomed = new Set(ids);
-      // Removed from the document, children of a group with it. Taking them out of this
-      // view alone (as the eraser once did) lasted only until the next change redrew
-      // the board from the document, and the erased thing came back.
-      const gone = get()
-        .elements.filter(
-          (element) => doomed.has(element.id) || (element.parentId && doomed.has(element.parentId)),
+      const { elements, selection } = get();
+      const gone = new Set<ElementId>();
+      for (const id of ids) {
+        const members = withGroupMembers(elements, [id]);
+        if (
+          members.some(
+            (item) =>
+              item.type === 'image' || lockedForMe(item) || lockedForMe(groupRoot(item, elements)),
+          )
         )
-        .map((element) => element.id);
-      deleteElements(board, gone);
-      bump({ selection: get().selection.filter((id) => !doomed.has(id)) });
+          continue;
+        for (const item of members) gone.add(item.id);
+      }
+      if (!gone.size) return;
+      deleteElements(board, [...gone]);
+      bump({ selection: selection.filter((id) => !gone.has(id)) });
     },
 
     /**
@@ -1174,12 +1279,25 @@ function attachDocument(doc: BoardDoc): void {
     doc,
     (all) => {
       const elements = all.filter((element) => pageOf(element) === doc.currentPage);
-      useBoardStore.setState((state) => ({
-        elements,
-        renderVersion: state.renderVersion + 1,
-        // Drop anything from the selection that no longer exists.
-        selection: state.selection.filter((id) => elements.some((element) => element.id === id)),
-      }));
+      useBoardStore.setState((state) => {
+        const selected = new Set(state.selection);
+        const selection = selected.size
+          ? elements
+              .filter((element) => selected.has(element.id))
+              .map((element) => {
+                // A remote drop or redo can group an item we already had selected.
+                const root = groupRoot(element, elements);
+                return root.type === 'frame' && state.croppingId !== element.id
+                  ? root.id
+                  : element.id;
+              })
+          : [];
+        return {
+          elements,
+          renderVersion: state.renderVersion + 1,
+          selection: [...new Set(selection)],
+        };
+      });
     },
     history.noteChanges,
   );

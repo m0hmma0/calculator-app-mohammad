@@ -6,7 +6,7 @@ import { pasteFromClipboard } from '@/input/useClipboard';
 import { selectCanComment, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
 import { useSettings } from '@/settings/settings';
-import { boardDoc, selectFitWidthFrame, useBoardStore } from '@/state/boardStore';
+import { boardDoc, canUngroup, selectFitWidthFrame, useBoardStore } from '@/state/boardStore';
 import { togglePane, useUiPrefs } from '@/state/uiPrefs';
 import { isHtmlCode } from '@/webpage/pageStore';
 import styles from './ContextMenu.module.css';
@@ -164,14 +164,14 @@ export function ContextMenu() {
           id: 'group',
           label: 'Group',
           hint: key('group'),
-          disabled: chosen.length < 2,
+          disabled: chosen.length < 2 || chosen.filter((item) => item.type === 'frame').length > 1,
           run: () => store().groupSelection(),
         },
         {
           id: 'ungroup',
           label: 'Ungroup',
           hint: key('ungroup'),
-          disabled: !chosen.some((element) => element.type === 'group'),
+          disabled: !chosen.some((element) => canUngroup(element, elements)),
           run: () => store().ungroupSelection(),
         },
         // A web page shows its code, or the page, from here.

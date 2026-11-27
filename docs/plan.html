@@ -397,6 +397,8 @@ tests/          unit (Vitest) + end-to-end (Playwright)</code></pre>
           <li>Overlap three shapes, use <kbd>[</kbd> and <kbd>]</kbd> — <strong>the stacking order changes one step at a time</strong>.</li>
           <li>With three overlapping items, use <strong>Send to back</strong> and <strong>Bring to front</strong> in the side panel to move one all the way with one click. Add a frame after the shapes and check that it starts behind them.</li>
           <li>Draw a wide rectangle inside a frame and use <strong>Fit width</strong> in the side panel or right-click menu. It should fill the frame from side to side and keep the same proportions. Undo should restore its earlier size and position.</li>
+          <li>Drag an item so it overlaps a frame, then move the frame by dragging the item. They should move together. Choose <strong>Ungroup</strong> and drag the frame again. The released item should stay put, even if it still overlaps the frame. Dragging one frame over another should leave them separate.</li>
+          <li>Arrange three items in a row or column. Use <strong>−</strong> and <strong>+</strong> under <strong>Spacing</strong> in the side panel to change all the gaps evenly without changing their order or alignment.</li>
           <li>Select several, click <em>distribute horizontally</em> — <strong>the gaps become equal</strong>.</li>
           <li>Change fill, stroke width, dash and corner radius in the inspector — <strong>each updates live</strong>.</li>
           <li>Rotate a shape — it <strong>snaps to 15° steps</strong> and shows the angle while you drag.</li>

@@ -1,6 +1,7 @@
 import type { Point, Rect } from '@/geometry';
 import { rotateAround, selectionAABB } from './bounds';
 import type { BoardElement } from './element';
+import { transformSelection } from './frameGroups';
 import { handleSign, type HandleId } from './transform';
 
 /**
@@ -14,7 +15,11 @@ export interface SelectionFrame {
   single: boolean;
 }
 
-export function selectionFrame(selected: readonly BoardElement[]): SelectionFrame | null {
+export function selectionFrame(
+  selection: readonly BoardElement[],
+  elements?: readonly BoardElement[],
+): SelectionFrame | null {
+  const selected = elements ? transformSelection(selection, elements) : selection;
   if (selected.length === 0) return null;
 
   if (selected.length === 1) {

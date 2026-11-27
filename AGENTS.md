@@ -111,6 +111,19 @@ as far as the frame allows. A box that follows its text becomes fixed-height whe
 resized so that it keeps its proportions. Frames, groups and bound connectors are
 ineligible.
 
+Frame grouping: a move gesture attaches an eligible top-level item to the visible,
+unlocked, stationary frame with the greatest overlap at drop. Membership uses
+`parentId`, and the frame itself keeps its geometry for presentation. Use Ungroup
+on the frame to release its direct members without deleting it. `frameDetached`
+keeps released items out of the legacy carry-by-position behavior until grouped
+again. Frames never join each other. Geometry and membership are stored in the
+document, with no D1 migration or new background requests.
+
+Row and column spacing: the side panel detects equal gaps in the selected aligned
+items with `arrangementOf`. The normal arrange commands start at 24 board units.
+The minus and plus buttons adjust the current gap by eight, down to zero, as one
+undo step per press.
+
 Phase 9 in one paragraph: pages (`element.page`, absent = first page; removed on 20
 November — see below), presentation (`src/workshop/presentation.ts`, followers fit the
 presenter's frame via presence `present`), a timer and dot votes in the document's

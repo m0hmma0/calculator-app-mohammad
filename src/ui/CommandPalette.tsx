@@ -7,6 +7,7 @@ import { toggleLayers, toggleMinimap } from '@/state/uiPrefs';
 import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { exportBlob, downloadBlob, type ExportFormat } from '@/export/exporters';
 import { useBoardStore, type Tool } from '@/state/boardStore';
+import { withGroupMembers } from '@/model/frameGroups';
 import styles from './CommandPalette.module.css';
 
 interface Command {
@@ -59,11 +60,8 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
 
     const save = async (format: ExportFormat, selectionOnly: boolean) => {
       const state = store();
-      const ids = new Set(state.selection);
       const chosen = selectionOnly
-        ? state.elements.filter(
-            (element) => ids.has(element.id) || (element.parentId && ids.has(element.parentId)),
-          )
+        ? withGroupMembers(state.elements, state.selection)
         : state.elements;
       if (chosen.length === 0) return;
 
