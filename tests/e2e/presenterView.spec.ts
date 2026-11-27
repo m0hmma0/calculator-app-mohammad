@@ -542,6 +542,28 @@ test.describe('presenter view, tidied', () => {
     expect(box.height).toBeGreaterThan(300);
   });
 
+  test('the audience window zooms into the slide, and the next slide starts whole', async ({
+    page,
+  }) => {
+    await threeFrames(page);
+    const audience = await openPresenterView(page);
+    const surround = () => middleFraction(audience, 'audience-canvas', SURROUND, 0.95);
+    await expect.poll(surround).toBeGreaterThan(0.05);
+    const whole = await surround();
+    // The wheel zooms in: the slide fills more of the window, its dark surround less.
+    await audience.mouse.move(640, 360);
+    for (let turn = 0; turn < 6; turn += 1) await audience.mouse.wheel(0, -200);
+    await expect.poll(surround).toBeLessThan(whole / 2);
+    // It never zooms out past the slide's own size.
+    for (let turn = 0; turn < 20; turn += 1) await audience.mouse.wheel(0, 400);
+    await expect.poll(surround).toBeCloseTo(whole, 1);
+    // Zoomed in again, the next slide starts whole.
+    for (let turn = 0; turn < 6; turn += 1) await audience.mouse.wheel(0, -200);
+    await expect.poll(surround).toBeLessThan(whole / 2);
+    await page.getByTestId('slide-next-big').click();
+    await expect.poll(surround).toBeCloseTo(whole, 1);
+  });
+
   test('the audience window’s full-screen button leaves only the slide', async ({ page }) => {
     await threeFrames(page);
     const audience = await openPresenterView(page);

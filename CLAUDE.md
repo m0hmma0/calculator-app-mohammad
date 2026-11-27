@@ -429,6 +429,24 @@ routes/sharing.ts lets them manage people, the link and export. Kept for the own
 move, archive, trash — those queries match `owner_id`). The board's badge reads
 "Co-owner".
 
+On me (27 November): the spotlight is "On me" / "On you · n/m" (`spotlight`,
+`follower-count` shows only "1/2"), and it is forced: `presenter()` ignores
+`dismissedSpotlight` and `leaderSession` puts it before a chosen follow, the card's
+"Follow their view" is disabled ("On them"), and a follower who zooms keeps following —
+`startFollowing` keeps their own view (`ownView`) until the leader's frame or view
+changes (a `key` of leader, frame or view, stage size, watching) or they are put "On me"
+again. One person can be put "On me" from their card (`peer-summon`; `summoned` in the
+presence store and `PresenceState.summoned`). The people bar shows while presenting too;
+`FollowMeToggle` is gone. An owner (or co-owner) does not see their own other windows —
+avatars or cursors (`isMyOtherWindow`); other people's two windows still show twice, so
+spotlight and avatar tests use two people (collab.spec's `twoWindows` defaults to two).
+Pointers still for `CURSOR_IDLE_MS` (2 s) hide (`cursorAt` per peer). Presenting is a
+badge on the avatar (`peer-presenting`). A lock for others holds co-owners; only the
+owner sets it (`mayLockForOthers`, and the right-click menu's `realOwner`). Locked items
+keep the plain cursor. The audience window and slides links zoom (wheel, pinch, drag
+while zoomed; `keepOnSlide`), reset at each new slide. Known flaky, before this too:
+document.spec "survives the tab being closed part-way through" (about 1 run in 6 here).
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.

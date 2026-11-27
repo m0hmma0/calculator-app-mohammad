@@ -99,15 +99,19 @@
   background: var(--surface-2);
 }
 
+/* Presenting: a small play badge on the avatar's corner, in no one's way. */
 .live {
   position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 2px;
-  font-size: 9.5px;
-  white-space: nowrap;
-  color: var(--accent-ink);
+  left: -3px;
+  bottom: -3px;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 1.5px var(--surface);
 }
 
 .action {

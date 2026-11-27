@@ -251,13 +251,23 @@ test.describe('locks', () => {
     await owner.page.mouse.up();
     await expect(owner.page.getByTestId('geo-y')).toHaveText(/^3\d\d$/);
 
+    // A co-owner: held by a lock for others too (27 November).
     const helper = await person(browser, 'lockhelper');
-    await shareWith(owner.page, helper.account, 'editor');
+    await shareWith(owner.page, helper.account, 'coowner');
     await openAs(helper.page, boardId);
     await expect(layers(helper.page)).toHaveCount(2);
     // The board opens fitted; take the shapes where they are now.
     await helper.page.keyboard.press('Shift+Digit0');
     const stage = (await helper.page.getByTestId('stage').boundingBox())!;
+
+    // Over a locked thing the pointer stays the plain one: no stop sign (27 November).
+    await helper.page.keyboard.press('KeyV');
+    await helper.page.mouse.move(stage.x + stage.width / 2, stage.y + stage.height / 2);
+    await helper.page.mouse.move(stage.x + stage.width / 2 + 3, stage.y + stage.height / 2);
+    await expect(helper.page.getByTestId('stage')).not.toHaveAttribute(
+      'data-cursor',
+      'not-allowed',
+    );
 
     // Someone else cannot move them by accident: a click selects, a drag does nothing.
     await helper.page.keyboard.press('KeyV');
@@ -281,7 +291,7 @@ test.describe('locks', () => {
     });
     await expect(helper.page.getByTestId('context-menu')).toBeVisible();
     await expect(helper.page.getByTestId('menu-unlock')).toBeVisible();
-    // A lock for everyone they may set; a lock for others is the owner's.
+    // A lock for everyone they may set; a lock for others is the owner's alone.
     await expect(helper.page.getByTestId('menu-lock')).toBeVisible();
     await expect(helper.page.getByTestId('menu-lock-others')).toHaveCount(0);
     await helper.page.keyboard.press('Escape');

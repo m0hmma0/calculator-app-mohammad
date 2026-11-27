@@ -38,10 +38,13 @@ export const selectCanComment = (state: BoardAccessStore) => canComment(state.ro
  * selected and unlocked on purpose, by anyone who edits.
  */
 export const lockedForMe = (element: { locked: boolean; lockMode?: 'others' | null }) =>
-  element.locked && !(element.lockMode === 'others' && actsAsOwner(useBoardAccess.getState().role));
+  element.locked && !(element.lockMode === 'others' && useBoardAccess.getState().role === 'owner');
 
-/** Only the owner (or a co-owner) locks things for others: the lock that leaves them free. */
-export const mayLockForOthers = () => actsAsOwner(useBoardAccess.getState().role);
+/**
+ * Only the board's owner locks things for others: the lock that leaves them free. It
+ * holds co-owners too (asked for on 27 November).
+ */
+export const mayLockForOthers = () => useBoardAccess.getState().role === 'owner';
 
 /** Whether a click on a placeholder types into it here: anyone who edits, or answers. */
 export const canTypeInto = () => canAnswer(useBoardAccess.getState().role);

@@ -7,6 +7,8 @@
   /* Nothing here is pressed — the presenter's window steers — except other sites'
      players, which only take a press in their own frame. */
   user-select: none;
+  /* Pinching zooms into the slide here, not the whole page. */
+  touch-action: none;
 }
 
 .audience * {

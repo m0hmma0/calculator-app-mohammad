@@ -120,6 +120,8 @@ export interface PresenceState {
   chat: string | null;
   /** Asking everyone to follow along. */
   spotlight: boolean;
+  /** Sessions asked to follow along one by one (27 November). */
+  summoned?: string[];
   /** Which page of the board they are on. Absent from browsers older than pages. */
   page?: string;
   /** Presenting: the frame on screen, which followers fit to their own screens. */

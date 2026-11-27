@@ -4,7 +4,14 @@ import { renderElements } from '@/canvas/renderElements';
 import { renderLaser } from '@/canvas/renderLaser';
 import { getCanvasColors } from '@/canvas/theme';
 import { useCanvas2D, type CanvasFrame } from '@/canvas/useCanvas2D';
-import { boardToScreen, fitToRect, viewportsEqual } from '@/canvas/viewport';
+import {
+  boardToScreen,
+  fitToRect,
+  panByScreen,
+  viewportsEqual,
+  zoomAt,
+  type Viewport,
+} from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import { REMOTE_ORIGIN, type BoardDoc } from '@/doc/board';
 import { RoomConnection } from '@/collab/connection';
@@ -18,7 +25,7 @@ import { EffectsLayer } from '@/ui/EffectsLayer';
 import { SlideTransition } from '@/ui/SlideTransition';
 import type { AudienceHooks, FromAudience, ToAudience } from '@/workshop/audience';
 import { cameraRadius, cameraRect, type CameraLayout } from '@/recording/camera';
-import { usePresentation } from '@/workshop/presentation';
+import { keepOnSlide, usePresentation } from '@/workshop/presentation';
 import { isLiveLayer, usePages } from '@/webpage/pageStore';
 import styles from './AudienceView.module.css';
 
@@ -68,6 +75,9 @@ export function AudienceView({
     frameId ? state.elements.some((element) => element.id === frameId) : false,
   );
   const redrawRef = useRef<() => void>(() => {});
+  /** This screen's own zoom into the slide, if any, and which slide it was on. */
+  const ownView = useRef<Viewport | null>(null);
+  const zoomedFrame = useRef<string | null>(null);
   const overRef = useRef<HTMLCanvasElement | null>(null);
 
   const draw = useCallback((ctx: CanvasRenderingContext2D, frame: CanvasFrame) => {
@@ -94,8 +104,14 @@ export function AudienceView({
     const id = usePresentation.getState().frame;
     const shown = id ? store.elements.find((element) => element.id === id) : undefined;
     if (!shown) return;
+    // A new slide starts whole; a viewer's own zoom (27 November) lasts until then.
+    if (zoomedFrame.current !== shown.id) {
+      zoomedFrame.current = shown.id;
+      ownView.current = null;
+    }
     // The camera is set from the size below; until it is, nothing is drawn askew.
-    const viewport = fitToRect(shown, frame, 0);
+    const fitted = fitToRect(shown, frame, 0);
+    const viewport = ownView.current ? keepOnSlide(ownView.current, shown, fitted, frame) : fitted;
     if (!viewportsEqual(viewport, store.viewport)) {
       store.setViewport(viewport);
       return;
@@ -366,6 +382,67 @@ export function AudienceView({
       }),
     [redraw],
   );
+
+  // Zooming in on the slide (27 November): the wheel or a pinch, and dragging about while
+  // zoomed in — never out past the slide's own size, nor off its edges.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const zoomBy = (factor: number, x: number, y: number) => {
+      const bounds = host.getBoundingClientRect();
+      const base = useBoardStore.getState().viewport;
+      ownView.current = zoomAt(base, { x: x - bounds.left, y: y - bounds.top }, base.zoom * factor);
+      redraw();
+    };
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      zoomBy(
+        Math.exp(-Math.max(-50, Math.min(50, event.deltaY)) * 0.004),
+        event.clientX,
+        event.clientY,
+      );
+    };
+    const pointers = new Map<number, { x: number; y: number }>();
+    let spread = 0;
+    const onDown = (event: PointerEvent) => {
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        spread = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+      }
+    };
+    const onMove = (event: PointerEvent) => {
+      const last = pointers.get(event.pointerId);
+      if (!last) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const now = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+        if (spread > 0 && now > 0) zoomBy(now / spread, (a!.x + b!.x) / 2, (a!.y + b!.y) / 2);
+        spread = now;
+      } else if (ownView.current && pointers.size === 1) {
+        const base = useBoardStore.getState().viewport;
+        ownView.current = panByScreen(base, event.clientX - last.x, event.clientY - last.y);
+        redraw();
+      }
+    };
+    const onUp = (event: PointerEvent) => {
+      pointers.delete(event.pointerId);
+      spread = 0;
+    };
+    host.addEventListener('wheel', onWheel, { passive: false });
+    host.addEventListener('pointerdown', onDown);
+    host.addEventListener('pointermove', onMove);
+    host.addEventListener('pointerup', onUp);
+    host.addEventListener('pointercancel', onUp);
+    return () => {
+      host.removeEventListener('wheel', onWheel);
+      host.removeEventListener('pointerdown', onDown);
+      host.removeEventListener('pointermove', onMove);
+      host.removeEventListener('pointerup', onUp);
+      host.removeEventListener('pointercancel', onUp);
+    };
+  }, [redraw]);
 
   // Full screen on a double-click or F; nothing else here answers.
   useEffect(() => {

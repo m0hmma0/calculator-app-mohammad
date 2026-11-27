@@ -2,6 +2,7 @@ import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { useEffect, useRef, useState } from 'react';
 import {
   followsMe,
+  isMyOtherWindow,
   peerList,
   presenter,
   toggleOutline,
@@ -63,7 +64,7 @@ export function PeerBar() {
   const peers = usePresence((state) => state.peers);
   const following = usePresence((state) => state.following);
   const spotlight = usePresence((state) => state.spotlight);
-  const dismissed = usePresence((state) => state.dismissedSpotlight);
+  const summoned = usePresence((state) => state.summoned);
   const owner = useBoardAccess(selectIsOwner);
   const [card, setCard] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -85,12 +86,10 @@ export function PeerBar() {
   }, [card]);
 
   if (!status) return null;
-  const list = peerList(peers);
-  const leading = presenter({
-    peers,
-    dismissedSpotlight: dismissed,
-    self: usePresence.getState().self,
-  });
+  // The owner's own other windows and devices are not shown to them (27 November): one
+  // of them is not someone else on the board. Anyone else's show as they are.
+  const list = peerList(peers).filter((peer) => !(owner && isMyOtherWindow(peer, self)));
+  const leading = presenter({ peers, self, session: mySession });
   const open = card ? peers[card] : undefined;
   // How many are following this person right now — shown on the Present button.
   const followers = list.filter((peer) => followsMe(peer, mySession)).length;
@@ -125,7 +124,11 @@ export function PeerBar() {
                   <EyeIcon />
                 </span>
               ) : null}
-              {peer.state?.spotlight ? <span className={styles.live}>presenting</span> : null}
+              {peer.state?.spotlight ? (
+                <span className={styles.live} title="Presenting" data-testid="peer-presenting">
+                  <PlayIcon />
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -141,21 +144,19 @@ export function PeerBar() {
           peer={open}
           mySession={mySession}
           following={following === open.session || leading?.session === open.session}
-          onFollow={(follow) =>
-            usePresence.setState({
-              following: follow ? open.session : null,
-              // Choosing someone yourself overrides an ongoing presentation, and
-              // stopping a presenter's follow holds until they present again.
-              dismissedSpotlight: follow
-                ? leading && leading.session !== open.session
-                  ? leading.session
-                  : dismissed
-                : leading?.session === open.session
-                  ? open.session
-                  : dismissed,
-            })
-          }
+          // Someone with this person "On me" is followed, chosen or not.
+          forced={leading?.session === open.session}
+          onFollow={(follow) => usePresence.setState({ following: follow ? open.session : null })}
           peers={peers}
+          // The owner (or a co-owner) may put one person "On me".
+          summoned={owner ? summoned.includes(open.session) : null}
+          onSummon={(on) =>
+            usePresence.setState((state) => ({
+              summoned: on
+                ? [...state.summoned.filter((each) => each !== open.session), open.session]
+                : state.summoned.filter((each) => each !== open.session),
+            }))
+          }
         />
       ) : null}
 
@@ -166,14 +167,22 @@ export function PeerBar() {
           className={styles.action}
           aria-pressed={spotlight}
           disabled={status !== 'connected'}
-          title="Everyone on the board follows your view"
+          title={
+            spotlight
+              ? 'Everyone is on you: they follow your view, and cannot leave it. Press to let them go'
+              : 'Put everyone on you: they follow your view, and can only zoom'
+          }
           data-testid="spotlight"
           onClick={() => usePresence.setState({ spotlight: !spotlight })}
         >
-          {spotlight ? 'Stop follow me' : 'Follow me'}
+          {spotlight ? 'On you' : 'On me'}
           {spotlight && list.length > 0 ? (
-            <span className={styles.followers} data-testid="follower-count">
-              {followers}/{list.length} following
+            <span
+              className={styles.followers}
+              title={`${followers} of ${list.length} following you`}
+              data-testid="follower-count"
+            >
+              {followers}/{list.length}
             </span>
           ) : null}
         </button>
@@ -186,14 +195,22 @@ function PeerCard({
   peer,
   mySession,
   following,
+  forced,
   onFollow,
   peers,
+  summoned,
+  onSummon,
 }: {
   peer: Peer;
   mySession: string | null;
   following: boolean;
+  /** They have this person "On me": following them is not a choice. */
+  forced: boolean;
   onFollow: (follow: boolean) => void;
   peers: Record<string, Peer>;
+  /** Whether this one person is "On me"; null where that is not this person's to say. */
+  summoned: boolean | null;
+  onSummon: (on: boolean) => void;
 }) {
   const outlined = usePresence((state) => Boolean(state.outlined[peer.session]));
   const theirLeader = peer.state?.following ?? null;
@@ -222,11 +239,26 @@ function PeerCard({
         type="button"
         className={styles.cardButton}
         aria-pressed={following}
+        disabled={forced}
+        title={forced ? 'They have you on them' : undefined}
         data-testid="peer-follow"
         onClick={() => onFollow(!following)}
       >
-        {following ? 'Stop following them' : 'Follow their view'}
+        {forced ? 'On them' : following ? 'Stop following them' : 'Follow their view'}
       </button>
+      {summoned !== null ? (
+        <button
+          type="button"
+          role="switch"
+          className={styles.cardButton}
+          aria-checked={summoned}
+          title="Only this person follows your view, and cannot leave it"
+          data-testid="peer-summon"
+          onClick={() => onSummon(!summoned)}
+        >
+          {summoned ? 'On you — let them go' : 'On me'}
+        </button>
+      ) : null}
       <button
         type="button"
         role="switch"
@@ -241,6 +273,14 @@ function PeerCard({
         Show their screen edges
       </button>
     </div>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M4 2.5v11l9.5-5.5z" fill="currentColor" />
+    </svg>
   );
 }
 

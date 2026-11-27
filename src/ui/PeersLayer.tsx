@@ -1,7 +1,14 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { boardToScreen, screenToBoard } from '@/canvas/viewport';
 import { useHistory } from '@/collab/history';
-import { peerList, presenter, usePresence } from '@/collab/presence';
+import {
+  CURSOR_IDLE_MS,
+  isMyOtherWindow,
+  peerList,
+  presenter,
+  usePresence,
+} from '@/collab/presence';
+import { selectIsOwner, useBoardAccess } from '@/sharing/boardAccess';
 import { elementAABB } from '@/model/bounds';
 import { FIRST_PAGE } from '@/model/element';
 import { useBoardStore } from '@/state/boardStore';
@@ -21,7 +28,6 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   const chat = usePresence((state) => state.chat);
   const cursor = usePresence((state) => state.cursor);
   const following = usePresence((state) => state.following);
-  const dismissed = usePresence((state) => state.dismissedSpotlight);
   const outlined = usePresence((state) => state.outlined);
   const viewport = useBoardStore((state) => state.viewport);
   const elements = useBoardStore((state) => state.elements);
@@ -29,6 +35,13 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
   // Looking at an old version: what people have selected now does not belong on it.
   const previewing = useHistory((state) => state.preview !== null);
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const owner = useBoardAccess(selectIsOwner);
+  // A clock for hiding pointers that have stopped moving.
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(performance.now()), 500);
+    return () => clearInterval(tick);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -67,12 +80,20 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
 
   const byId = new Map(elements.map((element) => [element.id, element]));
   // Someone on another page is not pointing at anything here.
-  const list = peerList(peers).filter((peer) => (peer.state?.page ?? FIRST_PAGE) === page);
+  // The owner's own other windows are not someone else on the board (27 November).
+  const list = peerList(peers).filter(
+    (peer) =>
+      (peer.state?.page ?? FIRST_PAGE) === page &&
+      !(owner && isMyOtherWindow(peer, usePresence.getState().self)),
+  );
   const leaderSession =
     following && peers[following]
       ? following
-      : (presenter({ peers, dismissedSpotlight: dismissed, self: usePresence.getState().self })
-          ?.session ?? null);
+      : (presenter({
+          peers,
+          self: usePresence.getState().self,
+          session: usePresence.getState().session,
+        })?.session ?? null);
   const leader = leaderSession ? peers[leaderSession] : null;
   const chatAt = cursor ? boardToScreen(viewport, cursor) : null;
 
@@ -111,6 +132,9 @@ export function PeersLayer({ hostRef }: { hostRef: RefObject<HTMLElement | null>
       {list.map((peer) => {
         const at = peer.state?.cursor;
         if (!at) return null;
+        // Still for a while: hidden, unless they are saying something.
+        const idle = now - (peer.cursorAt ?? now) > CURSOR_IDLE_MS;
+        if (idle && !peer.state?.chat) return null;
         const point = boardToScreen(viewport, at);
         return (
           <div

@@ -813,7 +813,8 @@ export function useCanvasInteraction(hostRef: RefObject<HTMLElement | null>): vo
       if (isPlaceholder(target) && !onPlaceholderEdge(target, point, zoom)) {
         return setCursor('text');
       }
-      if (lockedForMe(target)) return setCursor('not-allowed');
+      // Locked: the plain pointer, not a stop sign (asked for on 27 November).
+      if (lockedForMe(target)) return setCursor('default');
       return setCursor('move');
     };
 

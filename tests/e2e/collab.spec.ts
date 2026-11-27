@@ -10,10 +10,27 @@ import { API, createBoard, newAccount, signIn, tokenFor } from './accounts';
 
 const layers = (page: Page) => page.getByTestId('layers').locator('li');
 
-async function twoWindows(browser: Browser, label: string, twoPeople = false) {
+/** Shares a board with someone else as an editor, through the API. */
+async function shareAsEditor(
+  owner: { uid: string; name: string },
+  boardId: string,
+  other: { uid: string },
+) {
+  const shared = await fetch(`${API}/api/shares/board/${boardId}/people`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${await tokenFor(owner)}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ email: `${other.uid}@example.test`, role: 'editor' }),
+  });
+  expect(shared.ok).toBe(true);
+}
+
+async function twoWindows(browser: Browser, label: string, twoPeople = true) {
   const account = newAccount(label);
-  // Two people where following a presenter matters: one's own other window is never
-  // made to follow (26 November).
+  // Two people, as two devices would usually be: one's own other window is never made
+  // to follow (26 November), and the owner does not see it as someone else (27 November).
   const other = twoPeople ? newAccount(`${label}-b`) : account;
   const contextA = await browser.newContext();
   const contextB = await browser.newContext();
@@ -459,33 +476,67 @@ test.describe('two windows on one board', () => {
     await expect(b.getByTestId('following-frame')).toHaveCount(0);
     await expect(a.getByTestId('follows-you')).toHaveCount(0);
 
-    // "Follow me" brings everyone along without them having to ask, and counts them.
-    await expect(a.getByTestId('spotlight')).toHaveText('Follow me');
+    // "On me" brings everyone along without them having to ask, and counts them.
+    await expect(a.getByTestId('spotlight')).toHaveText('On me');
     await a.getByTestId('spotlight').click();
-    await expect(a.getByTestId('spotlight')).toContainText('Stop follow me');
+    await expect(a.getByTestId('spotlight')).toContainText('On you');
     await expect(b.getByTestId('following-frame')).toBeVisible();
-    await expect(a.getByTestId('follower-count')).toHaveText('1/1 following');
+    await expect(a.getByTestId('follower-count')).toHaveText('1/1');
+
+    // Since 27 November it cannot be left: B may zoom about, and still follows…
+    const zoomed = await a.getByTestId('zoom-readout').innerText();
+    await expect(b.getByTestId('zoom-readout')).toHaveText(zoomed);
+    await b.mouse.move(500, 400);
+    await b.keyboard.press('Equal');
+    await b.keyboard.press('Equal');
+    await expect(b.getByTestId('zoom-readout')).not.toHaveText(zoomed);
+    await expect(b.getByTestId('following-frame')).toBeVisible();
+    await expect(a.getByTestId('follower-count')).toHaveText('1/1');
+    // A pointing about (without moving the view) leaves B's zoom as B set it.
+    const ownZoom = await b.getByTestId('zoom-readout').innerText();
+    await a.mouse.move(300, 300);
+    await a.mouse.move(600, 400, { steps: 5 });
+    await expect(b.getByTestId('peer-cursor')).toHaveCount(1);
+    await expect(b.getByTestId('zoom-readout')).toHaveText(ownZoom);
+    // …and cannot stop following from A's card.
+    await b.getByTestId('peer-avatar').first().click();
+    await expect(b.getByTestId('peer-follow')).toBeDisabled();
+    await b.keyboard.press('Escape');
+    // When A moves, B is brought back to A's view.
+    await a.keyboard.press('Minus');
+    const moved = await a.getByTestId('zoom-readout').innerText();
+    await expect(b.getByTestId('zoom-readout')).toHaveText(moved);
     await close();
   });
 
-  test('stopping following a presenter lasts only until they present again', async ({
+  test('a pointer that stops moving hides after two seconds, and shows again when it moves', async ({
     browser,
   }) => {
-    const { a, b, close } = await twoWindows(browser, 'represent', true);
-    await a.getByTestId('spotlight').click();
-    await expect(b.getByTestId('following-frame')).toBeVisible();
+    const { a, b, close } = await twoWindows(browser, 'idle-cursor', true);
+    await b.mouse.move(400, 300);
+    await b.mouse.move(420, 310);
+    await expect(a.getByTestId('peer-cursor')).toHaveCount(1);
+    await a.waitForTimeout(2800);
+    await expect(a.getByTestId('peer-cursor')).toHaveCount(0);
+    await b.mouse.move(500, 360);
+    await expect(a.getByTestId('peer-cursor')).toHaveCount(1);
+    await close();
+  });
 
-    // B stops following from A's card.
-    await b.getByTestId('peer-avatar').first().click();
-    await b.getByTestId('peer-follow').click();
+  test('one person can be put "On me" alone, and let go', async ({ browser }) => {
+    const { a, b, close } = await twoWindows(browser, 'summon', true);
     await expect(b.getByTestId('following-frame')).toHaveCount(0);
-    await expect(a.getByTestId('follower-count')).toHaveText('0/1 following');
-
-    // A stops, then presents again: B is brought along once more.
-    await a.getByTestId('spotlight').click();
-    await a.getByTestId('spotlight').click();
+    // A opens B's card: "On me", for B alone.
+    await a.getByTestId('peer-avatar').first().click();
+    await a.getByTestId('peer-summon').click();
+    await expect(a.getByTestId('peer-summon')).toHaveAttribute('aria-checked', 'true');
     await expect(b.getByTestId('following-frame')).toBeVisible();
-    await expect(a.getByTestId('follower-count')).toHaveText('1/1 following');
+    await expect(a.getByTestId('follows-you')).toBeVisible();
+    // Everyone was not asked: A's own button is still "On me".
+    await expect(a.getByTestId('spotlight')).toHaveText('On me');
+    // Let go.
+    await a.getByTestId('peer-summon').click();
+    await expect(b.getByTestId('following-frame')).toHaveCount(0);
     await close();
   });
 
@@ -758,12 +809,15 @@ test.describe('who is on the board', () => {
   }) => {
     test.setTimeout(90_000);
     const account = newAccount('ghost');
+    // Someone else watches: the owner does not see their own other windows (27 November).
+    const watcher = newAccount('ghost-b');
     const { context: contextA, lines } = await ghostlyContext(browser);
     const contextB = await browser.newContext();
     const [a, b] = [await contextA.newPage(), await contextB.newPage()];
     await signIn(a, account);
     const boardId = await createBoard(a);
-    await signIn(b, account);
+    await shareAsEditor(account, boardId, watcher);
+    await signIn(b, watcher);
     await b.goto(`/b/${boardId}`);
     await expect(avatars(b)).toHaveCount(1);
 
@@ -782,6 +836,8 @@ test.describe('who is on the board', () => {
   test('a window that vanished is dropped once it has been silent a while', async ({ browser }) => {
     test.setTimeout(150_000);
     const account = newAccount('vanish');
+    // B and C are two other people: the owner does not see their own other windows.
+    const others = [newAccount('vanish-b'), newAccount('vanish-c')];
     const { context: contextA, lines, network } = await ghostlyContext(browser);
     const contextB = await browser.newContext();
     const contextC = await browser.newContext();
@@ -792,8 +848,9 @@ test.describe('who is on the board', () => {
     ];
     await signIn(a, account);
     const boardId = await createBoard(a);
-    for (const page of [b, c]) {
-      await signIn(page, account);
+    for (const [index, page] of [b, c].entries()) {
+      await shareAsEditor(account, boardId, others[index]!);
+      await signIn(page, others[index]!);
       await page.goto(`/b/${boardId}`);
     }
     await expect(avatars(b)).toHaveCount(2);

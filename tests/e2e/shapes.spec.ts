@@ -305,6 +305,12 @@ test.describe('arranging', () => {
     expect(await x()).toBe(before);
     await expect(page.getByTestId('layers').locator('li')).toHaveCount(1);
 
+    // Over a locked shape the pointer stays the plain one, not a stop sign (27 November).
+    await page.keyboard.press('Escape');
+    await page.mouse.move(380, 300);
+    await page.mouse.move(384, 302);
+    await expect(page.getByTestId('stage')).toHaveAttribute('data-cursor', 'default');
+
     // Unlocked from the right-click menu, then locked for others: the owner is free.
     await page.mouse.click(380, 300, { button: 'right' });
     await page.getByTestId('menu-unlock').click();

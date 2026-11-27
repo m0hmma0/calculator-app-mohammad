@@ -42,6 +42,7 @@ function currentPresence(): PresenceState {
         : null,
     chat: presence.chatOpen || presence.chat ? presence.chat : null,
     spotlight: presence.spotlight,
+    summoned: presence.summoned.length > 0 ? presence.summoned : undefined,
     present: presence.present,
     following: leaderSession(),
     page: board.page,
@@ -99,6 +100,7 @@ export function startPresence(room: RoomConnection): PresenceHandle {
       state.chat !== previous.chat ||
       state.chatOpen !== previous.chatOpen ||
       state.spotlight !== previous.spotlight ||
+      state.summoned !== previous.summoned ||
       state.present !== previous.present
     ) {
       schedule();
@@ -121,8 +123,11 @@ export function startPresence(room: RoomConnection): PresenceHandle {
 
 /** The session being followed: chosen by clicking an avatar, or a presenter. */
 export function leaderSession(presence = usePresence.getState()): string | null {
+  // Someone with this person "On me" comes first: following them is not a choice.
+  const forced = presenter(presence)?.session ?? null;
+  if (forced) return forced;
   if (presence.following && presence.peers[presence.following]) return presence.following;
-  return presenter(presence)?.session ?? null;
+  return null;
 }
 
 /**
@@ -136,15 +141,24 @@ export function followedFrameId(presence = usePresence.getState()): string | nul
 
 /**
  * Follow mode: this view tracks the leader's — same zoom, same centre. Moving the
- * view yourself is taken as "stop following", which is what people expect.
+ * view yourself is taken as "stop following", which is what people expect — except
+ * when the leader has this person "On me" (27 November): then there is no way out, but
+ * they may zoom and look about, until the leader moves on (another slide, another
+ * view) or puts them "On me" again, which brings their view back.
  */
 function startFollowing(): () => void {
   let applied: Viewport | null = null;
+  /** What was last fitted: the leader, and their frame or view, and this screen. */
+  let lastKey = '';
+  /** A forced follower moved their own view since: left as it is until the leader moves. */
+  let ownView = false;
 
   const apply = () => {
     const session = leaderSession();
     if (!session) {
       applied = null;
+      lastKey = '';
+      ownView = false;
       return;
     }
     const leader = usePresence.getState().peers[session]?.state;
@@ -157,6 +171,17 @@ function startFollowing(): () => void {
       useBoardStore.getState().setPage(leader.page);
     }
     const board = useBoardStore.getState();
+    const watching = useWatching.getState().watching;
+    const key = [
+      session,
+      leader.present?.frame ?? `${view.x},${view.y},${view.zoom},${view.width},${view.height}`,
+      board.stageSize.width,
+      board.stageSize.height,
+      watching,
+    ].join('|');
+    if (key === lastKey && ownView) return;
+    if (key !== lastKey) ownView = false;
+    lastKey = key;
     // A presenter's frame fills this screen, whatever shape this screen is.
     const frame = leader.present
       ? board.elements.find((element) => element.id === leader.present?.frame)
@@ -164,8 +189,7 @@ function startFollowing(): () => void {
     if (frame) {
       // Watching full screen: edge to edge, as the audience window shows it, so a slide
       // the shape of the screen fills it with no dark bars.
-      const padding = useWatching.getState().watching ? 0 : PRESENT_PADDING;
-      const fitted = fitToRect(frame, board.stageSize, padding);
+      const fitted = fitToRect(frame, board.stageSize, watching ? 0 : PRESENT_PADDING);
       applied = fitted;
       board.setViewport(fitted);
       return;
@@ -196,14 +220,15 @@ function startFollowing(): () => void {
     }
     if (state.viewport === previous.viewport || !applied) return;
     if (viewportsEqual(state.viewport, applied)) return;
-    // The view moved, and not because of the leader: this person took the wheel.
-    const presence = usePresence.getState();
-    const leading = presenter(presence);
-    usePresence.setState({
-      following: null,
-      dismissedSpotlight: leading ? leading.session : presence.dismissedSpotlight,
-    });
+    // The view moved, and not because of the leader. Put "On me", this person zooms
+    // and looks about but keeps following; following by choice, they took the wheel.
+    if (presenter(usePresence.getState())) {
+      ownView = true;
+      return;
+    }
+    usePresence.setState({ following: null });
     applied = null;
+    lastKey = '';
   });
 
   return () => {

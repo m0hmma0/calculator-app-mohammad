@@ -3,12 +3,7 @@ import { screenToBoard } from '@/canvas/viewport';
 import { usePresence } from '@/collab/presence';
 import { keyLabel, shortcutLabel } from '@/input/shortcuts';
 import { pasteFromClipboard } from '@/input/useClipboard';
-import {
-  selectCanComment,
-  selectCanEdit,
-  selectIsOwner,
-  useBoardAccess,
-} from '@/sharing/boardAccess';
+import { selectCanComment, selectCanEdit, useBoardAccess } from '@/sharing/boardAccess';
 import { useComments } from '@/sharing/comments';
 import { useSettings } from '@/settings/settings';
 import { boardDoc, useBoardStore } from '@/state/boardStore';
@@ -36,7 +31,8 @@ export function ContextMenu() {
   const renderVersion = useBoardStore((state) => state.renderVersion);
   const paneOpen = useUiPrefs((state) => state.pane);
   const editable = useBoardAccess(selectCanEdit);
-  const owner = useBoardAccess(selectIsOwner);
+  // A lock for others is the board's owner's alone; it holds co-owners too (27 November).
+  const realOwner = useBoardAccess((state) => state.role === 'owner');
   const canComment = useBoardAccess(selectCanComment);
   // Comments live on a board with a room; the signed-out board has none.
   const onBoard = usePresence((state) => state.status !== null);
@@ -139,7 +135,7 @@ export function ContextMenu() {
           disabled: !chosen.some((element) => !element.locked || element.lockMode === 'others'),
           run: () => store().setSelectionLocked(true),
         },
-        ...(owner
+        ...(realOwner
           ? [
               {
                 id: 'lock-others',

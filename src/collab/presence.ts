@@ -9,6 +9,8 @@ export interface Peer {
   state: PresenceState | null;
   /** The peer's laser, converted to this browser's clock so it fades on time here. */
   laser: { points: LaserPoint[]; lifetimeMs: number } | null;
+  /** When their pointer last moved, on this browser's clock: still for long, it hides. */
+  cursorAt?: number;
 }
 
 interface PresenceStore {
@@ -26,6 +28,8 @@ interface PresenceStore {
   dismissedSpotlight: string | null;
   /** This person is presenting. */
   spotlight: boolean;
+  /** Sessions this person has put "On me" one by one (27 November). */
+  summoned: string[];
   /** Sessions whose screen edges are outlined on this board, for presenting within them. */
   outlined: Record<string, true>;
   /** The frame this person is presenting, in presentation mode. */
@@ -49,6 +53,7 @@ const initial = {
   following: null,
   dismissedSpotlight: null,
   spotlight: false,
+  summoned: [],
   outlined: {},
   present: null,
   chatOpen: false,
@@ -123,6 +128,12 @@ export function applyServerMessage(message: ServerMessage): void {
             user: message.user,
             state: message.state,
             laser,
+            cursorAt: sameCursor(
+              current.peers[message.session]?.state?.cursor,
+              message.state.cursor,
+            )
+              ? (current.peers[message.session]?.cursorAt ?? now)
+              : now,
           },
         },
         // Saying "stop following" holds for that presentation only: once they stop
@@ -139,25 +150,44 @@ export function applyServerMessage(message: ServerMessage): void {
   }
 }
 
+const sameCursor = (
+  a: { x: number; y: number } | null | undefined,
+  b: { x: number; y: number } | null | undefined,
+) => (a ?? null) === (b ?? null) || (a != null && b != null && a.x === b.x && a.y === b.y);
+
+/** A pointer that has not moved for this long is hidden, the presenter's too (27 November). */
+export const CURSOR_IDLE_MS = 2000;
+
 /** Peers in a stable order, one entry per open window. */
 export function peerList(peers: Record<string, Peer>): Peer[] {
   return Object.values(peers).sort((a, b) => a.session.localeCompare(b.session));
 }
 
-/** Whoever is presenting, unless this person has said they would rather not follow. */
+/**
+ * Whoever has everyone — or this person alone — on them ("On me"): followed, and since
+ * 27 November without a way out but their own zoom. One's own other window or device
+ * is never followed (26 November): edit in one, present in the other. A guest has no
+ * account to share.
+ */
 export function presenter(
-  store: Pick<PresenceStore, 'peers' | 'dismissedSpotlight'> & { self?: PeerIdentity | null },
+  store: Pick<PresenceStore, 'peers'> & {
+    self?: PeerIdentity | null;
+    session?: string | null;
+  },
 ): Peer | null {
   return (
     peerList(store.peers).find(
       (peer) =>
-        peer.state?.spotlight &&
-        peer.session !== store.dismissedSpotlight &&
-        // One's own other window or device presenting is not followed (asked for on 26
-        // November): edit in one, present in the other. A guest has no account to share.
-        !(store.self && !store.self.uid.startsWith('guest:') && peer.user.uid === store.self.uid),
+        (peer.state?.spotlight ||
+          (store.session && peer.state?.summoned?.includes(store.session))) &&
+        !isMyOtherWindow(peer, store.self ?? null),
     ) ?? null
   );
+}
+
+/** Another window or device of this same signed-in person. */
+export function isMyOtherWindow(peer: Peer, self: PeerIdentity | null): boolean {
+  return Boolean(self && !self.uid.startsWith('guest:') && peer.user.uid === self.uid);
 }
 
 /** Shows or hides the outline of someone's screen on this board. */

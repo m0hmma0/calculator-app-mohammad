@@ -70,6 +70,8 @@ export function BoardControls({
       >
         <SlideControls placement="pane" />
         <ToolBar />
+        {/* Who is here and who follows, with "On me", as when not presenting. */}
+        {people ? <div className={styles.people}>{people}</div> : null}
         {editable ? (
           <div className={styles.menus}>
             <InsertMenu />

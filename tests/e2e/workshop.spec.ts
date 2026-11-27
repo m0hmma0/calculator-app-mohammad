@@ -45,7 +45,10 @@ async function twoWindows(browser: Browser, label: string, twoPeople = false) {
   for (const page of [a, b]) {
     await expect(page.getByTestId('connection-status')).toHaveAttribute('data-status', 'connected');
   }
-  await expect(b.getByTestId('peer-avatar').first()).toBeVisible();
+  // Each sees the other — someone else, that is: the owner does not see their own other
+  // window as a person on the board (27 November).
+  if (twoPeople) await expect(b.getByTestId('peer-avatar').first()).toBeVisible();
+  else await expect(b.getByTestId('peer-avatar')).toHaveCount(0);
   return {
     a,
     b,
@@ -151,7 +154,7 @@ test('followers see the frame the presenter is on', async ({ browser }) => {
     await expect.poll(() => colourFraction(b, '--shape-1', centre)).toBeGreaterThan(0.9);
 
     await a.keyboard.press('Escape');
-    await expect(b.getByTestId('peer-avatar').first()).not.toContainText('presenting');
+    await expect(b.getByTestId('peer-presenting')).toHaveCount(0);
   } finally {
     await close();
   }
@@ -237,7 +240,10 @@ test('one’s own other window is not made to follow; Follow me is on the slide 
     await same.a.keyboard.press('Escape');
     await expect(layerItems(same.b)).toHaveCount(1);
     await same.a.getByTestId('present-start').click();
-    await expect(same.a.getByTestId('present-follow-me')).toHaveAttribute('aria-checked', 'true');
+    // While presenting, the people bar is there, with "On you" — but not one's own
+    // other window, which is nobody else (27 November).
+    await expect(same.a.getByTestId('spotlight')).toContainText('On you');
+    await expect(same.a.getByTestId('peer-avatar')).toHaveCount(0);
     // The same account's other window: no following frame, no prompt, still editing.
     await same.b.waitForTimeout(1500);
     await expect(same.b.getByTestId('following-frame')).toHaveCount(0);
@@ -255,13 +261,16 @@ test('one’s own other window is not made to follow; Follow me is on the slide 
     await expect(layerItems(b)).toHaveCount(1);
     await a.getByTestId('present-start').click();
     await expect(b.getByTestId('following-frame')).toBeVisible();
+    // The follower shows on the presenter's people bar, with the count.
+    await expect(a.getByTestId('follows-you')).toBeVisible();
+    await expect(a.getByTestId('follower-count')).toHaveText('1/1');
     // Off: the other person is let go, and the presentation carries on here.
-    await a.getByTestId('present-follow-me').click();
-    await expect(a.getByTestId('present-follow-me')).toHaveAttribute('aria-checked', 'false');
+    await a.getByTestId('spotlight').click();
+    await expect(a.getByTestId('spotlight')).toHaveText('On me');
     await expect(b.getByTestId('following-frame')).toHaveCount(0);
     await expect(a.getByTestId('presentation-bar')).toBeVisible();
     // On again: they come back.
-    await a.getByTestId('present-follow-me').click();
+    await a.getByTestId('spotlight').click();
     await expect(b.getByTestId('following-frame')).toBeVisible();
   } finally {
     await close();

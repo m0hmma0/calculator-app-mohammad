@@ -19,7 +19,6 @@ import { rectsIntersect } from '@/geometry';
 import { useFrameOnShow } from '@/workshop/onShow';
 import { useSidePane } from './layout';
 import { RemoteControlButton, ShareSlidesButton } from './RemoteControl';
-import { FollowMeToggle } from './FollowMeToggle';
 import styles from './WorkshopLayer.module.css';
 
 /** What each presenting shortcut does; Settings can change the keys. */
@@ -264,7 +263,6 @@ export function SlideControls({ placement }: { placement: 'pane' | 'bottom' }) {
       </button>
       <RemoteControlButton compact={placement === 'bottom'} />
       <ShareSlidesButton compact={placement === 'bottom'} />
-      <FollowMeToggle compact={placement === 'bottom'} />
       {blocked && !audience ? (
         <span className={styles.blocked} role="alert" data-testid="presenter-view-blocked">
           The browser blocked the window: allow pop-ups for this site, then try again.
