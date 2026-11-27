@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import {
   colorFor,
@@ -7,6 +7,8 @@ import {
   frame,
   MAX_FRAME_BYTES,
   splitFrame,
+  unzipFrame,
+  zipFrame,
 } from '@shared/collab';
 import { searchTextInDoc } from '@shared/files';
 import { createBoard, insertElements, readElements, applyPatches } from '@/doc/board';
@@ -54,6 +56,55 @@ describe('frames too large to send whole', () => {
     expect(assembler.accept(b1!)).toBeNull();
     expect(sameBytes(assembler.accept(b2!), two)).toBe(true);
     expect(sameBytes(assembler.accept(a2!), one)).toBe(true);
+  });
+});
+
+describe('large frames go deflated (Phase 18)', () => {
+  const big = () => {
+    const out = new Uint8Array(200_000);
+    for (let i = 0; i < out.length; i += 1) out[i] = i % 7;
+    out[0] = FRAME.SYNC_STEP2;
+    return out;
+  };
+
+  it('deflates a large frame and inflates it back exactly', () => {
+    const data = big();
+    const packed = zipFrame(data);
+    expect(packed[0]).toBe(FRAME.ZIP);
+    expect(packed.length).toBeLessThan(data.length / 10);
+    expect(unzipFrame(packed)).toEqual(data);
+  });
+
+  it('leaves small frames and other frames alone', () => {
+    const small = frame(FRAME.UPDATE, new Uint8Array(100));
+    expect(zipFrame(small)).toBe(small);
+    expect(unzipFrame(small)).toBe(small);
+  });
+
+  it('refuses a frame that inflates past its limit', () => {
+    expect(() => unzipFrame(zipFrame(big()), 50_000)).toThrow();
+  });
+
+  it('a whole board survives the second encoding, deflated and split', () => {
+    const board = createBoard();
+    insertElements(
+      board,
+      Array.from({ length: 500 }, (_, i) =>
+        createElement({ type: 'rect', box: { x: i, y: i, w: 10, h: 10 }, z: `a${i}` }),
+      ),
+    );
+    const sent = splitFrame(
+      zipFrame(frame(FRAME.SYNC_STEP2_V2, Y.encodeStateAsUpdateV2(board.doc))),
+      1,
+    );
+    const assembler = new FrameAssembler();
+    let whole: Uint8Array | null = null;
+    for (const part of sent) whole = assembler.accept(part) ?? whole;
+    const data = unzipFrame(whole!);
+    expect(data[0]).toBe(FRAME.SYNC_STEP2_V2);
+    const copy = new Y.Doc();
+    Y.applyUpdateV2(copy, data.subarray(1));
+    expect(copy.getMap('elements').size).toBe(500);
   });
 });
 
@@ -105,5 +156,18 @@ describe('peer colours', () => {
     expect(colorFor('alice')).toBe(colorFor('alice'));
     const colours = new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(colorFor));
     expect(colours.size).toBeGreaterThan(3);
+  });
+});
+
+describe('element ids', () => {
+  it('differ between pages even in the same millisecond', async () => {
+    // Two pages: two fresh copies of the module, each making its first id.
+    vi.resetModules();
+    const one = (await import('@/model/element')).createElementId;
+    vi.resetModules();
+    const two = (await import('@/model/element')).createElementId;
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    expect(one('rect')).not.toBe(two('rect'));
+    vi.restoreAllMocks();
   });
 });

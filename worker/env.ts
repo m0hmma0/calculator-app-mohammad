@@ -13,4 +13,11 @@ export interface Env {
   FIREBASE_JWKS_URL?: string;
   /** How long a silent window counts as present; shortened only by the test backend. */
   PEER_STALE_MS?: string;
+
+  /** Rate limits (Phase 18; wrangler.toml). Absent in a deployment without them. */
+  LIMIT_API?: RateLimit;
+  LIMIT_HEAVY?: RateLimit;
+  LIMIT_ERRORS?: RateLimit;
+  /** Test backend only: count just the requests that carry an `x-rate-key`. */
+  RATE_LIMIT_TEST?: string;
 }

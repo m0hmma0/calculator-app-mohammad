@@ -1,0 +1,38 @@
+.screen {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--canvas-bg);
+  color: var(--text);
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.text {
+  margin: 0;
+  max-width: 36ch;
+  color: var(--text-muted);
+}
+
+.button {
+  justify-self: center;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}

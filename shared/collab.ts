@@ -1,3 +1,4 @@
+import { Inflate, deflateSync } from 'fflate';
 import type { Role } from './sharing';
 
 /**
@@ -10,6 +11,9 @@ import type { Role } from './sharing';
  *   UPDATE       a change made since
  *   HISTORY      a past state of the board, for the history scrubber
  *   CHUNK        one piece of a frame too large to send whole
+ *   ZIP          a large frame, deflated (Phase 18): a board's first sync is mostly
+ *                repeated keys and shrinks about five times
+ *   SYNC_STEP2_V2 SYNC_STEP2 in Yjs's second encoding, to pages that ask with `zip`
  *
  * Everything else — sign-in, presence, history listings — is JSON text.
  *
@@ -24,7 +28,46 @@ export const FRAME = {
   UPDATE: 2,
   HISTORY: 3,
   CHUNK: 9,
+  ZIP: 10,
+  /** SYNC_STEP2 in Yjs's second encoding: a board's first sync, a quarter the size. */
+  SYNC_STEP2_V2: 11,
 } as const;
+
+/** Frames at least this big are deflated, where the other side says it can inflate. */
+export const ZIP_FROM = 32 * 1024;
+/** What an inflated frame may grow to: a board this big is refused rather than built. */
+export const MAX_UNZIPPED_BYTES = 128 * 1024 * 1024;
+
+/** A frame deflated as [ZIP][deflate-raw bytes], if that is worth it; else the frame. */
+export function zipFrame(data: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+  if (data.length < ZIP_FROM) return data;
+  const packed = deflateSync(data, { level: 4 });
+  if (packed.length >= data.length * 0.9) return data;
+  const out = new Uint8Array(packed.length + 1);
+  out[0] = FRAME.ZIP;
+  out.set(packed, 1);
+  return out;
+}
+
+/** The frame inside a ZIP frame (any other frame is returned as it is). Throws past `max`. */
+export function unzipFrame(data: Uint8Array, max = MAX_UNZIPPED_BYTES): Uint8Array {
+  if (data[0] !== FRAME.ZIP) return data;
+  const parts: Uint8Array[] = [];
+  let length = 0;
+  const inflate = new Inflate((chunk) => {
+    length += chunk.length;
+    if (length > max) throw new Error('Frame too large');
+    parts.push(chunk);
+  });
+  inflate.push(data.subarray(1), true);
+  const whole = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) {
+    whole.set(part, offset);
+    offset += part.length;
+  }
+  return whole;
+}
 
 /** WebSocket messages over 1 MiB are refused; stay well under it. */
 export const MAX_FRAME_BYTES = 512 * 1024;
@@ -65,15 +108,26 @@ export function splitFrame(data: Uint8Array<ArrayBuffer>, id: number): Uint8Arra
 export class FrameAssembler {
   private readonly pending = new Map<number, { parts: Uint8Array[]; received: number }>();
 
+  /**
+   * `maxParts`: the most pieces one frame may have. The room sets it, so a frame that
+   * claims thousands of pieces cannot make it hold gigabytes; past it, or with more
+   * than a few frames half-received, `accept` throws.
+   */
+  constructor(private readonly maxParts = Infinity) {}
+
   accept(data: Uint8Array): Uint8Array | null {
     if (data[0] !== FRAME.CHUNK) return data;
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const id = view.getUint32(1);
     const index = view.getUint16(5);
     const total = view.getUint16(7);
+    if (index >= total) throw new Error('Unreadable frame');
 
     let entry = this.pending.get(id);
+    if (entry && entry.parts.length !== total) throw new Error('Unreadable frame');
     if (!entry) {
+      if (total > this.maxParts) throw new Error('Frame too large');
+      if (this.maxParts !== Infinity && this.pending.size >= 4) throw new Error('Too many frames');
       entry = { parts: new Array<Uint8Array>(total), received: 0 };
       this.pending.set(id, entry);
     }
@@ -154,6 +208,8 @@ export type ClientMessage =
        * board and move the slides, nothing more.
        */
       remote?: string;
+      /** This page inflates ZIP frames (Phase 18); older pages leave it out. */
+      zip?: boolean;
     }
   | { t: 'presence'; state: PresenceState }
   | { t: 'history' }
@@ -206,6 +262,8 @@ export type ServerMessage =
       /** The room's clock, so a shared timer ends at the same moment on every screen. */
       now: number;
       peers: Array<{ session: string; user: PeerIdentity }>;
+      /** The room inflates ZIP frames, so large ones may be sent deflated. */
+      zip?: boolean;
     }
   /** Sharing changed while connected: this is what they may do now. */
   | { t: 'role'; role: Role; canExport: boolean }
@@ -240,6 +298,8 @@ export type ServerMessage =
        * `waiting`: a remote control or slides link whose presenter is not connected, or
        * whose key the room has not been given yet; it tries again.
        * `ended`: a link from a presentation that has ended; it stops.
+       * `too-many`: far more messages than any page sends (Phase 18); the socket is
+       * closed, and the page reconnects after a pause and syncs what it had.
        */
       code:
         | 'unauthorised'
@@ -248,7 +308,8 @@ export type ServerMessage =
         | 'read-only'
         | 'revoked'
         | 'waiting'
-        | 'ended';
+        | 'ended'
+        | 'too-many';
     };
 
 /**

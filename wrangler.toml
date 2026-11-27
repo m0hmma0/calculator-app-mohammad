@@ -3,11 +3,35 @@ main = "worker/index.ts"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Served at the custom domain (Phase 18); the workers.dev address keeps working too.
+# Google sign-in needs both in Firebase's authorised domains.
+workers_dev = true
+routes = [{ pattern = "sabboura.read4more.com", custom_domain = true }]
+
 # Static assets are served free and unmetered; only /api/* reaches the Worker.
 [assets]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+# Rate limits (Phase 18), per caller address per minute; see worker/limits.ts.
+# Everything else under /api/, room connections included.
+[[ratelimits]]
+name = "LIMIT_API"
+namespace_id = "18001"
+simple = { limit = 1200, period = 60 }
+
+# Link previews, new boards and duplicates, transfers, inviting people.
+[[ratelimits]]
+name = "LIMIT_HEAVY"
+namespace_id = "18002"
+simple = { limit = 60, period = 60 }
+
+# Error reports from browsers.
+[[ratelimits]]
+name = "LIMIT_ERRORS"
+namespace_id = "18003"
+simple = { limit = 30, period = 60 }
 
 [observability]
 enabled = true

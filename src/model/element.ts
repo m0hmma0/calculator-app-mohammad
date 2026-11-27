@@ -402,9 +402,20 @@ export function isInteractive(element: BoardElement): boolean {
 
 let counter = 0;
 
+/**
+ * Random per open page. The time and a counter alone repeat across windows: five
+ * people drawing in the same millisecond each made `rect_<time>_1`, and the second
+ * shape written replaced the first everywhere (found by Phase 18's five-window test).
+ */
+const PAGE_PART = (() => {
+  const bytes = new Uint8Array(5);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => (byte % 36).toString(36)).join('');
+})();
+
 export function createElementId(prefix = 'el'): ElementId {
   counter += 1;
-  return `${prefix}_${Date.now().toString(36)}_${counter.toString(36)}`;
+  return `${prefix}_${Date.now().toString(36)}_${PAGE_PART}${counter.toString(36)}`;
 }
 
 export interface CreateElementOptions {

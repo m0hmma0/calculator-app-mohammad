@@ -20,6 +20,7 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "fflate": "^0.8.2",
     "firebase": "^13.0.0",
     "fractional-indexing": "^4.0.0",
     "jose": "^6.2.13",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260823.1",
     "@eslint/js": "^10.0.1",
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",

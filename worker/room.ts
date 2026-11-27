@@ -4,6 +4,8 @@ import {
   colorFor,
   FRAME,
   FrameAssembler,
+  unzipFrame,
+  zipFrame,
   frame,
   REMOTE_ACTIONS,
   REMOTE_KEY,
@@ -37,7 +39,13 @@ interface Attachment {
   remote?: boolean;
   /** A slides-only link: a remote that may only look (26 November). */
   watchOnly?: boolean;
+  /** The page inflates ZIP frames (Phase 18), so large frames go to it deflated. */
+  zip?: boolean;
 }
+
+/** Messages a second a page may send on average, and in a burst (Phase 18). */
+const MESSAGE_RATE = 100;
+const MESSAGE_BURST = 400;
 
 /** Take a full snapshot after this many updates, so loading never replays thousands. */
 const SNAPSHOT_EVERY = 200;
@@ -418,10 +426,21 @@ export class BoardRoom extends DurableObject<Env> {
   private sendBinary(ws: WebSocket, data: Uint8Array<ArrayBuffer>): void {
     this.chunkId = (this.chunkId + 1) >>> 0;
     try {
-      for (const part of splitFrame(data, this.chunkId)) ws.send(part);
+      const packed = this.attachment(ws).zip ? this.zipped(data) : data;
+      for (const part of splitFrame(packed, this.chunkId)) ws.send(part);
     } catch {
       // As above.
     }
+  }
+
+  /** A frame passed on to several pages is deflated once, not once for each. */
+  private lastZipped: { raw: Uint8Array; packed: Uint8Array<ArrayBuffer> } | null = null;
+
+  private zipped(data: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+    if (this.lastZipped?.raw === data) return this.lastZipped.packed;
+    const packed = zipFrame(data);
+    this.lastZipped = { raw: data, packed };
+    return packed;
   }
 
   /** Everyone signed in on this board, except `except`. */
@@ -468,7 +487,7 @@ export class BoardRoom extends DurableObject<Env> {
    * presenter's page was reconnecting as the link was made), or whose presenter is
    * momentarily away, is told to wait, and tries again.
    */
-  private authenticateRemote(ws: WebSocket, key: string): void {
+  private authenticateRemote(ws: WebSocket, key: string, zip: boolean): void {
     const expected = this.meta('remoteKey');
     const watchKey = this.meta('watchKey');
     const controls = Boolean(expected) && key === expected;
@@ -497,6 +516,7 @@ export class BoardRoom extends DurableObject<Env> {
       tab: null,
       remote: true,
       watchOnly: !controls,
+      zip,
     };
     ws.serializeAttachment(attachment);
     this.sendJson(ws, {
@@ -506,6 +526,7 @@ export class BoardRoom extends DurableObject<Env> {
       role: 'viewer',
       now: Date.now(),
       peers: [],
+      zip: true,
     });
     this.sendJson(ws, { t: 'role', role: 'viewer', canExport: false });
     // The presenter's page answers with where the talk is.
@@ -546,9 +567,32 @@ export class BoardRoom extends DurableObject<Env> {
     }
   }
 
+  /**
+   * Phase 18: messages each page may send, as a bucket that refills. A page sends about
+   * 50 a second at most (presence and changes, each gathered for 40 ms), and a board's
+   * first sync a few dozen pieces at once; a page far past that is closed, and
+   * reconnecting brings everything it had back through the usual sync.
+   */
+  private readonly buckets = new Map<string, { tokens: number; at: number }>();
+
+  private allowMessage(session: string): boolean {
+    const now = Date.now();
+    const bucket = this.buckets.get(session) ?? { tokens: MESSAGE_BURST, at: now };
+    bucket.tokens = Math.min(
+      MESSAGE_BURST,
+      bucket.tokens + ((now - bucket.at) / 1000) * MESSAGE_RATE,
+    );
+    bucket.at = now;
+    this.buckets.set(session, bucket);
+    if (bucket.tokens < 1) return false;
+    bucket.tokens -= 1;
+    return true;
+  }
+
   private refuse(
     ws: WebSocket,
-    code: 'unauthorised' | 'not-found' | 'bad-request' | 'revoked' | 'waiting' | 'ended',
+    code:
+      'unauthorised' | 'not-found' | 'bad-request' | 'revoked' | 'waiting' | 'ended' | 'too-many',
     message: string,
   ) {
     this.sendJson(ws, { t: 'error', code, message });
@@ -559,6 +603,7 @@ export class BoardRoom extends DurableObject<Env> {
       revoked: 4403,
       waiting: 4409,
       ended: 4410,
+      'too-many': 4429,
     };
     ws.close(close[code], message);
   }
@@ -684,6 +729,7 @@ export class BoardRoom extends DurableObject<Env> {
       viewer,
       link,
       tab,
+      zip: message.zip === true,
     };
     ws.serializeAttachment(attachment);
     await this.noteExpiry(access.expiresAt);
@@ -712,6 +758,7 @@ export class BoardRoom extends DurableObject<Env> {
       role: access.role,
       now: Date.now(),
       peers,
+      zip: true,
     });
     this.sendJson(ws, {
       t: 'role',
@@ -752,6 +799,9 @@ export class BoardRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const { session, user, role } = this.attachment(ws);
+    if (!this.allowMessage(session)) {
+      return this.refuse(ws, 'too-many', 'Too many messages. Reconnecting in a moment.');
+    }
     this.sweep();
 
     if (typeof message === 'string') {
@@ -764,7 +814,7 @@ export class BoardRoom extends DurableObject<Env> {
 
       if (!user) {
         if (parsed.t === 'auth' && typeof parsed.remote === 'string' && !parsed.token) {
-          return this.authenticateRemote(ws, parsed.remote);
+          return this.authenticateRemote(ws, parsed.remote, parsed.zip === true);
         }
         if (parsed.t === 'auth' && typeof parsed.token === 'string') {
           return this.authenticate(ws, parsed);
@@ -898,16 +948,30 @@ export class BoardRoom extends DurableObject<Env> {
 
     let assembler = this.assemblers.get(session);
     if (!assembler) {
-      assembler = new FrameAssembler();
+      // 64 pieces: 32 MB, eight times a 5,000-shape board.
+      assembler = new FrameAssembler(64);
       this.assemblers.set(session, assembler);
     }
-    const data = assembler.accept(new Uint8Array(message));
-    if (!data) return;
+    let data: Uint8Array;
+    try {
+      const whole = assembler.accept(new Uint8Array(message));
+      if (!whole) return;
+      data = unzipFrame(whole);
+    } catch {
+      return this.refuse(ws, 'bad-request', 'That change could not be read');
+    }
     const payload = data.subarray(1);
 
     switch (data[0]) {
       case FRAME.SYNC_STEP1:
-        this.sendBinary(ws, frame(FRAME.SYNC_STEP2, Y.encodeStateAsUpdate(this.doc, payload)));
+        // A page that inflates frames also reads the second encoding: with both, a
+        // 5,000-shape board's first sync is 0.25 MB instead of 4 (Phase 18).
+        this.sendBinary(
+          ws,
+          this.attachment(ws).zip
+            ? frame(FRAME.SYNC_STEP2_V2, Y.encodeStateAsUpdateV2(this.doc, payload))
+            : frame(FRAME.SYNC_STEP2, Y.encodeStateAsUpdate(this.doc, payload)),
+        );
         return;
       case FRAME.SYNC_STEP2:
       case FRAME.UPDATE: {
@@ -961,6 +1025,7 @@ export class BoardRoom extends DurableObject<Env> {
     const { session, user, remote } = this.attachment(ws);
     const wasPresenter = this.presenterSockets().includes(ws);
     this.assemblers.delete(session);
+    this.buckets.delete(session);
     try {
       ws.close(1000, 'Bye');
     } catch {

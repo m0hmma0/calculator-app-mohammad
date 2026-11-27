@@ -415,6 +415,18 @@ test.describe('access', () => {
     expect(response.status()).toBe(401);
   });
 
+  test('the API refuses an email address that was never verified', async ({ request }) => {
+    // Phase 18: sharing is by email, so a claimed address is not enough.
+    const token = await (
+      await fetch(`http://localhost:8799/token?uid=${newAccount('unverified').uid}&verified=no`)
+    ).text();
+    const response = await request.get('http://localhost:8788/api/workspace', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status()).toBe(401);
+    expect((await response.json()).error).toContain('verified');
+  });
+
   test('one account cannot read another account board over the API', async ({ request }) => {
     const owner = newAccount('api-owner');
     const ownerToken = await tokenFor(owner);

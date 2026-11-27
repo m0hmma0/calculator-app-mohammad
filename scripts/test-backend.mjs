@@ -50,6 +50,7 @@ async function mint(params) {
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({
     email: params.get('email') ?? `${uid}@example.test`,
+    email_verified: params.get('verified') !== 'no',
     name: params.get('name') ?? 'Test Person',
     picture: null,
   })
@@ -192,6 +193,9 @@ const WRANGLER_ARGS = [
   // The link-preview test page is served by the key server, on localhost.
   '--var',
   'UNFURL_ALLOW_LOCAL:1',
+  // Every test comes from one address: only a request naming its own key is limited.
+  '--var',
+  'RATE_LIMIT_TEST:1',
   // A window that vanished is dropped after 45 seconds here, not 3 minutes.
   '--var',
   'PEER_STALE_MS:45000',

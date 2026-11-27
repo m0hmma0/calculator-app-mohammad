@@ -43,10 +43,12 @@ import {
 import { addLibraryItem, listLibrary, removeLibraryItem } from './routes/library';
 import { getSettings, putSettings } from './routes/settings';
 import { unfurl } from './routes/unfurl';
+import { reportBrowserError } from './routes/errors';
 import { emptyTrash, getTrash, getWorkspace } from './routes/workspace';
 import { upsertUser } from './db';
 import type { Env } from './env';
 import { fail, json } from './http';
+import { overLimit } from './limits';
 
 export type { Env };
 export { BoardRoom } from './room';
@@ -75,6 +77,10 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   if (file && !file[2] && (method === 'GET' || method === 'HEAD')) {
     return getFile(request, env, file[1]!);
   }
+
+  // Errors from browsers are taken from anyone, signed in or not, and never need a
+  // token that might itself be what is broken.
+  if (pathname === '/api/errors' && method === 'POST') return reportBrowserError(request);
 
   // A browser cannot put a token on a WebSocket request, so the room asks for one as
   // the first message instead, and refuses to do anything else until it is valid.
@@ -257,6 +263,9 @@ export default {
 
     if (url.pathname.startsWith('/api/')) {
       try {
+        const limited =
+          url.pathname === '/api/health' ? null : await overLimit(request, env, url.pathname);
+        if (limited) return limited;
         return await handleApi(request, env, url.pathname);
       } catch (error) {
         console.error('API error', error);

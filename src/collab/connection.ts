@@ -4,6 +4,8 @@ import {
   FrameAssembler,
   frame,
   splitFrame,
+  unzipFrame,
+  zipFrame,
   type ClientMessage,
   type PresenceState,
   type ServerMessage,
@@ -82,6 +84,8 @@ export class RoomConnection {
   private unacked = 0;
   private settled: Array<() => void> = [];
   private assembler = new FrameAssembler();
+  /** The room inflates ZIP frames, so this page may send large ones deflated. */
+  private zip = false;
   private chunkId = 0;
   /** Everyone else connected to the room, by session, as the room last said. */
   private others = new Set<string>();
@@ -183,7 +187,9 @@ export class RoomConnection {
 
     ws.onopen = async () => {
       if (this.remote) {
-        ws.send(JSON.stringify({ t: 'auth', token: '', remote: this.remote, tab: PAGE_ID }));
+        ws.send(
+          JSON.stringify({ t: 'auth', token: '', remote: this.remote, tab: PAGE_ID, zip: true }),
+        );
         return;
       }
       // A refreshed token if the old one has expired; Firebase handles that.
@@ -196,6 +202,7 @@ export class RoomConnection {
           link: shareLink(),
           guest: token ? null : guestIdentity(),
           tab: PAGE_ID,
+          zip: true,
         } satisfies ClientMessage),
       );
     };
@@ -216,6 +223,7 @@ export class RoomConnection {
       const message = JSON.parse(event.data) as ServerMessage;
       if (message.t === 'ready') {
         this.ready = true;
+        this.zip = message.zip === true;
         this.everConnected = true;
         this.attempts = 0;
         this.unacked = 0;
@@ -239,8 +247,9 @@ export class RoomConnection {
       return;
     }
 
-    const data = this.assembler.accept(new Uint8Array(event.data as ArrayBuffer));
-    if (!data) return;
+    const whole = this.assembler.accept(new Uint8Array(event.data as ArrayBuffer));
+    if (!whole) return;
+    const data = unzipFrame(whole);
     const payload = data.subarray(1);
 
     switch (data[0]) {
@@ -250,7 +259,9 @@ export class RoomConnection {
         this.sendBinary(frame(FRAME.SYNC_STEP2, Y.encodeStateAsUpdate(this.doc.doc, payload)));
         return;
       case FRAME.SYNC_STEP2:
-        Y.applyUpdate(this.doc.doc, payload, REMOTE_ORIGIN);
+      case FRAME.SYNC_STEP2_V2:
+        if (data[0] === FRAME.SYNC_STEP2_V2) Y.applyUpdateV2(this.doc.doc, payload, REMOTE_ORIGIN);
+        else Y.applyUpdate(this.doc.doc, payload, REMOTE_ORIGIN);
         this.setStatus('connected');
         this.on.synced();
         return;
@@ -294,7 +305,9 @@ export class RoomConnection {
     this.setStatus(
       !navigator.onLine ? 'offline' : this.everConnected ? 'reconnecting' : 'connecting',
     );
-    const base = BACKOFF_MS[Math.min(this.attempts, BACKOFF_MS.length - 1)]!;
+    // 4429: this page sent far too much (Phase 18). Something is looping; pause.
+    const base =
+      code === 4429 ? 15_000 : BACKOFF_MS[Math.min(this.attempts, BACKOFF_MS.length - 1)]!;
     this.attempts += 1;
     // Jitter, so a room that restarts is not hit by everyone in the same instant.
     this.retryTimer = setTimeout(() => this.connect(), base * (0.6 + Math.random() * 0.4));
@@ -401,7 +414,8 @@ export class RoomConnection {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     this.chunkId = (this.chunkId + 1) >>> 0;
-    for (const part of splitFrame(data, this.chunkId)) ws.send(part);
+    const packed = this.zip ? zipFrame(data) : data;
+    for (const part of splitFrame(packed, this.chunkId)) ws.send(part);
   }
 
   private startPing(): void {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { formatZoom } from '@/canvas/viewport';
 import { useBoardStore } from '@/state/boardStore';
 import styles from './DevPanel.module.css';
@@ -8,7 +9,13 @@ const COUNTS = [500, 5000, 20000];
  * Not shipped-facing polish — this is the instrument panel that makes the Phase 1
  * performance claim checkable rather than asserted.
  */
+/** Thrown while drawing, to show the crash screen and its report. */
+function Crash(): never {
+  throw new Error('Test crash from the Renderer panel');
+}
+
 export function DevPanel() {
+  const [crash, setCrash] = useState(false);
   const stats = useBoardStore((state) => state.stats);
   const total = useBoardStore((state) => state.elements.length);
   const zoom = useBoardStore((state) => state.viewport.zoom);
@@ -54,6 +61,31 @@ export function DevPanel() {
           Clear
         </button>
       </div>
+
+      {/* Phase 18: proves error reports reach the dashboard. */}
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.action}
+          data-testid="test-error"
+          onClick={() => {
+            setTimeout(() => {
+              throw new Error('Test error from the Renderer panel');
+            });
+          }}
+        >
+          Test error
+        </button>
+        <button
+          type="button"
+          className={styles.action}
+          data-testid="test-crash"
+          onClick={() => setCrash(true)}
+        >
+          Test crash
+        </button>
+      </div>
+      {crash ? <Crash /> : null}
     </aside>
   );
 }

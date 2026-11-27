@@ -10,29 +10,29 @@ for Google sign-in.
 
 Built in phases. Each phase ends with a working, checkable deliverable.
 
-| Phase    | What it adds                                 | State       |
-| -------- | -------------------------------------------- | ----------- |
-| **0**    | Teardown, tooling, test harness, app shell   | ✅ done     |
-| **1**    | Infinite canvas — pan, zoom, minimap         | ✅ done     |
-| **2**    | Shapes, selection, transform handles         | ✅ done     |
-| **3**    | Freehand, text, images, laser pointer        | ✅ done     |
-| **4**    | Yjs document, per-user undo, offline, export | ✅ done     |
-| **5**    | Google sign-in, folders, boards (D1)         | ✅ done     |
-| **6**    | Image storage (R2)                           | built       |
-| **7**    | Real-time collaboration (Durable Objects)    | ✅ done     |
-| **8**    | Sharing, permissions, comments               | built       |
-| **9**    | Presentation mode, workshop tools, embeds    | built       |
-| **10**   | Quick fixes and the text box                 | built       |
-| **11**   | One control pane, and who sees what          | built       |
-| **12**   | Settings and shortcuts                       | built       |
-| **13**   | Presenting, frames, celebrations and media   | built       |
-| **14**   | Classroom: placeholders, Answer role, locks  | built       |
-| **14.1** | Fixes: text boxes, eraser, side panel        | built       |
-| **14.2** | Pictures, locks and panning                  | built       |
-| **15**   | Undo across sessions                         | built       |
-| **16**   | Dashboard organisation                       | built       |
-| 17       | Keyboard use and visible focus               | not started |
-| 18       | Hardening, load testing, launch              | not started |
+| Phase    | What it adds                                 | State   |
+| -------- | -------------------------------------------- | ------- |
+| **0**    | Teardown, tooling, test harness, app shell   | ✅ done |
+| **1**    | Infinite canvas — pan, zoom, minimap         | ✅ done |
+| **2**    | Shapes, selection, transform handles         | ✅ done |
+| **3**    | Freehand, text, images, laser pointer        | ✅ done |
+| **4**    | Yjs document, per-user undo, offline, export | ✅ done |
+| **5**    | Google sign-in, folders, boards (D1)         | ✅ done |
+| **6**    | Image storage (R2)                           | built   |
+| **7**    | Real-time collaboration (Durable Objects)    | ✅ done |
+| **8**    | Sharing, permissions, comments               | built   |
+| **9**    | Presentation mode, workshop tools, embeds    | built   |
+| **10**   | Quick fixes and the text box                 | built   |
+| **11**   | One control pane, and who sees what          | built   |
+| **12**   | Settings and shortcuts                       | built   |
+| **13**   | Presenting, frames, celebrations and media   | built   |
+| **14**   | Classroom: placeholders, Answer role, locks  | built   |
+| **14.1** | Fixes: text boxes, eraser, side panel        | built   |
+| **14.2** | Pictures, locks and panning                  | built   |
+| **15**   | Undo across sessions                         | built   |
+| **16**   | Dashboard organisation                       | built   |
+| **17**   | Phones, presenter view, keyboard use (a–d)   | built   |
+| **18**   | Hardening, load testing, launch              | built   |
 
 Phases 10–16 were added from a list of requests after Phase 9, and 14.1 and 14.2 from a
 list after Phase 14; the original Phases 10 and 11 are now 17 and 18, and come last so
@@ -298,7 +298,7 @@ Two things deliberately stay **out** of the shared document:
 
 Boards persist to IndexedDB, so the app keeps working with the network down. It has no
 service worker yet, so a _reload_ while offline will not load the app itself; that
-arrives with the rest of the offline work in Phase 18.
+was in the first plan's Phase 18 but not on its checklist, and is not built.
 
 ## Collaboration
 
@@ -538,6 +538,44 @@ node scripts/test-backend.mjs   # Worker + local D1 + R2 on :8788
 That script also serves a JWKS and mints tokens on `:8799`, so the end-to-end tests
 exercise the real verification path — same code, different key owner — rather than a
 bypass of it.
+
+## Hardening (Phase 18)
+
+- **A big board opens fast.** A board's first sync goes in Yjs's second encoding and
+  deflated (`ZIP` and `SYNC_STEP2_V2` frames, `zipFrame`/`unzipFrame` in
+  `shared/collab.ts`, fflate) to pages that say `zip` in their handshake: 5,000 shapes
+  are 0.27 MB on the wire instead of 4 MB. Any frame over 32 kB is deflated either way.
+  `hardening.spec.ts` opens 5,000 shapes and 50 photographs on a new browser in about
+  1 s here, 3.5 s at a quarter of the CPU on emulated 4G.
+- **Five people at once.** The same spec has five accounts drawing together and times
+  each change reaching the other four (about 50 ms, worst 130 ms here); every window
+  ends with the same things in the same order. It found that ids were
+  `<type>_<time>_<counter>`, so two windows drawing in the same millisecond made the
+  same id and one shape replaced the other; ids now carry a random part per page.
+- **Errors are reported.** Uncaught errors, rejected promises and crashed screens go
+  to `POST /api/errors` (`src/errors/report.ts`; at most 8 a page, deduplicated) and
+  are written to the Worker's log as `browser-error` lines: Cloudflare dashboard →
+  Workers & Pages → sabboura → Logs. A crashed screen shows "Something went wrong"
+  with Reload (`ErrorBoundary`). Each report carries `release`, the commit; builds
+  are reproducible, so `node scripts/symbolicate.mjs < stack.txt` after `npm run build`
+  at that commit turns the stack into source lines. The Renderer panel has Test error
+  and Test crash.
+- **Rate limits.** Cloudflare's rate-limit bindings (`wrangler.toml`,
+  `worker/limits.ts`), per caller address per minute: 1,200 for the API, 60 for link
+  previews, new boards, duplicates, transfers and invitations, 30 for error reports.
+  Over the limit: 429, `retry-after: 60`, "Too many requests. Wait a minute, then try
+  again." Each room gives each page a bucket of 400 messages refilling at 100 a second;
+  past it the socket is closed with 4429 and the page reconnects after 15 s and syncs.
+  The room also refuses a frame of more than 64 pieces or one that inflates past
+  128 MB.
+- **Security review** (27 November): a sign-in token's email must be verified
+  (`email_verified`), since sharing is by email; static pages are sent with
+  `X-Frame-Options: DENY`, `frame-ancestors 'none'`, `nosniff` and
+  `strict-origin-when-cross-origin` (`public/_headers`). Checked and left as they
+  are: remote and slides keys (18 random bytes, in the URL's hash, never sent to the
+  server), the room's internal paths (not reachable from outside), co-owners (manage
+  people and links, never transfer or delete), uploads (hash checked, sizes capped),
+  link previews (private hosts refused).
 
 ## Architecture
 

@@ -58,6 +58,12 @@ export async function verifyIdToken(token: string, env: Env): Promise<Account> {
 
   const email = typeof payload.email === 'string' ? payload.email : '';
   if (!email) throw new AuthError('Sign-in token has no email address');
+  // Boards and folders are shared by email, so the address must be proven to be theirs
+  // (Phase 18). Google always proves it; a provider that does not would otherwise let
+  // anyone claim an address and open what was shared with it.
+  if (payload.email_verified !== true) {
+    throw new AuthError('Sign in with an email address that has been verified');
+  }
 
   return {
     uid,

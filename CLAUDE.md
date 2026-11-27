@@ -31,7 +31,7 @@ selection, cropping, the old lock plus "lock for others", panning while dragging
 the canvas and visible focus. On 2 November what was already done came out of 17 and 18:
 17 is creating, reaching and typing into shapes from the keyboard (arrows and Delete
 work) and focus rings off the board (the board's 62 controls already show one); 18 no
-longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a**, **17b** and **17c** (built), then keyboard use (the old 17, now **17d**, built 26 November). Next is **18** (hardening). Parked by the user: student
+longer lists CI's end-to-end suite, panning 5,000 shapes or the README. **14.1, 14.2, 15 and 16 are built**; the user's mobile and presenting list is **17a**, **17b** and **17c** (built), then keyboard use (the old 17, now **17d**, built 26 November). **18** (hardening) was built on 27 November; what is left of it is the custom domain and the user's week of free-tier figures. Parked by the user: student
 picture uploads, read4more.com, "see the stroke before it ends", Chrome zoom, and (taken
 out of 15 and 17 on 1 November) the owner undoing a collaborator's steps, Arabic and
 RTL, dark mode, high contrast, reduced motion, onboarding, empty and error states, and
@@ -447,6 +447,22 @@ keep the plain cursor. The audience window and slides links zoom (wheel, pinch, 
 while zoomed; `keepOnSlide`), reset at each new slide. Known flaky, before this too:
 document.spec "survives the tab being closed part-way through" (about 1 run in 6 here).
 
+Phase 18 (27 November): hardening. The first sync goes to pages that say `zip` in the
+handshake as `SYNC_STEP2_V2` (Yjs's second encoding), and any frame over 32 kB as a
+deflated `ZIP` frame (fflate; `zipFrame`/`unzipFrame`) — 5,000 shapes are 0.27 MB on the
+wire, not 4. Element ids carry a random part per page (`PAGE_PART` in element.ts):
+`<type>_<time>_<counter>` collided when two windows drew in the same millisecond, and
+one shape replaced the other everywhere. Errors from browsers (`src/errors/report.ts`,
+`ErrorBoundary`) go to `POST /api/errors` (no auth, before the token check) and become
+`browser-error` lines in the Worker's log (Cloudflare's Logs); `release` is the commit
+(`__RELEASE__` in vite.config.ts), builds are reproducible, and
+`scripts/symbolicate.mjs` reads a stack against `dist/assets/*.map`. Rate limits are
+Cloudflare's bindings (`LIMIT_API` 1200, `LIMIT_HEAVY` 60, `LIMIT_ERRORS` 30 a minute
+per address; `worker/limits.ts`), and the room's per-page bucket (400, +100/s; over it,
+close 4429, the page waits 15 s) and `FrameAssembler(64)`. Tokens must have
+`email_verified`. `public/_headers` sets framing, nosniff and referrer headers on the
+static pages. Tests: `hardening.spec.ts` (workspace project).
+
 Images are stored once each under their SHA-256 (`shared/files.ts`); `GET /api/files/:hash`
 is public because the hash is the capability. Unused images are swept only when a
 trash is emptied, so undo still works until then.
@@ -524,6 +540,13 @@ End-to-end tests need a browser. In this container Chromium predates the pinned
 Playwright, so pass `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium`.
 
 ## Things that have bitten before
+
+- **The test backend counts rate limits only for requests with `x-rate-key`**
+  (`RATE_LIMIT_TEST`), since every test comes from one address. A test that hammers
+  names its own key. The test key server's tokens are `email_verified` unless
+  `&verified=no`.
+- **Chrome's network emulation is harsh on WebSockets**: 0.27 MB took it two seconds at
+  "9 Mbit/s". Timings from it are an upper bound, not a forecast.
 
 - **`pkill -f "wrangler dev"` kills your own shell**, because the pattern matches the
   command line running it. Exit code 144 is that. Use `pkill -f "[w]rangler"`, and put
